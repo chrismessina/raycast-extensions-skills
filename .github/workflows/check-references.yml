@@ -1,0 +1,22 @@
+name: Check skill references
+
+# Anti-drift guard: fails the build if a skill points at a reference/<name>.md
+# that was never authored. This is the failure that let `develop`/`ship` ship
+# with dangling links to dep-gates.md / sparse-checkout-discipline.md /
+# store-guidelines.md (diagnosed 2026-07-13).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check-references:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert every skill reference resolves
+        run: bash check-references.sh

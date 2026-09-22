@@ -1,0 +1,7 @@
+node_modules/
+# Machine-local Claude Code config — not ours to format
+.claude/
+# Markdown is hand-authored here (skill docs, references, house-style).
+# Prettier's markdown formatter reflows emphasis/spacing in ways that fight the
+# deliberate hand-wrapping — so docs are intentionally out of scope. Keep prose manual.
+*.md

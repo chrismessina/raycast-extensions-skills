@@ -1,0 +1,36 @@
+{
+  "name": "raycast-extensions-skills",
+  "owner": {
+    "name": "Chris Messina",
+    "url": "https://github.com/chrismessina"
+  },
+  "metadata": {
+    "description": "Claude Code skills for building, shipping, and reviewing Raycast extensions.",
+    "version": "0.7.0"
+  },
+  "plugins": [
+    {
+      "name": "raycast-extensions",
+      "description": "Stage-keyed skills for the full Raycast-extension lifecycle: api-changelog (derive @raycast/api release notes Raycast doesn't publish), scaffold (new), develop (change code, modernize, house-style audit fix), ship (dep hygiene, house-style audit, Store compliance, PR, cleanup), greptile-loop (drive an open Store PR's automated review to 5/5), review-pr (inbound review of a third-party PR).",
+      "author": {
+        "name": "Chris Messina",
+        "url": "https://github.com/chrismessina",
+        "email": "chris.messina@gmail.com"
+      },
+      "homepage": "https://github.com/chrismessina/raycast-extensions-skills",
+      "tags": [
+        "raycast",
+        "raycast-extensions",
+        "lifecycle",
+        "api-changelog",
+        "scaffold",
+        "develop",
+        "ship",
+        "greptile-loop",
+        "review-pr",
+        "house-style"
+      ],
+      "source": "./plugins/raycast-extensions"
+    }
+  ]
+}

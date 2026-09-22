@@ -1,0 +1,13 @@
+{
+  "name": "raycast-extensions-skills",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Source for the raycast-extensions Claude Code plugin. Docs/skills repo, not a Raycast extension.",
+  "scripts": {
+    "format": "prettier --write \"**/*.{yml,yaml,json}\"",
+    "format:check": "prettier --check \"**/*.{yml,yaml,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.8.4"
+  }
+}
