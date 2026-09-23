@@ -1070,7 +1070,9 @@ title?: string;
 icon?:  @defaultValue Icon.Finder on macOS and Icon.HardDrive on Windows
 ```
 
-So **any** `title` on `<Action.ShowInFinder>` — including the "correct" `"Show in Finder"` — hardcodes macOS wording onto Windows. Omit it and both platforms are right for free, *and stay right across upgrades*.
+So **any** `title` that names the file manager on `<Action.ShowInFinder>` — including the "correct" `"Show in Finder"` — hardcodes macOS wording onto Windows. Omit it and both platforms are right for free, *and stay right across upgrades*.
+
+**The one exception: two `ShowInFinder` actions in the same resolved panel.** With no titles they render as two identical rows that open different files. Give the one that needs telling apart a title that names the **target** and not the file manager — `"Show Hook Log"`, not `"Show Hook Log in Finder"` — and leave the other untitled. *(2026-09-23, `claude-artifacts` doctor: the "show index" remedy and the hook-log action render in one panel.)*
 
 > ⚠️ **The Windows string is not stable, which is the whole argument for omitting `title`.**
 > `ShowInFinderProps` documented `"Show in Explorer"` in v1.104.23 and **`"File Explorer"`**
@@ -1090,7 +1092,7 @@ title: isMacOS ? "Show in Finder" : "File Explorer"   // v2.0.3 wording
 
 Never `"Show in Folder"` — that has never been Raycast's string on either platform.
 
-- **Audit:** `rg -n 'title[=:] *["`].*\b[Rr]eveal'` → any user-facing "Reveal" (not just "in Finder" — it hides in "Reveal Index File" and "Could Not Reveal…"); `rg -U --pcre2 -n '<Action\.ShowInFinder\b(?:[^>]|=>)*?\btitle=' src` → must return nothing (the match stays inside one element, so a later action's `title` does not count; an attribute value containing a bare `>` would end it early). Internal identifiers (`revealOnComplete`, a `RevealInFinderAction` component) are not user-facing and don't block.
+- **Audit:** `rg -n 'title[=:] *["`].*\b[Rr]eveal'` → any user-facing "Reveal" (not just "in Finder" — it hides in "Reveal Index File" and "Could Not Reveal…"); `rg -U --pcre2 -n '<Action\.ShowInFinder\b(?:[^>]|=>)*?\btitle=' src` → every hit is a finding unless its panel holds a second `ShowInFinder` and the title names only the target; one naming Finder, Explorer, or Folder is always a finding (the match stays inside one element, so a later action's `title` does not count; an attribute value containing a bare `>` would end it early). Internal identifiers (`revealOnComplete`, a `RevealInFinderAction` component) are not user-facing and don't block.
 - **Evidence:** 2026-08-10 fleet audit — 8 user-facing strings across 4 self-authored extensions said "Reveal" or "Open in Finder"; `raycast-reader` branched on platform but emitted "Show in Folder". Every `Action.ShowInFinder` already omitted `title`, so the component was the only thing getting Windows right. Two `raycast-fathom` toasts labeled "Open in Finder" called bare `open(filePath)` — the file opened in its default app and Finder never appeared. **2026-08-20:** v2.0.3 renamed the Windows default from "Show in Explorer" to "File Explorer", invalidating the hand-written wording this rule had recommended ten days earlier — evidence for the omit-`title` form over any literal.
 
 ### `[both]` A completed file export offers Show in Finder AND Copy Path, both with shortcuts
@@ -1482,7 +1484,7 @@ verb) · artifact · while (not whilst)
 **Audit — two halves.** Tracked files, before shipping; it must print nothing:
 
 ```bash
-git grep -niE '\b(catalogue|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
+git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
 ```
 
 Exclude any other path that holds external data verbatim (below). Commit messages and PR

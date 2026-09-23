@@ -510,11 +510,11 @@ Run before PR. Each layer is gardening, not engineering:
      has no `.github/` at all). Note its absence in the report; never hold a submission for it.
    - 🚨 **A `LICENSE` file is MANDATORY on every self-authored extension — MIT, and it must
      exist as a file.** `package.json` `"license": "MIT"` is only a declaration; the README's
-     Licence badge is a **relative link to `LICENSE`**, so without the file it is a live 404
+     License badge is a **relative link to `LICENSE`**, so without the file it is a live 404
      on both GitHub and the Store page. Nothing in `ray build` or `ray lint` checks this.
      ```bash
      [ -f LICENSE ] || echo "BLOCKED: no LICENSE file (MIT required on self-authored extensions)"
-     grep -q '](LICENSE)' README.md && [ ! -f LICENSE ] && echo "BLOCKED: Licence badge links to a file that does not exist"
+     grep -q '](LICENSE)' README.md && [ ! -f LICENSE ] && echo "BLOCKED: License badge links to a file that does not exist"
      ```
      Add the standard MIT text with `Copyright (c) <year> Chris Messina`. It ships to the
      monorepo (verified: `extensions/digger`, `extensions/reader-mode`), which is what makes
@@ -750,7 +750,7 @@ returned — paste the actual output, don't assert it:
       grep -oE 'src="(\./)?(assets|metadata)/[^"]*"' README.md
       ```
 - [ ] **`LICENSE` file exists** (self-authored only — never add one to a fork). MIT. Required
-      whether or not the README carries the Licence badge; if it does, the badge is a relative
+      whether or not the README carries the License badge; if it does, the badge is a relative
       link and 404s without the file:
       ```bash
       [ -f LICENSE ] || echo "BLOCKED: no LICENSE file"

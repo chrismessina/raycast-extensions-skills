@@ -28,7 +28,7 @@ standalone repo, normally `raycast-<slug>`.
 # <Extension Title>
 
 [![Raycast Store](https://img.shields.io/badge/Raycast-Store-FF6363?style=flat-square&logo=raycast&logoColor=white)](https://www.raycast.com/chrismessina/<slug>)
-[![Licence MIT](https://img.shields.io/badge/Licence-MIT-22C55E?style=flat-square)](LICENSE)
+[![License MIT](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
 [![Follow @chrismessina](https://img.shields.io/github/followers/chrismessina?label=Follow%20chrismessina&style=social)](https://github.com/chrismessina)
 [![Stars](https://img.shields.io/github/stars/chrismessina/<repo>?style=social)](https://github.com/chrismessina/<repo>/stargazers)
 
@@ -241,9 +241,9 @@ time**, not at scaffold time — and when auditing, check the URL resolves rathe
 that the block exists. (`central-icon-system` carried the badge while its Store URL 404'd —
 the reason for this rule.)
 
-### The Licence badge links to a `LICENSE` file — which must actually exist
+### The License badge links to a `LICENSE` file — which must actually exist
 
-`[![Licence MIT](…)](LICENSE)` is a relative link. With no `LICENSE` file in the repo it is
+`[![License MIT](…)](LICENSE)` is a relative link. With no `LICENSE` file in the repo it is
 a 404 on both GitHub and the Store page, and nothing in `ray build`/`ray lint` checks it.
 
 **Known fleet debt (2026-08-29):** `raycast-ios-apps` and `raycast-get-app-icon` — the two
@@ -253,7 +253,7 @@ extensions this template was drawn from — both carry the badge with **no `LICE
 Assert it whenever the badge is present:
 
 ```bash
-grep -q '](LICENSE)' README.md && { [ -f LICENSE ] || echo "BROKEN: Licence badge, no LICENSE file"; }
+grep -q '](LICENSE)' README.md && { [ -f LICENSE ] || echo "BROKEN: License badge, no LICENSE file"; }
 ```
 
 `package.json` `"license": "MIT"` is a *declaration*; the file is what makes the badge
@@ -263,7 +263,7 @@ resolve. `LICENSE` ships to the monorepo (verified: `extensions/digger`,
 ### Badge order is deliberate
 
 Store link first — it is the only badge a *user* (rather than a developer) can act on.
-Licence second because Store reviewers look for it. The two social badges last: they are
+License second because Store reviewers look for it. The two social badges last: they are
 the personal half, and they are the half that must never appear on a fork.
 
 The `TypeScript` badge from the source template is deliberately dropped. It tells a reader

@@ -29,6 +29,11 @@ Reading synchronously is sufficient only for a *gate*. Shared state that command
 ### Extension root
 The directory holding the `package.json` that carries Raycast manifest keys — as distinct from the repository root, which is the same directory only for a standalone extension repo and is one or more levels up for anything derived from the extensions monorepo. Every build, lint, and publish command resolves the manifest by walking *upward* from the working directory to the nearest `package.json`, so running one above the extension root either fails with an error that names the package manager rather than the path, or — when an unrelated ancestor manifest exists — silently operates on that other package and reports success.
 
+### Installed-extension registry
+The set of built extension manifests Raycast keeps for every extension a user has installed, one per install, whether or not that extension has ever been opened. It is the only readable answer found to "which extensions does this user have": the host's own databases and its settings export could not be read.
+
+It is easily confused with the per-extension storage folders Raycast keeps elsewhere, which look like a list of installs and are not one. A storage folder is created the first time its extension *runs*, because that is where the extension's support files and cache live, so a listing of them silently omits everything installed but never opened. Neither the storage folders nor a path derived from an extension's assets location is a registry; only the manifest set is. Any feature that filters by installs should treat an unreadable or inconsistent registry as "could not tell" rather than as an empty or partial answer, because a filter that fails closed is indistinguishable from "nothing to show".
+
 ### Development renderer replay
 Raycast, outside a production environment, mounts a command's React tree in strict mode and replays effect setup, so any effect body — including a network fetch — executes twice per launch. Production launches do not replay, which makes duplicated work observed while developing an artifact of the harness rather than a defect in the extension.
 

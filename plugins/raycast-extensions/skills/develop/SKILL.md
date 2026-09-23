@@ -166,8 +166,8 @@ says what to build. These only establish *what baseline*, *where*, and *on what 
    `could not determine executable to run` via `npx`) — errors that name npm, never Raycast,
    so they read like a broken install rather than a wrong `cd`. Being one level *too deep*
    (e.g. in `src/`) is harmless: npm walks upward. Resolver one-liner and
-   the measured behavior table: the `[both]` extension-root entry in
-   [`../../reference/house-style.md`](../../reference/house-style.md) (*Environment / tooling*).
+   the measured behavior table: the `[build]` extension-root rule (`extension-root`) in
+   [`../../reference/house-style.md`](../../reference/house-style.md).
    Several matches → ask which extension. Don't guess.
 
 2. **Read the tree state, then branch — but only with permission to touch refs.**

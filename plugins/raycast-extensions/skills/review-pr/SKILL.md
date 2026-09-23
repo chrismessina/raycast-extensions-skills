@@ -158,8 +158,8 @@ silently give you the wrong code.*
 from the clone root and you get `npm error code ENOENT … package.json` — or, via `npx`,
 `could not determine executable to run`, which sounds like `ray` isn't installed. Neither error
 mentions Raycast or your path, so it sends you debugging a dependency. See the
-`[both]` extension-root rule (with the measured behavior table) in
-[`../../reference/house-style.md`](../../reference/house-style.md) (*Environment / tooling*).
+`[build]` extension-root rule (`extension-root`, with the measured behavior table) in
+[`../../reference/house-style.md`](../../reference/house-style.md).
 
 Do **not** `git init` the extension folder or detach it from the clone. That trick exists in
 community guides so `npm run publish` works — but publishing is not your job here, and losing
