@@ -34,7 +34,7 @@ related_components:
 >
 > The live divergence today is different: **`@raycast/eslint-plugin` 2.2.0** disagrees with both
 > the runtime and the docs on five constants. See
-> `../../../plugins/raycast-extensions/reference/keyboard-conventions.md`.
+> `../../reference/keyboard-conventions.md`.
 
 Raycast's public API reference documents `Keyboard.Shortcut.Common.Pin` as ⌘⇧P. The shipped runtime binds it to ⌘. Two automated reviewers, on two different days, each filed a duplicate-shortcut finding against the same PR: Sort by Popularity is ⌘⇧P, Pin is `Common.Pin`, therefore they collide.
 
@@ -49,8 +49,8 @@ Pin:{macOS:{modifiers:["cmd"],key:"."},Windows:{modifiers:["ctrl"],key:"."}}
 ```
 
 **And it was already written down in this repo.**
-[`plugins/raycast-extensions/reference/keyboard-conventions.md:54`](../../../plugins/raycast-extensions/reference/keyboard-conventions.md#L54)
-has carried `` `Common.Pin` | ⌘ . | ctrl . `` all along, and [line 13](../../../plugins/raycast-extensions/reference/keyboard-conventions.md#L13) records that a June snapshot had five wrong macOS bindings — naming `Pin` — and says to "regenerate rather than trusting prose docs."
+[`keyboard-conventions.md`'s semantic map](../../reference/keyboard-conventions.md#the-semantic-map-build)
+has carried `` `Common.Pin` | ⌘ . | ctrl . `` all along, and [its header](../../reference/keyboard-conventions.md#keyboard-conventions) records that a June snapshot had five wrong macOS bindings — naming `Pin` — and says to "regenerate rather than trusting prose docs."
 
 The rule existed. The correct value existed. Neither had any purchase, because both were written as guidance for *authoring* a shortcut, and I was *answering a review*. Those felt like different activities and are not.
 
@@ -114,7 +114,7 @@ Auditing the whole table afterwards found **eight wrong cells across six rows**,
 - [Answer a blocking review finding with a measurement](answer-a-blocking-review-with-a-measurement.md) — names compliance-by-default as the failure mode; this is compliance-by-default on a finding that was itself false.
 - Grading a reverse-engineered model against the vendor release — its §2 ground-truth ladder puts a vendor's generated API reference on rung 2, tracking the build. This is a counterexample: a page presenting as generated-per-release, wrong about the value, and regressing after correction. Strengthen that corollary from "lags" to "can contradict, and can revert".
 - Read the version off the running artifact — shares the primitive (ask the artifact, not the paperwork) but describes staleness between two points in time; here the doc and the runtime describe the same release and simply disagree.
-- [`keyboard-conventions.md`](../../../plugins/raycast-extensions/reference/keyboard-conventions.md) — the operational half, and where the durable rule for answering a collision finding lives.
+- [`keyboard-conventions.md`](../../reference/keyboard-conventions.md) — the operational half, and where the durable rule for answering a collision finding lives.
 
 ## Provenance
 

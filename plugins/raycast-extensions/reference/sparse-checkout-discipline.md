@@ -111,8 +111,8 @@ The sparse config persists across fetches — you stay scoped to `extensions/<na
   your path (the `npx` one reads as if `ray` were missing entirely). The
   sparse checkout is precisely what makes this misleading, because the tree is *almost*
   empty, so "the repo root" and "the extension" feel like the same place.
-  **`cd extensions/<name>` first, then run.** See the `[both]` extension-root rule in
-  [`house-style.md`](./house-style.md) (*Environment / tooling*) for the general invariant
+  **`cd extensions/<name>` first, then run.** See the `[build]` extension-root rule in
+  [`house-style.md`](./house-style.md) (`extension-root`) for the general invariant
   and the resolver one-liner.
 - **`git sparse-checkout set` REPLACES the path list; it does not append.** Setting a
   second extension drops the first. To hold two, pass both in one call:

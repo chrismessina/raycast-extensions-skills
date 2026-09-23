@@ -29,11 +29,23 @@ All three change code, so they all live here and all hand forward to `ship` when
 
 ## Documented learnings — read before writing the code, not after the review
 
-`docs/solutions/` in this plugin's source repo holds learnings written from previous runs of these skills, filed by category with YAML frontmatter (`module`, `component`, `problem_type`, `tags`). Three categories carry `develop`-relevant material: **`design-patterns/`** (implementation shapes that passed every gate and still broke), **`architecture-patterns/`** (integration shapes, e.g. AppleScript/JXA), and **`security-issues/`**. Browse: https://github.com/chrismessina/raycast-extensions-skills/tree/main/docs/solutions/
+`learnings/` in this plugin holds write-ups of defects and decisions from previous runs of these skills, each with the trigger that makes it relevant. **Read the row that matches what you are about to do — before doing it.** A learning is only useful at the moment it applies; rediscovering one after the review costs a round.
+
+| When you are about to… | Read |
+|---|---|
+| calling `useCachedPromise` / `useCachedState`, or branching on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
+| sharing mutable state between commands, or between an AI tool and an open command | [`portable-node-advisory-file-lock`](../../learnings/design-patterns/portable-node-advisory-file-lock.md) |
+| listing or filtering by the user's installed extensions, or walking up from `environment.supportPath` / `assetsPath` | [`read-installed-raycast-extensions-from-config-not-application-support`](../../learnings/design-patterns/read-installed-raycast-extensions-from-config-not-application-support.md) |
+| driving a third-party Mac app through AppleScript or JXA | [`raycast-applescript-jxa-integration`](../../learnings/architecture-patterns/raycast-applescript-jxa-integration.md) |
+| building a string or array across lines, tokens, or records inside a loop | [`quadratic-accumulator-paths-in-text-reflow`](../../learnings/design-patterns/quadratic-accumulator-paths-in-text-reflow.md) |
+| showing, copying, or logging an error that may carry a server response or URL | [`error-display-is-a-credential-disclosure-surface`](../../learnings/security-issues/error-display-is-a-credential-disclosure-surface.md) |
+| reading Reddit without a logged-in session | [`reading-reddit-programmatically-in-2026`](../../learnings/tooling-decisions/reading-reddit-programmatically-in-2026.md) |
+| moving a helper into a shared package, or adding one to the kit | [`deciding-whether-to-extract-a-shared-package`](../../learnings/tooling-decisions/deciding-whether-to-extract-a-shared-package.md) |
+| changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
 
 Reach for it when you are about to use a `@raycast/api` or `@raycast/utils` primitive in a way you have not used before, when a hook or platform API behaves differently from how it reads, or when a review finding points at a dependency's runtime behavior rather than at your own code. `CONCEPTS.md` at the repo root defines the terms these learnings use (Fleet, House Style, Command process isolation, Development renderer replay, Restored value).
 
-> **The recurring shape worth knowing before you start:** the expensive defects in this fleet are the ones `tsc`, `ray lint`, and `ray build` all pass — a cache key that does not vary, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. A green gate is evidence about types and syntax, never about a library's runtime semantics. When behavior depends on a dependency, **read the dependency** — `node_modules/@raycast/utils/dist/module.js` is bundled but readable. See `docs/solutions/design-patterns/use-cached-promise-caching-semantics.md`.
+> **The recurring shape worth knowing before you start:** the expensive defects in this fleet are the ones `tsc`, `ray lint`, and `ray build` all pass — a cache key that does not vary, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. A green gate is evidence about types and syntax, never about a library's runtime semantics. When behavior depends on a dependency, **read the dependency** — `node_modules/@raycast/utils/dist/module.js` is bundled but readable. See [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md).
 
 ---
 

@@ -109,11 +109,92 @@ if grep -q '\*\*Status:\*\* v' "$README" 2>/dev/null; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# Guard 3: every learning is cited where it applies, and every relative link resolves.
+# A learning only a folder listing points at is one an agent rediscovers after the
+# review instead of reading before the work (2026-09-23: 10 of 14 were cited nowhere).
+# Citations from other learnings do not count; one from a skill or reference does.
+# ---------------------------------------------------------------------------
+LEARN_DIR="$PLUGIN_DIR/learnings"
+echo
+echo "Checking every learning is cited by a skill or reference"
+echo
+cited_file="$(mktemp)"
+python3 - "$SKILLS_DIR" "$REFERENCE_DIR" > "$cited_file" <<'PY'
+# Print every file a skill or reference links to, resolved to an absolute path.
+# A citation is a real Markdown link — a filename mentioned in prose or code does not count.
+import os, re, sys
+from urllib.parse import unquote
+link = re.compile(r"\]\(([^)\s]+)\)")
+for top in sys.argv[1:]:
+    for d, _, files in os.walk(top):
+        for f in files:
+            if not f.endswith(".md"):
+                continue
+            in_fence = False
+            for line in open(os.path.join(d, f), encoding="utf-8"):
+                if line.lstrip().startswith("```"):
+                    in_fence = not in_fence
+                if in_fence:
+                    continue
+                for t in link.findall(re.sub(r"`[^`]*`", "", line)):
+                    t = unquote(t.split("#", 1)[0])
+                    if t and not re.match(r"^[a-z]+:", t):
+                        print(os.path.realpath(os.path.join(d, t)))
+PY
+for f in "$LEARN_DIR"/*/*.md; do
+  [ -f "$f" ] || continue
+  name="$(basename "$f")"
+  if grep -qxF "$(cd "$(dirname "$f")" && pwd -P)/$name" "$cited_file"; then
+    echo "  ok       $name"
+  else
+    echo "  ORPHAN   $name   <-- no skill or reference links to it; add it to the trigger table of the skill it serves"
+    echo "x" >> "$fail_marker"
+  fi
+done
+rm -f "$cited_file"
+
+echo
+echo "Checking relative Markdown links resolve"
+echo
+broken_file="$(mktemp)"
+python3 - "$REPO_ROOT" > "$broken_file" <<'PY'
+import os, re, sys
+root = sys.argv[1]
+link = re.compile(r"\]\(([^)\s]+)\)")
+for d, _, files in os.walk(root):
+    if "/.git" in d or "node_modules" in d:
+        continue
+    for f in files:
+        if not f.endswith(".md"):
+            continue
+        p = os.path.join(d, f)
+        in_fence = False
+        for n, line in enumerate(open(p, encoding="utf-8"), 1):
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+            if in_fence:
+                continue
+            for target in link.findall(re.sub(r"`[^`]*`", "", line)):
+                t = target.split("#", 1)[0]
+                if not t or re.match(r"^[a-z]+:", t) or t.startswith("<"):
+                    continue
+                if not os.path.exists(os.path.normpath(os.path.join(d, t))):
+                    print(f"{os.path.relpath(p, root)}:{n}  {target}")
+PY
+broken="$(cat "$broken_file")"; rm -f "$broken_file"
+if [ -n "$broken" ]; then
+  echo "$broken" | sed 's/^/  BROKEN   /'
+  echo "x" >> "$fail_marker"
+else
+  echo "  ok       every relative link resolves"
+fi
+
 echo
 if [ -s "$fail_marker" ]; then
-  echo "FAIL: see MISSING / UNLISTED / VERSION MISMATCH above."
+  echo "FAIL: see MISSING / UNLISTED / VERSION MISMATCH / ORPHAN / BROKEN above."
   echo "      Dangling reference -> author the file in $REFERENCE_DIR or drop the pointer."
   echo "      Unlisted skill     -> add it to the README skills table and both manifest descriptions."
   exit 1
 fi
-echo "PASS: every skill reference resolves, every skill is announced, versions agree."
+echo "PASS: references resolve, skills are announced, versions agree, every learning is cited, links resolve."

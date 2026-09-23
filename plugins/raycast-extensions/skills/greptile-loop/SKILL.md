@@ -71,6 +71,13 @@ curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR
 
 ## 2. Triage — every finding gets a verdict, and "valid" is not automatic
 
+| When you are about to… | Read |
+|---|---|
+| comply with a correct finding whose fix is only implied | [`verify-the-remedy-not-just-the-finding`](../../learnings/workflow-issues/verify-the-remedy-not-just-the-finding.md) |
+| answer a rating that will not clear | [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md) |
+| act on a collision or value you cannot reproduce | [`wrong-vendor-docs-manufacture-review-findings`](../../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) |
+| start a third round that is finding defects in the last round's fixes | [`count-the-review-layers-not-the-findings`](../../learnings/workflow-issues/count-the-review-layers-not-the-findings.md) |
+
 > 🚨 **FIRST, before any verdict: has Chris already ruled on this?**
 >
 > An explicit instruction from him — "make X the default action", "I want the extra docs
@@ -108,7 +115,7 @@ For each finding, decide and say which:
   does not make its implied fix correct, and a score that won't clear pressures you to
   ship *any* responsive change. Measure the implied remedy against what you have and
   report the number, including when it loses. (See
-  `https://github.com/chrismessina/raycast-extensions-skills/blob/main/docs/solutions/workflow-issues/answer-a-blocking-review-with-a-measurement.md`.)
+  [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md).)
 - **False positive → answer with receipts, change nothing.** The canonical one:
   **"Merge Date Is Hardcoded" on a CHANGELOG date that raycastbot itself stamped.**
   The receipt must name the commit that changed the date, not merely show a bot exists

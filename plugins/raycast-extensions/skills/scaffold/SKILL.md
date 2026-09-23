@@ -17,11 +17,18 @@ The seam is **binary on existence**, so triggers never overlap with `develop`.
 
 ## Documented learnings — cheapest to read here, before anything exists
 
-`docs/solutions/` in this plugin's source repo holds learnings written from previous runs of these skills, filed by category with YAML frontmatter (`module`, `component`, `problem_type`, `tags`). Browse: https://github.com/chrismessina/raycast-extensions-skills/tree/main/docs/solutions/ Three categories bear on a net-new extension: **`design-patterns/`** (implementation shapes that passed every gate and still broke), **`architecture-patterns/`** (integration shapes, e.g. AppleScript/JXA), and **`tooling-decisions/`** (including when a shared package is worth extracting rather than copying a helper in).
+`learnings/` in this plugin holds write-ups of defects and decisions from previous runs of these skills, each with the trigger that makes it relevant. **Read the row that matches what you are about to do — before doing it.** A learning is only useful at the moment it applies; rediscovering one after the review costs a round.
+
+| When you are about to… | Read |
+|---|---|
+| calling `useCachedPromise` / `useCachedState`, or branching on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
+| sharing mutable state between commands, or between an AI tool and an open command | [`portable-node-advisory-file-lock`](../../learnings/design-patterns/portable-node-advisory-file-lock.md) |
+| showing, copying, or logging an error that may carry a server response or URL | [`error-display-is-a-credential-disclosure-surface`](../../learnings/security-issues/error-display-is-a-credential-disclosure-surface.md) |
+| driving a third-party Mac app through AppleScript or JXA | [`raycast-applescript-jxa-integration`](../../learnings/architecture-patterns/raycast-applescript-jxa-integration.md) |
 
 **This skill is where the corpus is worth the most.** Every learning in `design-patterns/` describes a shape that was adopted, shipped, reviewed, and only then found wrong — and picking the right shape while the file is still empty costs nothing, while changing it later costs a review round and a Store release. `CONCEPTS.md` at the repo root defines the terms these learnings use.
 
-> **The recurring shape:** the expensive defects in this fleet are the ones `tsc`, `ray lint`, and `ray build` all pass — a cache key that does not vary, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. Scaffolding chooses several of these shapes in one sitting. See `docs/solutions/design-patterns/use-cached-promise-caching-semantics.md` before reaching for `useCachedPromise` in a generated command.
+> **The recurring shape:** the expensive defects in this fleet are the ones `tsc`, `ray lint`, and `ray build` all pass — a cache key that does not vary, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. Scaffolding chooses several of these shapes in one sitting. See [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) before reaching for `useCachedPromise` in a generated command.
 
 ## Ideation: reuse, don't rebuild
 

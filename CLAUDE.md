@@ -5,7 +5,7 @@ Guidance for agents working in this repo. The README is the human-facing manual.
 ## What this is
 
 Source for the **`raycast-extensions` Claude Code plugin** (`plugins/raycast-extensions/`), plus
-the learnings corpus the skills cite (`docs/solutions/`) and derived `@raycast/api` release notes
+the learnings the skills cite (`plugins/raycast-extensions/learnings/`) and derived `@raycast/api` release notes
 (`docs/reference/`). It is not a Raycast extension — there is no `ray build` here, and
 `package.json` is `private: true` with Prettier as its only dependency.
 
@@ -23,14 +23,23 @@ Bump `version` in **both** `plugins/raycast-extensions/.claude-plugin/plugin.jso
 `.claude-plugin/marketplace.json` for a release, so GitHub installs see an update, and keep the
 README's `**Status:**` line in step. **Run `bash check-references.sh` after touching any skill, reference, manifest, or
 the README** — it fails on a dangling `reference/X.md` pointer, a skill missing from the README
-table or either manifest description, and a version mismatch. Exit 0 = clean.
+table or either manifest description, a version mismatch, a learning no skill or reference
+cites, and a relative link that does not resolve. Exit 0 = clean.
 
-## `docs/solutions/`
+## `learnings/`
+
+The learnings live **inside the plugin** so they ship with every install and the skills can
+link them by relative path. A learning that only a folder listing points at gets rediscovered
+after the review instead of read before the work, so each one is cited in a *When you are about
+to… / Read* table in the skill it serves, or inline in the House Style rule it backs.
+`check-references.sh` fails on a learning nothing cites.
+
 
 Filed by category with YAML frontmatter (`module`, `component`, `problem_type`, `tags`); array
 items are double-quoted. Match the existing vocabulary (`component: development_workflow`,
 `module: publishing`, `module: skills`). `CONCEPTS.md` defines the shared terms. A learning nothing
-points at does not compound — wire a new one into the skill it serves.
+points at does not compound: add a new one to the trigger table of the skill it serves, in the
+same change that adds the file.
 
 Cite code in public repos by GitHub URL, and files in this repo by relative path. Never by a
 machine-local absolute path: this repo is public.

@@ -31,9 +31,18 @@ fork of it either.** A fork of the monorepo is just as large as the monorepo. Fe
 
 ## Documented learnings — what to look for that CI cannot
 
-`docs/solutions/` in this plugin's source repo holds learnings written from previous runs of these skills, filed by category with YAML frontmatter (`module`, `component`, `problem_type`, `tags`). Browse: https://github.com/chrismessina/raycast-extensions-skills/tree/main/docs/solutions/ Two categories bear on reviewing someone else's submission: **`security-issues/`** (e.g. error display as a credential disclosure surface — a thing to actively look for in a contributor's error handling) and **`design-patterns/`** (shapes that pass every gate and still break).
+`learnings/` in this plugin holds write-ups of defects and decisions from previous runs of these skills, each with the trigger that makes it relevant. **Read the row that matches what you are about to do — before doing it.** A learning is only useful at the moment it applies; rediscovering one after the review costs a round.
 
-**A PR with green CI is not a reviewed PR.** The defects worth your time here are the ones no gate models: a cache key that does not vary per item, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. Each renders the wrong content or leaks state while `tsc`, `ray lint`, and `ray build` stay green. See `docs/solutions/design-patterns/use-cached-promise-caching-semantics.md`.
+| When you are about to… | Read |
+|---|---|
+| showing, copying, or logging an error that may carry a server response or URL | [`error-display-is-a-credential-disclosure-surface`](../../learnings/security-issues/error-display-is-a-credential-disclosure-surface.md) |
+| calling `useCachedPromise` / `useCachedState`, or branching on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
+| sharing mutable state between commands, or between an AI tool and an open command | [`portable-node-advisory-file-lock`](../../learnings/design-patterns/portable-node-advisory-file-lock.md) |
+| building a string or array across lines, tokens, or records inside a loop | [`quadratic-accumulator-paths-in-text-reflow`](../../learnings/design-patterns/quadratic-accumulator-paths-in-text-reflow.md) |
+| a reviewer reports a collision or value you cannot reproduce | [`wrong-vendor-docs-manufacture-review-findings`](../../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) |
+| changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
+
+**A PR with green CI is not a reviewed PR.** The defects worth your time here are the ones no gate models: a cache key that does not vary per item, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. Each renders the wrong content or leaks state while `tsc`, `ray lint`, and `ray build` stay green. See [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md).
 
 > **Use the corpus for defects, never as a style stick.** These learnings encode *our* conventions alongside real hazards, and this skill's own caveat about judging a fork by your own conventions still governs. A contributor owes you correct code, not House Style. Raise a `design-patterns/` finding when it names a concrete failure the code will actually hit; keep a preference to yourself.
 

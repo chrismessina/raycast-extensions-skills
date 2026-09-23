@@ -17,11 +17,19 @@ metadata:
 
 ## Documented learnings — read before the review cycle, not after it
 
-`docs/solutions/` in this plugin's source repo holds learnings written from previous runs of these skills, filed by category with YAML frontmatter (`module`, `component`, `problem_type`, `tags`). Two categories carry ship-relevant material: **`workflow-issues/`** (publishing topology, diverged PR bases, answering a blocking review) and **`design-patterns/`** (implementation shapes a reviewer will challenge).
+`learnings/` in this plugin holds write-ups of defects and decisions from previous runs of these skills, each with the trigger that makes it relevant. **Read the row that matches what you are about to do — before doing it.** A learning is only useful at the moment it applies; rediscovering one after the review costs a round.
 
-Relevant when a Store PR draws review findings, when a submission behaves unexpectedly, or when a claim in this file looks stale. Browse: https://github.com/chrismessina/raycast-extensions-skills/tree/main/docs/solutions
+| When you are about to… | Read |
+|---|---|
+| a Store PR shows far more changed files than the branch touched | [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md) |
+| an automated reviewer is holding the PR with a rating that will not clear | [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md) |
+| complying with a correct finding whose fix is only implied | [`verify-the-remedy-not-just-the-finding`](../../learnings/workflow-issues/verify-the-remedy-not-just-the-finding.md) |
+| a reviewer reports a collision or value you cannot reproduce | [`wrong-vendor-docs-manufacture-review-findings`](../../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) |
+| a third review pass is still finding defects in the previous pass's fixes | [`count-the-review-layers-not-the-findings`](../../learnings/workflow-issues/count-the-review-layers-not-the-findings.md) |
+| introducing a helper that encodes a rule an audit already greps for | [`audit-coupled-to-the-hand-written-form-of-a-rule`](../../learnings/workflow-issues/audit-coupled-to-the-hand-written-form-of-a-rule.md) |
 
-> **On a blocking finding from an automated reviewer:** a finding being correct does not make the remedy it implies correct, and a rating that will not clear creates pressure to ship *any* responsive change. Build the implied remedy, measure it against what you have, and report the number — including when it loses. See `docs/solutions/workflow-issues/answer-a-blocking-review-with-a-measurement.md`.
+
+> **On a blocking finding from an automated reviewer:** a finding being correct does not make the remedy it implies correct, and a rating that will not clear creates pressure to ship *any* responsive change. Build the implied remedy, measure it against what you have, and report the number — including when it loses. See [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md).
 
 > **Once the PR is open and Greptile posts a scored review, the round-by-round loop is its own skill:** [`greptile-loop`](../greptile-loop/SKILL.md) — triage per finding, re-publish with the secret holdout, and wait for the next round without resident background pollers (repeatedly killed under memory pressure on 2026-09-10; see its §4 for the bounded waiting mechanics).
 
@@ -366,45 +374,24 @@ Run before PR. Each layer is gardening, not engineering:
    > on 1.x, and the 1.x line was still shipping (1.104.25). **A gate keyed on `latest`
    > silently converts someone else's major release into your emergency.**
 
-2. **House-style audit** (read-only — the `npm audit` twin) — assert against `reference/house-style.md` + `reference/keyboard-conventions.md`:
-   - **Every failure toast carries Copy Error — the blocking assertion.** Run the per-call-site
-     pairing review in House Style's *Every failure toast carries a "Copy Error" action* rule.
-     It covers raw `Toast.Style.Failure`, `showFailureToast` (whose default action is Report
-     Error, not Copy Error), and the kit's `showError` / `failToast` (compliant by construction).
-     Never assert with a count of `"Copy Error"` strings: one compliant toast masks ten that are
-     not, and kit-using code has none at all.
-   - **`raycast-kit` adoption — REPORT ONLY, never blocks.** On a **self-authored** extension,
-     note failure toasts / `instanceof Error` ternaries / `${n} items`-style copy that could move
-     to `showError` / `getErrorMessage` / `countOf`, as a one-line opportunity in your report.
-     **Since 0.2.0, add hand-rolled byte formatters to that list** — a local
-     `bytes / 1024` / `toFixed(1) + " MB"` helper moves to `formatBytes` (and a transfer rate to
-     `formatSpeed`) from `@chrismessina/raycast-kit/bytes`. The floor is `^0.2.0`
-     (`reference/dep-gates.md`). Do **not** hand back to `develop` for this alone, do **not**
-     open a PR for it alone, and **never** flag it on a fork (personal dependency). The gate is
-     the underlying rule, not the dependency.
-
-     > **Two things to check when you see the kit at `^0.2.0` or a `bytes` adoption:**
-     > 1. **`tsconfig` must be `moduleResolution: Node16`** — subpath imports
-     >    (`@chrismessina/raycast-kit/bytes`) fail `TS2307` under the scaffold default
-     >    (commonjs + node10, which ignores `exports` maps). `"bundler"` is not the fix; it is
-     >    rejected unless `module` is `es2015`+ (`TS5095`).
-     > 2. **Displayed sizes change, and that is intended.** The kit defaults to base-1024;
-     >    most local copies divided by 1,000,000. A CHANGELOG line is not required for the
-     >    shift itself, but do not "restore" the old numbers with `{ base: 1000 }` — reserve
-     >    that for a figure shown next to something the user also reads in Finder.
-   - Web-request extensions use `@chrismessina/raycast-logger`.
-   - 🚨 **KEYBOARD SHORTCUT VALIDATION — a blocking step of its own, not a line item.** Shortcuts use `Keyboard.Shortcut.Common`, and **no two actions conflict within a resolved ActionPanel.** Assert by *reading the resolved panel* — **never by trusting a green `ray lint`, which does not check this invariant at all.** Resolve each custom combo against the `Common` table first: a hand-written `{cmd+shift+c}` *is* `Common.Copy` and collides with one.
-
-     **As of 2026-09-15 this step changed, and the old habit now produces wrong answers.** `@raycast/eslint-plugin` 2.2.0 (latest) **disagrees with BOTH the Raycast runtime and the published docs** on five constants — `Common.Duplicate`, `MoveUp`, `MoveDown`, `Remove`, `RemoveAll`. Runtime and docs agree with each other on all 17; the linter is the sole outlier. Three consequences for this audit, all blocking:
-
-     1. **Validate against the runtime OR the docs — they are co-equal; never against the linter.** Verified 2026-09-15: the runtime shim and `developers.raycast.com/api-reference/keyboard` agree on all 17 constants, and `@raycast/eslint-plugin` 2.2.0 is the sole outlier on five. Either source settles a binding; citing the docs page in a review is legitimate. Get the table from whichever is handier (both commands are in `reference/keyboard-conventions.md`) and compare every shortcut in the diff against it. If the two ever disagree, the runtime wins and the disagreement goes upstream.
-     2. **A `ray lint --fix` that touched shortcuts is a BEHAVIOUR change on those five, not a rename.** `--fix` rewrites a literal to the constant using the linter's stale values, and the action's real binding silently moves (e.g. `{cmd+shift+s}` → `Common.Duplicate` → actually ⌘D). **If `--fix` ran, `git diff` every action file and re-derive each rewritten binding from the runtime before shipping.**
-     3. **The fixer never reads `package.json` `platforms`** — the string does not appear in the rule source. It matches `macMatch || winMatch`, so on a **macOS-only** extension a literal `{ctrl+shift+c}` gets rewritten to `Common.Copy` on the *Windows* match and moves to ⌘⇧C. A collision the fixer created, on a platform the extension does not target.
-
-     Full divergence table, the three `--fix` hazards, and both extraction snippets: `reference/keyboard-conventions.md` (verified 2026-09-15 against Raycast 2.4.1.0; re-verify when Raycast updates, not only when `@raycast/eslint-config` bumps).
-   - No hand-defined `Preferences`/`Arguments` types; no `any` casts (`[lint]` — backstop only; durable home is ESLint).
-   - **Disable the Impeccable design hook first** (`/impeccable hooks off`) so a design false-positive can't masquerade as a house-style violation during this audit — it can't see `@raycast/api` UI (see the *Environment / tooling* rule in `reference/house-style.md`). Confirm `.impeccable/config.json` is gitignored so it never lands in the Store PR.
-   - **Any failure that needs code → hand to `develop`'s house-style audit fix.**
+2. **House-style audit** (read-only — the `npm audit` twin). Walk the **Audit matrix** at the
+   end of `reference/house-style.md`: for every row whose *Applies* condition holds, run that
+   rule's **Audit** and record `pass`, `fail`, or `n/a` with the reason — one line per ID, in
+   the pre-flight report. Every row gets a result; a row you skipped is a row you did not audit.
+   - **A `block` failure stops the submission** and goes to `develop`'s house-style audit fix.
+     A `report` failure goes in the report and does not stop it — never hand back to `develop`
+     or open a PR for a `report` item alone.
+   - **`copy-error` is the one most often gotten wrong:** it is a per-call-site pairing review.
+     A count of `"Copy Error"` strings proves nothing, and kit-using code has none at all.
+   - **`keyboard` follows `reference/keyboard-conventions.md`, never a green `ray lint`.**
+     `@raycast/eslint-plugin` disagrees with the runtime and the published docs on five
+     `Common` constants, and it never checks the conflict invariant. If `ray lint --fix`
+     touched a shortcut, re-derive every rewritten binding from the runtime before shipping.
+   - **`kit` (report only):** note the adoption opportunity in one line. The `^0.2.0` floor, the
+     `bytes` subpath, its `Node16` tsconfig requirement, and the base-1024 display change are
+     in `reference/dep-gates.md`.
+   - **Disable the Impeccable design hook first** if it is installed (`impeccable-off`), so a
+     design false positive cannot pass for a house-style finding.
 3. **Weeding** — screenshots current (did we add a command/view?), README current, CHANGELOG updated.
    - 🚨 **FRESHEN `AGENTS.md` (and `CONCEPTS.md`) — every self-authored PR push, no
      exceptions.** Not "if it looks stale": the doc is part of the deliverable, on the same
@@ -1134,7 +1121,7 @@ in this table — the CHANGELOG plus the two screenshots the user had replaced t
 PNGs would have reverted the new screenshots. Neither is detectable after merge without
 re-reading the published copy.)*
 
-**Known failure — wrong PR base / diverged fork main → huge diff (verify after every publish).**
+**Known failure — wrong PR base / diverged fork main → huge diff (verify after every publish).** Full write-up: [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md).
 `ray publish` sometimes opens the PR against **`<you>:main` (the fork) instead of
 `raycast/extensions:main` (upstream)**. Worse, a fork `main` can periodically diverge
 from upstream via GitHub "Sync fork" **merge** commits (it merges rather than

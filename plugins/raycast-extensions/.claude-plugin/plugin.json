@@ -1,6 +1,6 @@
 {
   "name": "raycast-extensions",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Stage-keyed skills for the full Raycast-extension lifecycle: api-changelog (derive @raycast/api release notes Raycast doesn't publish), scaffold (new), develop (change code, modernize, house-style audit fix), ship (dep hygiene, house-style audit, Store compliance, PR, cleanup), greptile-loop (drive an open Store PR's automated review to 5/5), review-pr (inbound review of a third-party PR).",
   "author": {
     "name": "Chris Messina",

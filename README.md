@@ -39,12 +39,12 @@ The `develop` ↔ `ship` handoff is two-way: when `ship`'s read-only audit or St
 
 Shared references live in [`plugins/raycast-extensions/reference/`](plugins/raycast-extensions/reference/): `house-style.md` (the tagged convention checklist both the build and the audit read), `keyboard-conventions.md` (including where the linter, the runtime, and the docs disagree), `dep-gates.md`, `store-guidelines.md`, `readme-template.md`, `sparse-checkout-discipline.md`, `pr-and-cleanup.md`, and an `eslint-rules/` directory.
 
-> **Status:** v0.7.0 — all six skills are authored and in use.
+> **Status:** v0.8.0 — all six skills are authored and in use.
 
 ## Also in this repo
 
 - **[`docs/reference/raycast-api-changelog.md`](docs/reference/raycast-api-changelog.md)** — derived `@raycast/api` release notes, useful whether or not you use the plugin.
-- **[`docs/solutions/`](docs/solutions/)** — learnings from real extension work, filed by category: caching semantics of `useCachedPromise`, error display as a credential-disclosure surface, AppleScript/JXA integration, advisory file locks across command processes, and how to handle automated review findings.
+- **[`plugins/raycast-extensions/learnings/`](plugins/raycast-extensions/learnings/)** — learnings from real extension work, shipped inside the plugin and cited by each skill at the step where they apply: caching semantics of `useCachedPromise`, error display as a credential-disclosure surface, AppleScript/JXA integration, advisory file locks across command processes, and how to handle automated review findings.
 - **[`CONCEPTS.md`](CONCEPTS.md)** — the vocabulary the skills and learnings use.
 
 ## Developing the plugin

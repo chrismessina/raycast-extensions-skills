@@ -79,7 +79,7 @@ Map ad-hoc `Action` shortcuts to `Keyboard.Shortcut.Common` **by semantics**, an
   grep -oE 'Pin:\{macOS:\{[^}]*\}[^}]*\}' \
     "/Applications/Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Contents/Resources/api/node_modules/@raycast/api/index.js"
   ```
-  The npm `@raycast/api` ships types only and has no `index.js`, so looking there finds nothing and feels like confirmation. The historical case where the docs *were* wrong (since fixed): `docs/solutions/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md` — read it as a dated incident, not as a standing claim about that page.
+  The npm `@raycast/api` ships types only and has no `index.js`, so looking there finds nothing and feels like confirmation. The historical case where the docs *were* wrong (since fixed): [`wrong-vendor-docs-manufacture-review-findings`](../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) — read it as a dated incident, not as a standing claim about that page.
 
 ---
 

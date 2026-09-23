@@ -59,7 +59,7 @@ done
 
 Of 36 extension repos here, 24 were self-authored and 12 were forks. The forks
 are out of scope before any counting starts — see the fork prohibition in
-[the House Style kit rule](../../../plugins/raycast-extensions/reference/house-style.md).
+[the House Style kit rule](../../reference/house-style.md).
 
 **2. Count each candidate pattern per repo — occurrences AND repo spread.** Repo
 spread is the load-bearing number; total occurrences mislead badly. Example from
