@@ -11,13 +11,17 @@ the learnings corpus the skills cite (`docs/solutions/`) and derived `@raycast/a
 
 ## Editing the plugin
 
-**Install copies into a version-keyed cache — it is not a symlink.** Editing a `SKILL.md` here does
-nothing to the running plugin until the cache is refreshed, so a skill you just edited is not the
-skill that runs in this session. Do not verify an edit by invoking the skill.
+**A local-directory marketplace loads the plugin in place from this checkout.** An edit to a
+`SKILL.md` reaches the next session, or the current one after `/reload-plugins` — not before. So
+the skill already loaded in this session is the pre-edit version: do not verify an edit by
+invoking the skill without reloading first. (Verified 2026-09-22 on Claude Code 2.1.280: a marker
+added to a skill description appeared in a fresh session while the copy under
+`~/.claude/plugins/cache/` did not have it. That cache copy is what GitHub installs run, not
+what a local checkout runs.)
 
 Bump `version` in **both** `plugins/raycast-extensions/.claude-plugin/plugin.json` and
-`.claude-plugin/marketplace.json` for anything structural, and keep the README's `**Status:**`
-line in step. **Run `bash check-references.sh` after touching any skill, reference, manifest, or
+`.claude-plugin/marketplace.json` for a release, so GitHub installs see an update, and keep the
+README's `**Status:**` line in step. **Run `bash check-references.sh` after touching any skill, reference, manifest, or
 the README** — it fails on a dangling `reference/X.md` pointer, a skill missing from the README
 table or either manifest description, and a version mismatch. Exit 0 = clean.
 

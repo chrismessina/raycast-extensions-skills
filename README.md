@@ -11,7 +11,16 @@ claude plugin marketplace add chrismessina/raycast-extensions-skills
 claude plugin install raycast-extensions@raycast-extensions-skills
 ```
 
-Restart Claude Code so the skills load. `scaffold` builds on [`superpowers:brainstorming`](https://github.com/obra/superpowers) for ideation; the other skills have no plugin dependencies.
+Restart Claude Code so the skills load. To pick up a new release later:
+
+```sh
+claude plugin marketplace update raycast-extensions-skills
+claude plugin update raycast-extensions   # then restart Claude Code
+```
+
+A GitHub install is a copy kept in `~/.claude/plugins/cache/`; it changes only when you update it.
+
+`scaffold` builds on [`superpowers:brainstorming`](https://github.com/obra/superpowers) for ideation; the other skills have no plugin dependencies.
 
 ## Skills
 
@@ -47,14 +56,9 @@ claude plugin marketplace add ~/path/to/raycast-extensions-skills
 claude plugin install raycast-extensions@raycast-extensions-skills
 ```
 
-Install copies the plugin into a version-keyed cache (`~/.claude/plugins/cache/<marketplace>/raycast-extensions/<version>/`); it is not a live link. After editing:
+A local-directory marketplace loads the plugin **in place** from your checkout: edits take effect in the next session, or immediately after `/reload-plugins`. No reinstall or version bump is needed to see them.
 
-```sh
-claude plugin marketplace update raycast-extensions-skills
-claude plugin update raycast-extensions   # then restart Claude Code
-```
-
-For anything structural (a new skill or reference file), bump `version` in both `plugins/raycast-extensions/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` — same-version refreshes can be sticky. Run `bash check-references.sh` before committing; CI runs it too.
+Bump `version` in both `plugins/raycast-extensions/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` when you cut a release, so GitHub installs see an update. Run `bash check-references.sh` before committing; CI runs it too.
 
 ## License
 
