@@ -29,7 +29,7 @@ Mostly **no** — the layers don't overlap:
   and off-the-shelf ESLint can't see (Copy-Error toast pairing, `canAccess(AI)` gating,
   `supportPath`-is-internal).
 
-### `[build]` `.prettierrc` is this exact file, in every self-authored extension
+### `[both]` `.prettierrc` is this exact file, in every self-authored extension
 
 ```json
 {
@@ -47,26 +47,21 @@ import ordering — Node builtins, then third-party, then `@raycast/*`, then rel
 Prettier fails to load the plugin and every format run errors. Config and dependency
 are a matched pair: never add one without the other.
 
-**Promoted from opt-in to rule, 2026-08-29.** The earlier note here said adoption was
-"too split" and cited a `reader` pilot. Both claims are now false: 12 extensions carry
-this exact config, all 12 declare the plugin, and there are **zero** mismatches in
-either direction across the fleet. The `reader` pilot itself has since lost both the
-config and the plugin, so the receipt that entry rested on no longer exists — the
-majority of actively-maintained extensions is the receipt now.
+**Promoted from opt-in to rule, 2026-08-29,** when a fleet census found most actively
+maintained extensions already carried this exact config with the plugin declared, and none
+carried one without the other.
 
-> **`[both]` Self-authored extensions only.** Never add this to a fork you don't own.
+- **Audit:** if `.prettierrc` lists `@ianvs/prettier-plugin-sort-imports`, `package.json`
+  `devDependencies` must declare it — and the reverse. Either half alone fails every format run.
+
+> **Self-authored extensions only.** Never add this to a fork you don't own.
 > Sorting imports rewrites every file that has more than one import block, burying your
 > actual change in an unrelated reformat and making the Store PR unreviewable. Same
 > reasoning as the `@chrismessina/raycast-kit` rule below. Check `author` in
 > `package.json` before touching `.prettierrc`.
 
-This repo's own config deliberately differs: it's docs/YAML, not extension TS, and
-excludes Markdown so hand-authored prose isn't reflowed.
-
-Still on the plain two-key config and eligible for the change (self-authored, as of
-2026-08-29): `central-icon-system`, `claude-artifacts`, `ejection-seat`, `google-maps`,
-`reader`, `secret-browser-commands`, `store-updates`, `threads-client`. Apply it when
-you are next in one of them for another reason — a standalone reformat PR is noise.
+An extension still on the plain two-key config gets the change the next time it is being
+changed for another reason (`[build]`). A standalone reformat PR is noise.
 
 ---
 
@@ -209,13 +204,34 @@ shape, or a dark asset on a light ground. After any wave of UI work, run the
 extension (`npm run dev`) and open the changed commands before reporting — or say
 plainly that rendered output is unverified and hand the eyes-only list over.
 
+### `[both]` A readiness gate tracks *did prep finish* and *which items succeeded* separately
+
+One boolean can't carry both, and conflating them fails in *both* directions:
+- **Finish must resolve on every path — including `.catch`.** If a background task (WASM load, pre-render, prefetch) drives the spinner via `isLoading={… || !ready}`, the failure branch must still flip `ready`, or one non-critical failure wedges the whole view on a permanent spinner even though the UI is fully functional. Toast *and* dismiss — never just toast.
+- **A single "ready" flag lies about per-item availability.** When the gate covers N independent items (pre-rendered files, prefetched rows), track the *set of items that actually succeeded* — not one flag flipped for all. Render/fetch each item independently (per-item `try/catch`, not a `Promise.all` that rejects on the first failure and abandons the rest), return the succeeded ids, and gate each item's action on membership. Flipping one `ready=true` on completion offers an action (Quick Look, open-file) on items whose file/row was never produced — pointing at something that doesn't exist. And the two paths must derive the identical key (e.g. both `${id}-512.png`), or set-membership doesn't actually prove the target exists. (Cursors #29662: a flat `quickLookReady` boolean offered ⌘Y on cursors a first-failure `Promise.all` never rendered.)
+
+- **Audit:** find loading gates fed by background work — `rg -n 'isLoading=\{[^}]*(ready|Ready)' src` —
+  and read each: the failure branch must resolve the gate, and any per-item action must be gated
+  on that item's success, not on the shared flag.
+
 ## Required patterns
 
 ### `[both]` Every failure toast carries a "Copy Error" action
 
-When showing `Toast.Style.Failure`, attach a `primaryAction` titled **"Copy Error"** that copies the error message to the clipboard.
+Every failure toast offers **Copy Error**, which copies the error message to the clipboard —
+however the toast is made. There are three paths, and only the last is compliant by default:
 
-- **Audit:** grep every `Toast.Style.Failure` → assert an accompanying copy-error action.
+| Path | Compliant when |
+|---|---|
+| `showToast({ style: Toast.Style.Failure, … })`, or `toast.style = Toast.Style.Failure` | it sets a `primaryAction` titled `"Copy Error"` (canonical form below) |
+| `showFailureToast(error, { title })` from `@raycast/utils` | it passes `primaryAction` titled `"Copy Error"`. **Its default action is not Copy Error:** it attaches **Report Error** (opens a GitHub issue on a published extension) or **Copy Logs** (in development or a private extension). Passing `primaryAction` moves that default to the secondary slot, so the user gets both. |
+| `showError` / `failToast` from `@chrismessina/raycast-kit` | always — the kit attaches Copy Error itself |
+
+- **Audit — a per-call-site pairing review, not a count.** List every failure site, then read
+  each one: `rg -n 'Toast\.Style\.Failure|showFailureToast\(' src`. Each hit must set a
+  Copy Error `primaryAction` in the same call or on the same toast. `showError(` / `failToast(`
+  sites comply without one. A global count of `"Copy Error"` strings proves nothing — one
+  compliant toast can mask ten that are not.
 - **Canonical form:**
 
 ```ts
@@ -234,6 +250,15 @@ catch (error) {
     },
   });
 }
+```
+
+With `@raycast/utils`, pass the action explicitly:
+
+```ts
+await showFailureToast(error, {
+  title: "Failed to generate token",
+  primaryAction: { title: "Copy Error", onAction: () => Clipboard.copy(error instanceof Error ? error.message : String(error)) },
+});
 ```
 
 ### `[both]` In a `no-view` command, never `showHUD` before a toast that carries actions
@@ -410,7 +435,7 @@ title: isMacOS ? "Show in Finder" : "File Explorer"   // v2.0.3 wording
 
 Never `"Show in Folder"` — that has never been Raycast's string on either platform.
 
-- **Audit:** `rg -n 'title[=:] *["`].*\b[Rr]eveal'` → any user-facing "Reveal" (not just "in Finder" — it hides in "Reveal Index File" and "Could Not Reveal…"); `rg -A3 '<Action\.ShowInFinder' | rg 'title='` → must return nothing. Internal identifiers (`revealOnComplete`, a `RevealInFinderAction` component) are not user-facing and don't block.
+- **Audit:** `rg -n 'title[=:] *["`].*\b[Rr]eveal'` → any user-facing "Reveal" (not just "in Finder" — it hides in "Reveal Index File" and "Could Not Reveal…"); `rg -U --pcre2 -n '<Action\.ShowInFinder\b(?:[^>]|=>)*?\btitle=' src` → must return nothing (the match stays inside one element, so a later action's `title` does not count; an attribute value containing a bare `>` would end it early). Internal identifiers (`revealOnComplete`, a `RevealInFinderAction` component) are not user-facing and don't block.
 - **Evidence:** 2026-08-10 fleet audit — 8 user-facing strings across 4 self-authored extensions said "Reveal" or "Open in Finder"; `raycast-reader` branched on platform but emitted "Show in Folder". Every `Action.ShowInFinder` already omitted `title`, so the component was the only thing getting Windows right. Two `raycast-fathom` toasts labeled "Open in Finder" called bare `open(filePath)` — the file opened in its default app and Finder never appeared. **2026-08-20:** v2.0.3 renamed the Windows default from "Show in Explorer" to "File Explorer", invalidating the hand-written wording this rule had recommended ten days earlier — evidence for the omit-`title` form over any literal.
 
 ### `[both]` A completed file export offers Show in Finder AND Copy Path, both with shortcuts
@@ -450,14 +475,13 @@ Three further requirements on the write itself, none of which the toast can pape
   does. A plain `existsSync` check races its own write.
 - **`await mkdir(dir, { recursive: true })` first.** `~/Downloads` is not guaranteed to
   exist, and without this every export on such a machine fails with a bare `ENOENT`.
-- **Failures go through `showFailureToast(error, { title })`**, never a hand-rolled
-  `Toast.Style.Failure` — the Copy-Error rule above applies to exports too, and an export
+- **Failures follow the Copy-Error rule above**, like every other failure toast. An export
   that fails with a generic message and the real error dropped into `console.error` is one
   the user cannot report.
 
 - **Audit:** `rg -n 'writeFile' src/` → each hit needs the `wx` flag, a preceding `mkdir`,
-  and a success toast with both actions; `rg -n 'Toast.Style.Failure' src/` inside export
-  handlers must return nothing.
+  and a success toast with both actions; every failure path in an export handler passes the
+  Copy-Error pairing review.
 - **Evidence:** 2026-09-08, `raycast-ios-apps` `use-export-favorites.ts` — a good
   Show-in-Finder + Copy-Path toast (the source of this rule) paired with two hand-rolled
   failure toasts carrying no Copy Error and discarding the error to `console.error`.
@@ -493,8 +517,12 @@ Non-string columns need `String(value)` at the call site, not a widened signatur
 `price` that silently becomes `"undefined"` is the failure this catches. Apply it to the header
 row too if any header ever becomes dynamic.
 
-- **Audit:** `rg -n '\.replace\(/"/g' src/` → hand-rolled cell quoting with no formula guard;
-  any `join(",")` building a row from more than one differently-escaped expression.
+- **Audit — locate, then read.** A grep cannot tell a CSV writer from a file that only
+  mentions `.csv` (a MIME table, a filename list), and the compliant helper itself contains
+  `.replace(/"/g, '""')`, so both would be false findings. Find the writers —
+  `rg -n 'text/csv|\.csv[`"]|toCsv|csvCell' src` — and for each one confirm that **every cell,
+  header included if dynamic, passes through one helper whose first step is the formula guard**
+  (`/^[=+\-@\t\r]/`). A test pins it: `csvCell("=1+1")` must start with `"'=`.
 - **Evidence:** 2026-09-08, `raycast-ios-apps` `generateCSV` — correct RFC 4180 quoting on
   `name` and `sellerName`, both straight from the iTunes API, with nothing stopping a leading
   `=`. Found while fixing the export rule above, which the quoting had made *look* handled.
@@ -544,10 +572,17 @@ Compute the version instead:
 
 ```js
 // scripts/cache-schema.mjs — run from prebuild/predev, checked by prelint
-const hash = createHash("sha256")
-  .update(readFileSync("src/types/index.ts", "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "").replace(/\s+/g, " ").trim())
-  .digest("hex").slice(0, 10);
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import ts from "typescript";
+
+// Reprint through the compiler: comments go, formatting is normalized, and string
+// literals survive intact. A regex strip cuts `"https://a"` at the `//`.
+function canonical(file) {
+  const sf = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+  return ts.createPrinter({ removeComments: true }).printFile(sf);
+}
+const hash = createHash("sha256").update(canonical("src/types/index.ts")).digest("hex").slice(0, 10);
 writeFileSync("src/utils/cacheSchema.ts", `export const CACHE_SCHEMA = "${hash}";\n`);
 ```
 
@@ -564,10 +599,10 @@ KEY_PREFIX: `myext_cache_${CACHE_SCHEMA}_`,
 - **Hash the transitive imports, not just the entry file.** A cached type almost always
   reaches a union or interface defined elsewhere; hashing one file lets a rename there keep
   the old key, and the stale value then misses the new lookup and throws at render.
-- **Strip comments with a scanner that respects string literals, not a regex.** A regex
-  truncates `type Url = "https://x"` at the `//`, so two different URLs hash identically —
-  the exact failure the mechanism exists to prevent. Emit a space for a block comment, or
-  `string/* n */` and `string /* n */` hash differently and reformatting evicts every cache.
+- **Never strip comments with a regex.** It truncates `type Url = "https://a.example"` at the
+  `//`, so two different URLs hash identically — the exact failure the mechanism exists to
+  prevent. The compiler printer above is verified against that case, comment and whitespace
+  changes, and JSDoc: formatting-only edits keep the hash, real shape changes move it.
 - **Keep a hand-bumped salt beside the hash.** A semantic correction with an unchanged
   shape — a classifier that now returns "unavailable" where it returned "absent" — moves no
   type and therefore no hash. One deliberate step for the case no derivation can see.
@@ -608,11 +643,14 @@ catalog (not catalogue) · behavior · color · recognize · normalize · serial
 optimize · analyze · honor · labeled · canceled · cancelable · center · defense · license (noun and
 verb) · artifact · while (not whilst)
 
-**Audit** — run before shipping; it must print nothing:
+**Audit — two halves.** Tracked files, before shipping; it must print nothing:
 
 ```bash
-grep -rniE '\b(catalogue|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' src *.md
+git grep -niE '\b(catalogue|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
 ```
+
+Exclude any other path that holds external data verbatim (below). Commit messages and PR
+descriptions are not files, so the second half is `[build]`: read them before you push.
 
 Word boundaries and explicit endings matter here: `PercentRef` matches a loose
 `centre`, `optimistic` is correct US English, and **`cancellation` keeps its double L**
@@ -661,11 +699,12 @@ you carefully put on separate lines arrive as one wall of text.
   collapsed newlines), and (b) flag any error `Detail` that doesn't use the `# Error`
   heading form. Overall description *length* is a `[build]` judgment, not a hard audit
   assertion.
-- **The newline half of (a) now has an ESLint rule** —
-  [`eslint-rules/no-multiline-emptyview-description.mjs`](./eslint-rules/no-multiline-emptyview-description.mjs).
-  Catches `List.EmptyView` / `Grid.EmptyView` / bare `EmptyView` (plus any local wrapper
-  passed via `additionalComponents`), across `"…"`, `{"…"}`, and template literals. Drop it
-  into an extension's flat config:
+- **The newline half of (a) has a reference ESLint rule — not enforced anywhere yet.**
+  [`eslint-rules/no-multiline-emptyview-description.mjs`](./eslint-rules/no-multiline-emptyview-description.mjs)
+  catches `List.EmptyView` / `Grid.EmptyView` / bare `EmptyView` (plus any local wrapper
+  passed via `additionalComponents`), across `"…"`, `{"…"}`, and template literals. No shared
+  config ships it, so an extension that wants it **copies the file into its own repo** (here,
+  `eslint-rules/`) and registers it in its flat config:
 
   ```js
   import noMultilineEmptyViewDescription from "./eslint-rules/no-multiline-emptyview-description.mjs";
@@ -864,6 +903,39 @@ jq -r '(.preferences // [])[] | select(.name=="verboseLogging")
     then "ok" else "DRIFT: \(.title) / \(.label) / \(.description)" end' package.json
 ```
 
+#### `[both]` Logger 1.5.0+: declare `strictRedaction` beside `verboseLogging`
+
+`@chrismessina/raycast-logger` **1.5.0** reads a second preference, `strictRedaction`. Standard
+redaction masks values by *name* (`password`, `token`, `?access_token=`); strict also masks every
+URL query string and fragment, which catches a secret under an unremarkable name (`?sid=…`). The
+logger reads it per call, and the user's setting wins over the extension's configured level.
+
+It is **optional in the Raycast sense** — `"required": false`, default off — so a user never sees
+it unless they open the extension's settings, and nothing about ordinary logging changes. What
+the extension gains is a switch the user can flip before pasting a log into an issue. Declare it
+in every extension on logger 1.5.0+, next to `verboseLogging`, verbatim from the logger's README:
+
+```json
+{
+  "name": "strictRedaction",
+  "type": "checkbox",
+  "required": false,
+  "title": "Strict Redaction",
+  "label": "Also hide URL query strings and fragments in logs",
+  "description": "Enable before reproducing an issue, then share only the lines written afterwards. Masks every URL query string and fragment, including values that automatic redaction cannot recognize by name. Does not change lines already in the console.",
+  "default": false
+}
+```
+
+- **Audit:** an extension whose **installed** logger is 1.5.0+
+  (`npm ls @chrismessina/raycast-logger`; a caret range like `^1.2.2` admits 1.5.0 without
+  installing it) declares `strictRedaction`; `jq -r '(.preferences // [])[] | select(.name=="strictRedaction") | .title' package.json`
+  prints `Strict Redaction`. **Report, don't block** on an extension still pinned below 1.5.0 —
+  bumping the logger is its own change.
+- **Why not in code instead:** `new Logger({ enableRedaction: "strict" })` is always strict,
+  and a query string is often the thing being diagnosed. The person who knows a log is about to
+  leave the machine is the user, so the user holds the switch.
+
 This is UI copy in `package.json`, so it ships — changing it is a Store PR. Fold it into
 the next PR that touches the extension rather than opening one that changes three strings.
 In an extension you do **not** author, leave it alone; the standard is Chris's house style,
@@ -893,12 +965,14 @@ remembering to grep. The 2026-07-25 fleet audit measured what that's worth:
 | Count-bearing copy | 34 | 11 | — |
 
 `raycast-ios-apps` is the proof: **51 failure toasts, zero Copy-Error actions**, because it
-calls `showFailureToast` from `@raycast/utils` 42 times — which has no copy action at all.
+calls `showFailureToast` from `@raycast/utils` 42 times — whose default action is Report Error
+or Copy Logs, never Copy Error, unless you pass one.
 The house-style rule and the ergonomic path point in opposite directions, and the ergonomic
 path wins. A dependency inverts that: the compliant call becomes the shortest one.
 
 **Status:** published — [`@chrismessina/raycast-kit`](https://www.npmjs.com/package/@chrismessina/raycast-kit)
-v0.1.3 (first published 2026-07-25), zero runtime deps, `@raycast/api` peer. First adoption: `get-app-icon`
+**0.2.0** (first published 2026-07-25; floor `^0.2.0`, see `dep-gates.md`), zero runtime deps,
+`@raycast/api` peer. First adoption: `get-app-icon`
 (`c1de11b`), which converted 4 non-compliant failure toasts and deleted a duplicate
 `pluralize`, net −22 lines.
 
@@ -911,7 +985,7 @@ import { showError, failToast, getErrorMessage, countOf } from "@chrismessina/ra
 const errorMessage = error instanceof Error ? error.message : String(error);
 await showToast({ style: Toast.Style.Failure, title: "Failed to Load", message: errorMessage,
   primaryAction: { title: "Copy Error", onAction: async () => { await Clipboard.copy(errorMessage); } } });
-// AFTER
+// AFTER — carries Copy Error itself
 await showError(error, { title: "Failed to Load" });
 
 // A progress toast flipped to failure IN PLACE — showError creates a NEW toast, so
@@ -1107,45 +1181,13 @@ correct ones — then in the "No Visible Blockers" state `Eject Volume` was firs
 clean volume and pressing Return ejected it. The shortcut audit passed; the per-state
 first-action audit did not exist.)*
 
-### `[both]` Keyboard shortcuts: `Common` first, platform-explicit only when cross-platform
+### `[both]` Keyboard shortcuts follow `keyboard-conventions.md`
 
-Two independent decisions. Don't conflate them. (Full ruleset + conflict invariant + audit-fix contract: see [`keyboard-conventions.md`](./keyboard-conventions.md).)
+**The canonical rules live in [`keyboard-conventions.md`](./keyboard-conventions.md)** — the
+`Common` semantic map, when a shortcut must name both platforms, the conflict invariant, and the
+linter's divergence from Raycast. They are not restated here, so the two files cannot drift.
 
-**Decision 1 — Does a `Keyboard.Shortcut.Common` member match the action's semantics?**
-
-- **Yes → use the `Common` constant.** Always. It is already platform-aware, so it is correct on every platform with no extra work. Never hand-roll a shortcut that `Common` already covers, and never wrap a `Common` constant in a platform-explicit object.
-- **No → a custom shortcut is correct and expected.** The `Common` set is small and version-dependent (16 members in `@raycast/api` 1.104.1,
-  17 in 2.0.5 — read the installed typing rather than trusting a number written here); it
-  does not cover everything (no "switch mode", "toggle setting", "connect"). Do not force a bad semantic match — a wrong `Common` is worse than an honest custom shortcut.
-
-**Decision 2 — For custom shortcuts only: what does `platforms` in `package.json` say?**
-
-- **`platforms` ABSENT** → treat as **macOS-only**. That is Raycast's historical default (the field postdates Windows support), so an extension with no `platforms` key predates the split and has no Windows leg. Write the plain object; do **not** flag a bare `cmd`-only shortcut. *(Real: 7 of Chris's 34 extensions have no `platforms` field — `at-profile`, `google-books`, `ios-apps`, `raycast-fly`, `wayback-machine`, `craftdocs`, `quick-call`. An auditor that treats absent as cross-platform mis-fires on every one of them.)*
-- **`["macOS"]` only** → plain object: `shortcut={{ modifiers: ["cmd"], key: "l" }}`. There is no Windows leg. A `{ macOS, Windows }` object on a Mac-only extension is dead weight implying portability it doesn't have.
-- **macOS *and* Windows** → platform-explicit form:
-  ```ts
-  shortcut={{
-    macOS: { modifiers: ["cmd"], key: "l" },
-    Windows: { modifiers: ["ctrl"], key: "l" },
-  }}
-  ```
-  A bare `{ modifiers: ["cmd"], … }` on a cross-platform extension is the defect: `cmd` doesn't exist on Windows, so the shortcut is silently broken there. (This is the miss that shipped ⌘-only shortcuts into an open Store PR on 2026-07-13.)
-
-> **API casing:** the platform keys are **`macOS`** and **`Windows`** (capital W). Lowercase `windows` still typechecks but is marked `@deprecated Use Windows instead` in the SDK — always write `Windows`.
-
-| `platforms`         | `Common` match | Write                                                 |
-| ------------------- | -------------- | ----------------------------------------------------- |
-| absent (⇒ macOS)    | Yes            | `Keyboard.Shortcut.Common.X`                          |
-| absent (⇒ macOS)    | No             | `{ modifiers: [...], key: "..." }`                    |
-| macOS only          | Yes            | `Keyboard.Shortcut.Common.X`                          |
-| macOS only          | No             | `{ modifiers: [...], key: "..." }`                    |
-| macOS + Windows     | Yes            | `Keyboard.Shortcut.Common.X` (already platform-aware) |
-| macOS + Windows     | No             | `{ macOS: {...}, Windows: {...} }`                    |
-
-**Audit note:** a bare `cmd`-only shortcut is a defect *only if* `platforms` **explicitly includes Windows**. The auditor MUST read `package.json` `platforms` before flagging — and must treat an **absent** `platforms` as macOS-only, not as cross-platform. Skipping this mis-fires on every Mac-only extension *and* on every extension with no `platforms` field, which together are the majority of the fleet.
-
-- **`[build]`** Pin/unpin actions use `Icon.Tack` / `Icon.TackDisabled` (the paired set) — never `Icon.Pin`/`Icon.PinDisabled` (Chris preference, attio 2026-09-01).
-- **`[build]`** Person avatars rendered as icons/accessories always carry `mask: Image.Mask.RoundedRectangle` (squircle) — bare circular/unmasked avatar rectangles are a finding (attio, 2026-09-02).
+- **Audit:** the platform-form audit and the conflict invariant, exactly as `keyboard-conventions.md` defines them.
 
 ---
 
@@ -1279,6 +1321,9 @@ a future extension doesn't regress to `osascript`.
 ---
 
 ## Icons
+
+- **`[build]`** Pin/unpin actions use `Icon.Tack` / `Icon.TackDisabled` (the paired set) — never `Icon.Pin`/`Icon.PinDisabled` (Chris preference, attio 2026-09-01).
+- **`[build]`** Person avatars rendered as icons/accessories always carry `mask: Image.Mask.RoundedRectangle` (squircle) — bare circular/unmasked avatar rectangles are a finding (attio, 2026-09-02).
 
 ### `[both]` A monochrome bundled icon needs a theme-aware treatment — a bare filename is invisible in one theme
 
@@ -1478,9 +1523,6 @@ report from being filed. They go above the dependency bumps, never omitted as no
 > CHANGELOG.md` rewrote `## [Bug fix] -  2026-05-21` to a single space on two separate
 > edits, and `ray lint` stayed green both times — so only the diff against the published
 > file surfaced it at all. After any reformat, check what moved:
-> ```bash
-> diff <(grep -E '^## \[' "$PUB_DIR/CHANGELOG.md") \
->      <(grep -E '^## \[' CHANGELOG.md | grep -v '{PR_MERGE_DATE}')
 > ```bash
 > diff <(grep -E '^## \[' "$PUB_DIR/CHANGELOG.md") \
 >      <(grep -E '^## \[' CHANGELOG.md | grep -v '{PR_MERGE_DATE}')

@@ -367,20 +367,12 @@ Run before PR. Each layer is gardening, not engineering:
    > silently converts someone else's major release into your emergency.**
 
 2. **House-style audit** (read-only — the `npm audit` twin) — assert against `reference/house-style.md` + `reference/keyboard-conventions.md`:
-   - Every `Toast.Style.Failure` has a "Copy Error" action. **This is the blocking assertion** —
-     hand-rolled or via the kit, either satisfies it.
-     > **A literal `grep "Copy Error"` gives a FALSE FAILURE on kit-using code.** `showError` /
-     > `failToast` attach the action *inside the package*, so a compliant extension shows zero
-     > matches. Count a site as compliant if it is a `showError(` / `failToast(` call **or** a
-     > `Toast.Style.Failure` with an adjacent `"Copy Error"`. Assert like this:
-     > ```bash
-     > # sites needing a copy action (raw Failure toasts NOT routed through the kit)
-     > rg -n 'Toast\.Style\.Failure' src | rg -v 'failToast|showError'
-     > # sites that already comply
-     > rg -cn '"Copy Error"|failToast\(|showError\(' src
-     > ```
-     > (Caught 2026-07-25 by the `get-app-icon` adoption: after migrating, the literal grep
-     > reported 0 Copy-Error actions on an extension that had just become *more* compliant.)
+   - **Every failure toast carries Copy Error — the blocking assertion.** Run the per-call-site
+     pairing review in House Style's *Every failure toast carries a "Copy Error" action* rule.
+     It covers raw `Toast.Style.Failure`, `showFailureToast` (whose default action is Report
+     Error, not Copy Error), and the kit's `showError` / `failToast` (compliant by construction).
+     Never assert with a count of `"Copy Error"` strings: one compliant toast masks ten that are
+     not, and kit-using code has none at all.
    - **`raycast-kit` adoption — REPORT ONLY, never blocks.** On a **self-authored** extension,
      note failure toasts / `instanceof Error` ternaries / `${n} items`-style copy that could move
      to `showError` / `getErrorMessage` / `countOf`, as a one-line opportunity in your report.

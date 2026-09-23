@@ -414,22 +414,10 @@ the exact paste/open target — do not let a green toast stand in as proof.
 
 ## House Style (applies to all three intents)
 
-Every code change here must conform to House Style. The canonical, tagged checklist is [`../../reference/house-style.md`](../../reference/house-style.md). Highlights you'll hit constantly:
-
-- **Every `Toast.Style.Failure` gets a "Copy Error" action** (copies the message to clipboard).
-  In a **self-authored** extension you're already changing, reach for
-  `showError(error, { title })` from `@chrismessina/raycast-kit` instead of hand-rolling the
-  block — it carries the copy action by definition, and the fleet audit found the hand-rolled
-  form at ~20% compliance. Hand-rolling remains correct; it's just the path that keeps losing.
-  **Never add the kit to a fork you don't own** (personal dep), and never as a standalone
-  change. Same for `countOf(n, "item")` over `${n} items` / `item(s)`.
-- **Web-request extensions use `@chrismessina/raycast-logger`** for structured logging.
-- **Shortcuts use `Keyboard.Shortcut.Common`** by semantics — see [`../../reference/keyboard-conventions.md`](../../reference/keyboard-conventions.md).
-- **Never hand-define `Preferences`/`Arguments`** — use the auto-generated ambient types. **No `any` casts.**
-- **Disable the Impeccable design hook on first touch** if it's firing — it can't see `@raycast/api` UI and every finding on extension code is a false positive (`/impeccable hooks off`). See the *Environment / tooling* rule in [`../../reference/house-style.md`](../../reference/house-style.md).
-- **A readiness gate needs two separate things: *did prep finish* (drives `isLoading`) and *which items actually succeeded* (gates each item's action).** One boolean can't carry both, and conflating them fails in *both* directions:
-  - **Finish must resolve on every path — including `.catch`.** If a background task (WASM load, pre-render, prefetch) drives the spinner via `isLoading={… || !ready}`, the failure branch must still flip `ready`, or one non-critical failure wedges the whole view on a permanent spinner even though the UI is fully functional. Toast *and* dismiss — never just toast.
-  - **A single "ready" flag lies about per-item availability.** When the gate covers N independent items (pre-rendered files, prefetched rows), track the *set of items that actually succeeded* — not one flag flipped for all. Render/fetch each item independently (per-item `try/catch`, not a `Promise.all` that rejects on the first failure and abandons the rest), return the succeeded ids, and gate each item's action on membership. Flipping one `ready=true` on completion offers an action (Quick Look, open-file) on items whose file/row was never produced — pointing at something that doesn't exist. And the two paths must derive the identical key (e.g. both `${id}-512.png`), or set-membership doesn't actually prove the target exists. (Cursors #29662: a flat `quickLookReady` boolean offered ⌘Y on cursors a first-failure `Promise.all` never rendered.)
+Every code change here must conform to House Style. The canonical, tagged checklist is
+[`../../reference/house-style.md`](../../reference/house-style.md) — read it rather than working
+from memory; it is not restated here, so the two cannot drift. Shortcuts follow
+[`../../reference/keyboard-conventions.md`](../../reference/keyboard-conventions.md).
 
 ## Hands off
 

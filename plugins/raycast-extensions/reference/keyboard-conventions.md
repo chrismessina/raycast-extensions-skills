@@ -83,12 +83,40 @@ Map ad-hoc `Action` shortcuts to `Keyboard.Shortcut.Common` **by semantics**, an
 
 ---
 
-## Two independent axes `[build]` (read this first)
+## Two independent axes `[both]` (read this first)
 
 Shortcut form is decided by TWO independent questions — do NOT conflate them:
 
-1. **Does a `Common` member match the action's semantics?** Yes → use the `Common` constant (it's already platform-aware; never wrap it in a platform object). No → a custom shortcut is correct.
-2. **For custom shortcuts only — what does `package.json` `platforms` say?** **Absent** → treat as macOS-only (Raycast's historical default; the field postdates Windows support). `["macOS"]` → plain `{ modifiers, key }` object. `["macOS","Windows"]` → platform-explicit `{ macOS: {...}, Windows: {...} }` (capital `Windows`; TS rejects lowercase). A bare `cmd`-only object on a cross-platform extension is silently broken on Windows.
+1. **Does a `Common` member match the action's semantics?** Yes → use the `Common` constant. It is
+   already platform-aware, so never hand-roll a shortcut it covers and never wrap it in a platform
+   object. No → a custom shortcut is correct and expected. The set is small and version-dependent
+   (16 members in `@raycast/api` 1.104.1, 17 in 2.0.5 — read the installed typing, not a number
+   written here) and has no "switch mode", "toggle setting", or "connect". **A wrong `Common` is
+   worse than an honest custom shortcut.**
+2. **For custom shortcuts only — which platforms does `package.json` `platforms` name?**
+   - **Absent** → treat as **macOS-only**. The field postdates Windows support, so an extension
+     without it has no Windows leg. Write the plain object and do not flag a bare `cmd`.
+   - **One platform** → plain `{ modifiers, key }` object for that platform. A `{ macOS, Windows }`
+     object on a Mac-only extension is dead weight implying portability it doesn't have.
+   - **macOS and Windows** → **name both platforms whenever the shortcut uses `cmd`, `ctrl`, or
+     `windows`.** Raycast's docs call those the *ambiguous* modifiers: "If the shortcut contains
+     some 'ambiguous' modifiers (eg. `ctrl`, or `cmd`, or `windows`), you will need to specify the
+     shortcut for both platforms"
+     ([keyboard reference](https://developers.raycast.com/api-reference/keyboard)). A bare `cmd`
+     does not exist on Windows, and a bare `ctrl` means a different key on each platform. A
+     shortcut built only from `opt`/`alt` and `shift` is unambiguous and may stay a plain object
+     (`opt` and `alt` are the same physical key under two names).
+
+```ts
+shortcut={{
+  macOS: { modifiers: ["cmd"], key: "l" },
+  Windows: { modifiers: ["ctrl"], key: "l" },
+}}
+```
+
+**Platform keys are `macOS` and `Windows`.** Lowercase `windows` still typechecks but is marked
+`@deprecated Use Windows instead` in `@raycast/api` 2.x types (verified 2.4.1) — always write
+`Windows`.
 
 | `platforms` | `Common` match | Write |
 |---|---|---|
@@ -97,13 +125,20 @@ Shortcut form is decided by TWO independent questions — do NOT conflate them:
 | macOS only | Yes | `Keyboard.Shortcut.Common.X` |
 | macOS only | No | `{ modifiers: [...], key: "..." }` |
 | macOS + Windows | Yes | `Keyboard.Shortcut.Common.X` |
-| macOS + Windows | No | `{ macOS: {...}, Windows: {...} }` |
+| macOS + Windows | No, uses `cmd`/`ctrl`/`windows` | `{ macOS: {...}, Windows: {...} }` |
+| macOS + Windows | No, only `opt`/`alt`/`shift` | `{ modifiers: [...], key: "..." }` |
 | Windows only | Yes | `Keyboard.Shortcut.Common.X` |
-| Windows only | No | `{ modifiers: [...], key: "..." }` (ctrl/alt-based) |
+| Windows only | No | `{ modifiers: [...], key: "..." }` |
 
-> **Windows-only (`platforms: ["Windows"]`)** is rare and absent from Chris's fleet, but it is a legal manifest. Audit its collisions against the **Windows** column of the table, not the macOS one — and note that `Common.Remove` / `Common.RemoveAll` / `Common.Duplicate` differ per platform, so a panel that is collision-free on macOS is not automatically collision-free there.
+> **Windows-only (`platforms: ["Windows"]`)** is rare but legal. Audit its collisions against the
+> **Windows** column of the table below — `Common.Remove` / `RemoveAll` / `Duplicate` differ per
+> platform, so a panel collision-free on macOS is not automatically collision-free there.
 
-> **Absent ≠ cross-platform.** 7 of Chris's 34 extensions have no `platforms` field (`at-profile`, `google-books`, `ios-apps`, `raycast-fly`, `wayback-machine`, `craftdocs`, `quick-call`). An auditor that defaults absent → cross-platform flags a bogus defect on every one of them.
+**Audit (platform form):** read `package.json` `platforms` **before** flagging anything. A custom
+shortcut is a defect only when the extension targets both platforms and the shortcut uses an
+ambiguous modifier without naming both. An auditor that treats an absent field as cross-platform
+mis-fires on every Mac-only extension. *(Real: 7 of the fleet's 34 extensions have no `platforms`
+field. The miss this rule prevents shipped ⌘-only shortcuts into an open Store PR on 2026-07-13.)*
 
 ## The semantic map `[build]`
 
