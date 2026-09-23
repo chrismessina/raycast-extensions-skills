@@ -1163,16 +1163,40 @@ cursors PR #29493: 143 files, base `chrismessina:main`.)
 - **Do NOT "fix" this by resetting fork `main`** — it may carry commits of your own. Retargeting the PR base is the correct, non-destructive fix.
   Fork-main divergence is then harmless.
 
-> **`ray publish` adds and updates, but does NOT delete.** A re-publish syncs new and
-> changed files into the fork branch, but a file you *removed* from the source since the last
-> publish stays in the PR — the fork branch keeps it. Observed 2026-07-14: `.windsurf/` was
-> untracked locally and gone from `origin/main`, yet still sat in the open PR after re-publish.
-> So: after a re-publish that was meant to *remove* a file, **verify the fork branch's file
-> list** (`git fetch --depth 1 --filter=tree:0 <fork> ext/<name>` then `git ls-tree -r --name-only FETCH_HEAD`),
-> and if a removed file lingers, delete it directly from the fork branch —
-> `gh api -X DELETE repos/<you>/extensions/contents/extensions/<name>/<path> -f sha=<blob> -f branch=ext/<name> -f message=…`.
-> Verify PR *content*, not just the file list, by the same route — a staging race can push a
-> commit whose message claims a fix its code lacks.
+> **Deletions reach the PR on every publish except a brand-new extension's first push.**
+> `ray publish`'s "preparing extension" step checks out the submission branch in a local fork
+> clone, then — if that clone already holds the extension (`existsSync(<extension dir>/package.json)`)
+> — runs `rmSync` on the extension's directory before copying your extension root back in. The
+> directory is already there for an extension published upstream **and** for a re-publish to an
+> open first-submission PR, so both are wiped; only the very first push of a new extension skips
+> the wipe, and it has nothing to delete. Read from the bundled CLI
+> (`node_modules/@raycast/api/dist/commands/publish/index.js`, search `preparing extension`), same
+> flow in 1.103.10 and 2.4.1; confirmed 2026-09-23 on `raycast-store-updates` #31447, where a
+> locally deleted `eslint.config.mjs` arrived as `removed`.
+>
+> What that means in practice:
+> - **A committed deletion always lands.** Delete the file, commit, publish — it is removed in
+>   the PR. No manual cleanup of the fork branch is needed.
+> - **Anything upstream has that you lack is deleted by your publish.** This is why the staleness
+>   gate's `Only in <PUB_DIR>` is a STOP, not noise.
+> - **What shows up uninvited is a GITIGNORED file still on disk.** Publishing refuses a dirty tree
+>   (`please commit or discard your uncommited changes first`), so an ordinary untracked file
+>   blocks rather than ships — but git status does not list ignored files, and the copy reads the
+>   disk minus its own fixed exclusion list (`.git`, `.github`, `node_modules`, `raycast-env.d.ts`,
+>   `.direnv`, and the Swift/Rust build folders). A gitignored `CLAUDE.md` or `.claude/` in the
+>   extension root ships on every publish; move it outside the root first. The 2026-07-14 case
+>   this note once generalized from — `.windsurf/` persisting in an open PR — fits this if the
+>   folder was ignored and still present; the record does not say, and the current code gives a
+>   tracked, committed deletion no way to linger.
+>
+> **Still read the PR's full file list after every publish**, unfiltered —
+> `gh api repos/raycast/extensions/pulls/<N>/files --paginate --jq '.[] | .status+" "+.filename'`
+> (or `curl` the same endpoint when `gh` is unavailable). It is the only view of what actually
+> shipped, including anything gitignored that rode along. To remove a file from an open PR after
+> the fact, delete it on disk and re-publish; the fork-branch API delete
+> (`gh api -X DELETE repos/<you>/extensions/contents/extensions/<name>/<path> -f sha=<blob> -f branch=ext/<name> -f message=…`)
+> is the fallback when a re-publish is not possible. Verify PR *content*, not just the file list,
+> by the same route — a staging race can push a commit whose message claims a fix its code lacks.
 
 ## Post-merge cleanup
 
