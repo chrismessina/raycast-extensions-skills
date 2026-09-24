@@ -884,7 +884,7 @@ in every extension on logger 1.5.0+, next to `verboseLogging`, verbatim from the
   "required": false,
   "title": "Strict Redaction",
   "label": "Also hide URL query strings and fragments in logs",
-  "description": "Enable before reproducing an issue, then share only the lines written afterwards. Masks every URL query string and fragment, including values that automatic redaction cannot recognize by name. Does not change lines already in the console.",
+  "description": "Enable before reproducing an issue, then share only the lines written afterward. Masks every URL query string and fragment, including values that automatic redaction cannot recognize by name. Does not change lines already in the console.",
   "default": false
 }
 ```
@@ -1479,12 +1479,12 @@ identifiers too.
 
 catalog (not catalogue) · behavior · color · recognize · normalize · serialize ·
 optimize · analyze · honor · labeled · canceled · cancelable · center · defense · license (noun and
-verb) · artifact · while (not whilst)
+verb) · artifact · while (not whilst) · afterward (not afterwards)
 
 **Audit — two halves.** Tracked files, before shipping; it must print nothing:
 
 ```bash
-git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
+git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|afterwards|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
 ```
 
 Exclude any other path that holds external data verbatim (below). Commit messages and PR
