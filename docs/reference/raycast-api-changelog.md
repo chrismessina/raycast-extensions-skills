@@ -1,6 +1,8 @@
 # @raycast/api — derived changelog
 
-Raycast publishes no changelog for `@raycast/api` on npm. This file is derived by diffing the
+Raycast publishes no changelog for `@raycast/api` **on npm**. It does keep one on its docs site —
+[developers.raycast.com/misc/changelog](https://developers.raycast.com/misc/changelog) — but that page
+skips releases (no 2.4.0 or 2.4.1 entry as of 2026-09-24), so it is a lead list, not a record. This file is derived by diffing the
 published tarballs (`npm pack @raycast/api@<v>`), comparing `types/index.d.ts`, `oclif.manifest.json`,
 and the natural-language string sets extracted from the minified `dist/` bundles.
 
@@ -16,6 +18,129 @@ mkdir -p v221 v230 && tar xzf raycast-api-2.2.1.tgz -C v221 && tar xzf raycast-a
 diff -u v221/package/types/index.d.ts v230/package/types/index.d.ts
 node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").commands))'
 ```
+
+---
+
+## 2.5.1 — 2026-09-24 · **nothing new; see 2.5.0**
+
+A pure version bump, verified at byte level. Only `dist/commands/version/index.js`,
+`oclif.manifest.json`, and `package.json` differ from 2.5.0. The first and last each differ in one
+byte (`0` → `1`). `oclif.manifest.json` differs in 5,596 bytes at identical size, which is **not** a
+version-only signature on its face — but parsed as JSON the two manifests differ in exactly one key,
+`.version`. The byte churn is key order. Published three hours after 2.5.0.
+
+---
+
+## 2.5.0 — 2026-09-24
+
+Diffed against **2.4.1**. The installed Raycast app is still **2.4.1.0**, so nothing below was
+checked against a 2.5 runtime: every claim is about the npm package, and the runtime-only claims in
+Raycast's note are listed as unverified at the end.
+
+**Raycast now has a public changelog** —
+[developers.raycast.com/misc/changelog](https://developers.raycast.com/misc/changelog), with dated
+entries back to 1.25.0 (2021-10-13). It is vendor prose and it is **incomplete**: fetched 2026-09-24,
+it has an entry for 2.5.0 but none for 2.4.0 or 2.4.1, so the Skills capability that shipped in the
+2.4.0 CLI (below) first appears there under 2.5.0. Use it as a lead list; this file stays the record
+of what the artifacts show.
+
+### What moved
+
+`types/index.d.ts` grew 12.5 KB (10 lines out, 422 in). The publish, build, bundle, and develop
+bundles changed by 62–242 bytes each. No file was added or removed. `oclif.manifest.json` compares
+equal apart from `.version`, so **no CLI command or flag changed.** `dist/types/manifest-schema.d.js`
+differs only in a minifier variable name.
+
+### Extensions can provide AI models — the types are new, the build support is not
+
+New in the public surface:
+
+- `AI.refreshModels(): Promise<void>`
+- `AI.RegisteredModel`, `AI.GetModels`, `AI.StreamCompletion`, and the `AI.Model*` request/stream
+  types (`ModelMessage`, `ModelRequest`, `ModelStream`, `ModelStreamPart`, …), all exported aliases
+  of an `ExtensionModel*` family. **That is the family the 2.4.0 entry below recorded as dropped** —
+  absent from 2.4.1 entirely. It returns in 2.5.0 still as `declare type`; what is new and public is
+  the `AI.*` aliases that point at it.
+- `AI.ask`'s `model` option is now `ModelSelector = Model | { id: string }`, so an extension can name
+  one of its own models by id. This widens the type; every existing call still typechecks.
+- A registered model declares `id`, `title`, and optional `isLocal`, `icon`, `description`,
+  `contextWindow`, `sizeInBytes`, and `capabilities` (`systemMessage`, `temperature`, `vision` media
+  types, `tools`, `streaming`, `reasoningEffort` with its options).
+
+The **manifest** side already existed. The 2.4.1 build bundle resolves `ai.modelProvider` to a file
+under `src/` and fails with *"Make sure ai.modelProvider in the package.json corresponds to a file in
+the src directory"*; 2.5.0's code for this is identical apart from minifier names. So `modelProvider`
+is not new CLI behavior in 2.5.0 — what 2.5.0 adds is the typed API to implement one.
+
+### `ai.mcp` — new in the build output
+
+The build bundle's `mcp` occurrences go from 0 to 4, all in one place: after writing `plugin.json`
+and copying `skills/`, the build now writes `.mcp.json` to the output directory as
+`{ "mcpServers": { "<plugin name>": <ai.mcp> } }`, and **deletes** it when `ai.mcp` is absent. The
+value is passed through verbatim — no occurrence of `mcp` in the build validates its shape — so a
+malformed server entry is not caught at build time.
+
+### `AI.experimental_decide`
+
+```ts
+AI.experimental_decide(
+  { state: unknown, questions: Record<string, DecisionQuestion> },
+  { signal?: AbortSignal },
+): Promise<DecisionAnswers<Questions>>
+```
+
+Three question types, discriminated by `type`. `choice` takes `instructions` and a `criteria` map of
+option → description, and answers with `choice`, `confidence`, and per-option `probabilities`. The
+other two are typed as `NoulQuestion` (sic — the declaration's own spelling) and `ScoreQuestion`.
+Answers are typed per question key.
+
+### AI model enum: 9 members repointed, 4 added
+
+No member was removed — each `-` line reappears in the `+` block with a new target:
+
+| Member(s) | 2.4.1 | 2.5.0 |
+|---|---|---|
+| `Anthropic_Claude_Sonnet`, `_Sonnet_4.5`, `_4.5_Sonnet`, `_3.7_Sonnet`, `_Sonnet_3.7` | `anthropic-claude-sonnet-4-5` | `anthropic-claude-sonnet-5` |
+| `OpenAI_GPT-5`, `OpenAI_GPT5`, `OpenAI_o3` | `openai_o1-gpt-5` / `openai_o1-o3` | `openai-gpt-5.6-terra` |
+| `xAI_Grok-4.20` | `xai-grok-4.20` | `xai-grok-4.5` |
+
+Added: `OpenAI_GPT-6_Sol`, `OpenAI_GPT-6_Luna`, `Anthropic_Claude_Opus_5.5`, `xAI_Grok-4.7`.
+
+This is the same kind of silent repoint as 2.3.0: code that names `AI.Model.Anthropic_Claude_Sonnet`
+now gets a different model with no source change.
+
+### Publishing: git errors deduplicated, and token redaction now covers stdout and stderr
+
+`dist/utils/publish/git.js` changed how a failed git command becomes an error:
+
+- **2.4.1** — `failed running git ${message with oauth2:gho_… redacted}` followed by git's stdout and
+  stderr, **unredacted**.
+- **2.5.0** — `[message, stdout, message.includes(stderr) ? "" : stderr]`, empty parts dropped,
+  joined, and **the whole string** redacted.
+
+The first half is the "no longer repeat" in Raycast's note: stderr is dropped when the message
+already contains it. The second half is not in the note: a `gho_` token that git echoed to stdout or
+stderr was printed in a 2.4.1 publish error and is masked in 2.5.0.
+
+### Unverified — Raycast's note says so; these artifacts cannot confirm it
+
+The installed app is 2.4.1, so none of these were checked against a runtime:
+
+- Using extension-provided models requires Raycast Pro.
+- MCP supports remote HTTP and local stdio servers, with OAuth for HTTP, and its tools appear next
+  to the extension's declared tools. (The build only writes the config; what consumes it is in the app.)
+- `mcp` and `skills` can also be declared in `ai.yaml`.
+- Users can mention skills in AI Chat.
+- **Fork Extension** in Store search results — an app feature with no footprint in this package.
+
+### Fleet impact
+
+- **Nothing breaks.** Every type change widens or adds. No fleet extension names an `AI.Model`
+  member (searched `raycast-*/src`, 2026-09-24); `reader` and `tesla-energy` call `AI.ask` with the
+  default model, which this diff does not describe.
+- **No dependency floor moves.** Nothing in 2.5.0 is required by existing code.
+- **A model-provider or MCP extension targets `^2.5.0`** — the model types and the `.mcp.json`
+  output first exist there. A Skills-only extension needs `^2.4.0` (below).
 
 ---
 

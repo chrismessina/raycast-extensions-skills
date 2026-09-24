@@ -174,6 +174,18 @@ Scaffold into a standalone working dir. If you keep the extension in its own Git
 default for **every** first submission. Nothing about a first submission needs a
 standalone repo, a git remote, or a published baseline.
 
+## AI capabilities need a newer `@raycast/api` floor
+
+The general floor is `^2.1` (`reference/dep-gates.md`). An extension that uses one of these targets
+the version where it first exists instead — the derivation is in
+[`docs/reference/raycast-api-changelog.md`](../../../../docs/reference/raycast-api-changelog.md):
+
+| Capability | Declared as | First in |
+|---|---|---|
+| Agent Skills (`skills/<name>/SKILL.md`, validated at build) | `ai.skills` / `ai.yaml` | `^2.4.0` |
+| Provide AI models (`getModels`, `streamCompletion`, `AI.refreshModels`) | `ai.modelProvider` | `^2.5.0` |
+| MCP server (build writes `.mcp.json`, shape not validated) | `ai.mcp` / `ai.yaml` | `^2.5.0` |
+
 ## House Style from the start
 
 New code must conform to House Style as it's written — see `reference/house-style.md` (`[build]` entries) and `reference/keyboard-conventions.md`. Don't scaffold code that the `ship` house-style audit would immediately flag.

@@ -7,9 +7,12 @@ metadata:
 
 # api-changelog
 
-Raycast ships `@raycast/api` to npm with **no changelog, no release notes, and no readable tags**
-(observed through 2.4.1, 2026-09-14). The npm page gives you a version number and a date; everything
-else has to be derived from artifacts.
+Raycast ships `@raycast/api` to npm with **no changelog, no release notes, and no readable tags**.
+Its docs site does keep a changelog —
+[developers.raycast.com/misc/changelog](https://developers.raycast.com/misc/changelog) — but it
+**skips releases**: fetched 2026-09-24, it has 2.5.0 and no 2.4.0 or 2.4.1, so the Skills capability
+that shipped in the 2.4.0 CLI first appears there under 2.5.0. Treat it as Tier 3: a list of leads
+to verify, and a check on what you might have missed, never a source.
 
 This skill is that derivation. It exists because the answers change what the other skills do: 2.3.0
 silently repointed AI model ids, and 2.4.0 added a whole extension capability (Skills).
