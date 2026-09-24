@@ -258,6 +258,13 @@ looking there returns nothing and feels like confirmation.
 "users cannot do this", trace the public entry point to that branch and confirm no other route
 reaches the feature — a guarded branch proves only that *that* path throws.
 
+**Search for an entitlement on the object the feature produces, not only near its name.** On the
+2.5.0 pass a search for a Pro check within a few hundred bytes of every `modelProvider` reference
+found nothing, and the entry nearly shipped saying so. The gate was on the registered model object —
+`allowed_subscription_types: ["pro", "advanced_ai"]` — read by a separate model-store module. Search
+for the subscription vocabulary itself (`subscription`, `allowed_`, `requires_`, `pro`) across the
+bundles, then trace hits back to the feature.
+
 ## 5. Write it up
 
 Append to
