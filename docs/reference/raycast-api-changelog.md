@@ -33,9 +33,9 @@ version-only signature on its face — but parsed as JSON the two manifests diff
 
 ## 2.5.0 — 2026-09-24
 
-Diffed against **2.4.1**. The installed Raycast app is still **2.4.1.0**, so nothing below was
-checked against a 2.5 runtime: every claim is about the npm package, and the runtime-only claims in
-Raycast's note are listed as unverified at the end.
+Diffed against **2.4.1**. First derived from the npm packages alone while the installed app was
+2.4.1.0; the runtime claims were then checked against **Raycast.app 2.5.1.0** the same day (section
+*Checked against the app*, below).
 
 **Raycast now has a public changelog** —
 [developers.raycast.com/misc/changelog](https://developers.raycast.com/misc/changelog), with dated
@@ -122,16 +122,43 @@ The first half is the "no longer repeat" in Raycast's note: stderr is dropped wh
 already contains it. The second half is not in the note: a `gho_` token that git echoed to stdout or
 stderr was printed in a 2.4.1 publish error and is masked in 2.5.0.
 
-### Unverified — Raycast's note says so; these artifacts cannot confirm it
+### Checked against the app (Raycast 2.5.1.0)
 
-The installed app is 2.4.1, so none of these were checked against a runtime:
+Read from `Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Contents/Resources/`
+(`backend/index.mjs`, `frontend/*.js`, and the runtime shim
+`api/node_modules/@raycast/api/index.js`).
 
-- Using extension-provided models requires Raycast Pro.
-- MCP supports remote HTTP and local stdio servers, with OAuth for HTTP, and its tools appear next
-  to the extension's declared tools. (The build only writes the config; what consumes it is in the app.)
-- `mcp` and `skills` can also be declared in `ai.yaml`.
-- Users can mention skills in AI Chat.
-- **Fork Extension** in Store search results — an app feature with no footprint in this package.
+- **`AI.experimental_decide` is live, with no internal-build gate.** The shim forwards it as an
+  `aiDecide` request and throws `TypeError("AI.experimental_decide state must be JSON-serializable")`
+  when `state` does not survive `JSON.stringify`. The note does not mention that constraint.
+- **`AI.refreshModels` is live** — a `refreshModels` request in the backend's method table.
+- **MCP config is validated by the app, not the build.** The backend's schema accepts exactly two
+  shapes, both `.strict()` (unknown keys rejected):
+  - `{ type?: "stdio", command, args?: string[], env?: Record<string,string> }`
+  - `{ type?: "http" | "sse", url (http/https only), headers?: Record<string,string>, oauth?: … }`,
+    where `oauth` is `{ type: "dynamic" }` or `{ type: "static", clientId, clientSecret?, scopes? }`.
+
+  So HTTP and stdio are confirmed. **SSE, custom headers, and static-client OAuth are also supported
+  and are not in the note.** A malformed `ai.mcp` passes `ray build` and fails when the app loads it.
+- **`mcp` and `skills` in an AI config file:** the app never reads one — no `ai.yaml` string in its
+  bundles. The CLI build does, and checks four names in this order: `ai.json`, `ai.json5`,
+  `ai.yaml`, `ai.yml`; the 2.4.0 entry below records how it merges them into the manifest's `ai`.
+- **Skill mentions exist in AI Chat.** The frontend has an `ai-skill-mentions` module, and the
+  chat playground's sample text uses the syntax `@skill:weekly-update`.
+- **Extension models are opt-in per extension.** Each extension's settings carry
+  `modelProviderEnabled` (default `false`), toggled in extension settings; failure reads *"Could not
+  enable AI models"*. The note does not say a user has to turn this on.
+- **Fork Extension** is an action in an extension's *Configure* section, shown only when the
+  extension is `publishedOnGitHub`. It is also exposed as a Raycast AI tool, `fork-extension`
+  (*"Fork a Raycast Store extension into a local development project by its handle and name"*),
+  which refuses when the destination folder already exists.
+
+- **Extension models require Pro — confirmed.** The backend registers every extension-provided
+  model with `allowed_subscription_types: ["pro", "advanced_ai"]`, the same tag it gives local Ollama
+  models, and the frontend model store (`ai-models-store-*.js`) checks
+  `allowed_subscription_types?.includes(...)` to decide whether a model is locked for the user.
+  (A first search only near `modelProvider` found nothing; the gate is on the registered model
+  object. Codex located it.)
 
 ### Fleet impact
 

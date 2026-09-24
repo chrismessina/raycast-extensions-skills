@@ -184,7 +184,7 @@ the version where it first exists instead — the derivation is in
 |---|---|---|
 | Agent Skills (`skills/<name>/SKILL.md`, validated at build) | `ai.skills` / `ai.yaml` | `^2.4.0` |
 | Provide AI models (`getModels`, `streamCompletion`, `AI.refreshModels`) | `ai.modelProvider` | `^2.5.0` |
-| MCP server (build writes `.mcp.json`, shape not validated) | `ai.mcp` / `ai.yaml` | `^2.5.0` |
+| MCP server (build writes `.mcp.json` unchecked; the app validates it on load — stdio, or http/sse with optional headers and OAuth) | `ai.mcp` / `ai.yaml` | `^2.5.0` |
 
 ## House Style from the start
 
