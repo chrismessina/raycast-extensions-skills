@@ -29,7 +29,7 @@ by inline flags. Use `.git/pr-body.md`: never tracked, never published.
 | Situation | Flag |
 | --- | --- |
 | `gh pr create` (a PR made by hand) | `--body-file "$BODY"` |
-| `gh api -X PATCH …/pulls/<N>` (body onto `ray publish`'s draft) | **`-F` body=@"$BODY"** |
+| Body onto `ray publish`'s draft, first post or any update | **`ship/scripts/pr-body.py`**: `--initial` writes a local body only while the live one is still the PR's original, and `--splice` builds every later update from the live body. Never PATCH a body from a local file yourself; it overwrites the user's own edits (see ship step 4) |
 
 ⚠️ **For `gh api` it is `-F` (uppercase).** Lowercase `-f` does *not* expand `@path` — it
 posts the literal string `@.git/pr-body.md` as the body. Verified 2026-07-28 against the

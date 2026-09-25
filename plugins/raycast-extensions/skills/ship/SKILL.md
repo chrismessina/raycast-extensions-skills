@@ -246,6 +246,20 @@ Run before PR. Each layer is gardening, not engineering:
    Then assert the kept files still meet spec (`2000 × 1250`) — a replaced screenshot is
    the most likely thing in the tree to be the wrong size.
 
+   **Then run Raycast's own screenshot CI check on the set that will SHIP.** The
+   `metadata-images` job (`scripts/check_metadata_images.py`, which imports its sibling
+   `check_raycast_images.py`) compares every screenshot's background against the first one
+   (RMS limit 12.0) and requires one light/dark appearance across the set. Only the files
+   you change get pushed, so **replacing one screenshot tests it against the OLD published
+   captures**. A fresh shot beside old ones fails even though your local set is consistent.
+   Either retake the whole set or check against the published copies. Local run: put both
+   scripts under `<tmp>/mono/scripts/`, symlink the extension to
+   `<tmp>/mono/extensions/<name>`, then `python3 scripts/check_metadata_images.py
+   extensions/<name>` in a venv with `numpy pillow`.
+
+   *(2026-09-24, brew #31534: one new `brew-4.png` scored 42.3 against the published
+   `brew-1.png`, and 0.1 against the local one it was captured alongside.)*
+
    *(2026-07-30, `karakeep` 2.4.0: the previous `HEAD`-based script reported
    `RECOMPRESS → ADOPT UPSTREAM` for **all six screenshots AND the extension icon** — every
    one of which the user had just replaced that session. Because the assets were already
@@ -904,31 +918,64 @@ gh api "repos/raycast/extensions/pulls/$PR" \
 `draft` is `true`, `state` is `open`. If `draft` is `false`, the PR is already submitted —
 do not post; tell the user and let them decide.
 
-**4. Post it onto the draft.**
+**4. Post it onto the draft, and never overwrite a body the user has edited.**
+
+> 🚨 **Every PR-body write goes through `scripts/pr-body.py`. Never PATCH a whole body
+> from a local file.** Once the draft exists, Chris edits it by hand: he uploads a
+> screenshot and ticks the checklist boxes only he can truthfully tick. A later
+> whole-body PATCH from your local copy discards all of that without an error.
+> *(2026-09-24, brew #31534: two follow-up body updates overwrote his uploaded Adopt Apps
+> screenshot and all five ticked boxes. He re-applied them by hand.)*
 
 ```bash
-gh api -X PATCH "repos/raycast/extensions/pulls/$PR" -F body=@"$BODY" \
-  --jq '{draft:.draft, len:(.body|length)}'
+S=/Users/messina/Developer/GitHub/chrismessina/raycast-extensions-skills/plugins/raycast-extensions/skills/ship/scripts/pr-body.py
+# First post: refuses unless the live body is still exactly the one the PR was
+# created with (no edit history, or equal to the oldest history entry).
+"$S" "$PR" --initial "$BODY"            # dry run: prints the diff
+"$S" "$PR" --initial "$BODY" --apply
+# EVERY later update, whether a new bullet, a corrected count, or a fix note:
+"$S" "$PR" --splice edits.json          # [{"find": "...", "replace": "..."}]
+"$S" "$PR" --splice edits.json --apply
 ```
 
-> The PATCH sends **only** `body`, so it cannot flip draft state. The check above is the
-> real guard — reading `.draft` *after* the write cannot prevent one. `len` confirms the
-> body actually landed (a `0` means the file was empty or the flag was wrong).
+Splice mode uses the **live** body as the base. Every `find` must be one or more
+**whole lines** occurring exactly once in it; a fragment is refused, because a fragment
+still matches inside a line he has extended. All anchors are located in the original
+live body and applied at once, so one edit cannot create or destroy another's anchor,
+and overlapping anchors abort. If an anchor is missing, he rewrote or deleted that line:
+the script writes nothing, and you show him the edit instead of forcing it. To add a new
+line, anchor on the line it goes after and replace it with that line plus the new one.
 
-> ⚠️ **`-F` (uppercase) reads `@file`. `-f` (lowercase) does NOT** — it posts the literal
-> string `@.git/pr-body.md` as the PR body, publicly, on the user's submission. Verified
-> 2026-07-28 against the live API: only `-F key=@path` expands the file (newlines and
-> backticks preserved intact). This is a one-character difference with a visibly wrong,
-> public result.
+It re-reads the body just before writing and aborts if it moved. **That leaves a gap of
+milliseconds between the re-read and the write**: GitHub's PR PATCH has no conditional
+write, so it cannot be closed. The script checks the edit history after writing, where
+each entry holds the whole body as of that edit, newest first. Once the newest entry is
+its own write, it compares the one before with what it read. If they differ, an edit
+landed in the gap: it prints the overwritten version and exits 2, and you splice that
+back in rather than moving on. If the history has not caught up after a few seconds, it
+says the gap could not be checked. Bodies are compared as exact strings, so CRLF line
+endings from web edits survive; a find ending in half of a CRLF is refused.
 
-**The `--jq '.draft'` must print `true`.** If it prints `false`, the PR was already out
-of draft — say so plainly rather than quietly leaving a submission live.
+> The PATCH sends **only** `body`, so it cannot flip draft state. Step 3's check is the
+> real guard. `gh` is a shell alias for `op plugin run -- gh` here, and aliases do not
+> exist in a subprocess, so reads try `op plugin run -- gh` first (skipped when
+> `GH_TOKEN` or `GITHUB_TOKEN` is set), then plain `gh`, and report each one's stderr if
+> both fail. **The write is sent exactly once, on the transport the reads proved.** A
+> transport can fail after GitHub accepted the PATCH, and re-sending could overwrite an
+> edit made in between, so a failed write is re-read and reported, never retried.
 
-**If the PATCH hangs (~2 min, auto-backgrounds):** that is the documented sandbox
-behavior for `gh` writes — see `reference/pr-and-cleanup.md`. **Do not retry it three
-times.** Check whether it landed anyway (`gh pr view "$PR" --repo raycast/extensions
---json body --jq '.body | length'`), and if not, hand the user the exact command with the
-body file already written. Their one paste beats your three timeouts.
+**If step 3 found `draft: false`,** the PR was already out of draft: say so plainly
+rather than quietly updating a live submission.
+
+**If the script hangs (~2 min, auto-backgrounds):** that is the documented sandbox
+behavior for `gh` writes; see `reference/pr-and-cleanup.md`. **Do not retry it three
+times.** Check whether it landed by reading the live body for your replacement lines
+(`gh pr view "$PR" --repo raycast/extensions --json body --jq .body`). **Never re-run a
+splice without that check:** an insertion keeps its anchor line, so running it twice
+inserts the new line twice. If it did not land, hand
+the user the same `pr-body.py … --apply` command, with the same `edits.json` (or
+`$BODY` for a first post), to run in their own shell. Never hand over a raw whole-body
+PATCH. Their one paste beats your three timeouts.
 
 **4. Report, then stop.** Give the user the PR URL, the body as posted, and the explicit
 next step: *read it, then click "Ready for review" yourself.* Do not do it for them.
