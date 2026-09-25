@@ -21,6 +21,16 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.5.2 — 2026-09-25 · **nothing new; see 2.5.0**
+
+A pure version bump against **2.5.1**, verified at byte level. Only `dist/commands/version/index.js`,
+`oclif.manifest.json`, and `package.json` differ. The first and last each differ in one byte (`1` →
+`2`). `oclif.manifest.json` differs in 8,339 bytes at identical size, and parsed as JSON the only
+differing key is `.version` — the same key-order churn as 2.5.1. Raycast's changelog page has no
+entry for 2.5.1 or 2.5.2 (fetched 2026-09-25). The installed app is 2.5.2.0.
+
+---
+
 ## 2.5.1 — 2026-09-24 · **nothing new; see 2.5.0**
 
 A pure version bump, verified at byte level. Only `dist/commands/version/index.js`,
