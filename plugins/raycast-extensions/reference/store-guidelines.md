@@ -135,5 +135,7 @@ structural; **the fetched docs remain authoritative over anything below.**
 - **Screenshots are the most common staleness miss.** If a command or view was added,
   the screenshots are wrong. That's a `ship` weeding item, and it's easy to skip because
   the code is fine.
+  If the extension shows personal data (accounts, contacts, meetings, health), retake them with
+  the [`screenshots`](../skills/screenshots/SKILL.md) skill, never from the live account.
 - **Don't let the cache above become the audit.** It exists to save a round-trip on
   structural questions, not to replace step 1.

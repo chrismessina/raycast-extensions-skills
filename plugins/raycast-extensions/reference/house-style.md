@@ -884,15 +884,16 @@ in every extension on logger 1.5.0+, next to `verboseLogging`, verbatim from the
   "required": false,
   "title": "Strict Redaction",
   "label": "Also hide URL query strings and fragments in logs",
-  "description": "Enable before reproducing an issue, then share only the lines written afterward. Masks every URL query string and fragment, including values that automatic redaction cannot recognize by name. Does not change lines already in the console.",
+  "description": "Turn on before reproducing an issue, then share only the new log lines.",
   "default": false
 }
 ```
 
 - **Audit:** an extension whose **installed** logger is 1.5.0+
   (`npm ls @chrismessina/raycast-logger`; a caret range like `^1.2.2` admits 1.5.0 without
-  installing it) declares `strictRedaction`; `jq -r '(.preferences // [])[] | select(.name=="strictRedaction") | .title' package.json`
-  prints `Strict Redaction`. **Report, don't block** on an extension still pinned below 1.5.0 —
+  installing it) declares `strictRedaction`; `jq -r '(.preferences // [])[] | select(.name=="strictRedaction") | .title + " / " + .description' package.json`
+  prints `Strict Redaction / Turn on before reproducing an issue, then share only the new log lines.`
+  The earlier 237-character description is **drift**: replace it (see `pref-description-length`). **Report, don't block** on an extension still pinned below 1.5.0 —
   bumping the logger is its own change.
 - **Why not in code instead:** `new Logger({ enableRedaction: "strict" })` is always strict,
   and a query string is often the thing being diagnosed. The person who knows a log is about to
@@ -902,6 +903,32 @@ This is UI copy in `package.json`, so it ships — changing it is a Store PR. Fo
 the next PR that touches the extension rather than opening one that changes three strings.
 In an extension you do **not** author, leave it alone; the standard is Chris's house style,
 not a fix to someone else's product.
+
+#### `[both]` Preference descriptions fit on one line — 80 characters or fewer
+
+**ID:** `pref-description-length` · **Applies:** all
+
+Raycast's extension settings pane shows a preference's `description` under its toggle or field,
+and a long one wraps into a paragraph behind a **Show more / Show less** disclosure. The first
+`strictRedaction` copy (237 characters) rendered as three wrapped lines; Chris flagged it on
+2026-09-25. Measured from that screenshot, a line wraps at about **86 characters** at the default
+settings width, so the target is **80 characters or fewer**, with room for a narrower window.
+
+- **Say when or why, not what.** The `label` already names the setting. The description earns
+  its line by saying when to turn it on or what changes as a result. Detail that needs more
+  than one line belongs in the README.
+- **`label` has its own budget: under 50 characters.** It renders in a larger font on the same
+  row as the switch.
+- This is a *target measured once*, not a documented Raycast limit. If a screenshot shows a
+  line wrapping earlier, lower the number here; do not raise it without one.
+
+**Audit:**
+
+```bash
+jq -r '(.preferences // [])[]
+  | select((.description // "" | length) > 80 or (.label // "" | length) >= 50)
+  | "LONG: \(.name) description=\(.description // "" | length) label=\(.label // "" | length)"' package.json
+```
 
 ### `[both]` (conditional) Prefer `@chrismessina/raycast-kit` for failure toasts and count copy
 
@@ -1311,7 +1338,7 @@ linter's divergence from Raycast. They are not restated here, so the two files c
 
 - **Audit:** the platform-form audit and the conflict invariant, exactly as `keyboard-conventions.md` defines them.
 
-### `[both]` Every `isShowingDetail` list carries a "Toggle Sidebar" action
+### `[both]` Every `isShowingDetail` list carries a "Show Sidebar" / "Hide Sidebar" action
 
 **ID:** `toggle-sidebar` · **Applies:** a list uses `isShowingDetail`
 
@@ -1327,7 +1354,7 @@ const [showDetail, setShowDetail] = useCachedState<boolean>("show-detail-<view>"
 <List isShowingDetail={items.length > 0 && showDetail} ...>
 // in EVERY item's ActionPanel:
 <Action
-  title="Toggle Sidebar"
+  title={showDetail ? "Hide Sidebar" : "Show Sidebar"}
   icon={Icon.AppWindowSidebarRight}
   shortcut={{ macOS: { modifiers: ["cmd", "shift"], key: "d" }, Windows: { modifiers: ["ctrl", "shift"], key: "d" } }}
   onAction={() => setShowDetail((v) => !v)}
@@ -1336,14 +1363,16 @@ const [showDetail, setShowDetail] = useCachedState<boolean>("show-detail-<view>"
 
 - **`useCachedState`, not `useState`** — the preference survives relaunch; a user who
   collapses the sidebar means it.
-- **Title is exactly "Toggle Sidebar"**; shortcut is exactly ⌘⇧D / Ctrl⇧D,
+- **The title names what the action will do: "Hide Sidebar" while it shows, "Show Sidebar"
+  while it's hidden.** Never "Toggle Sidebar": that leaves the user to work out which way it
+  goes. *(Stated by Chris, 2026-09-26, shipping Mercury.)* Shortcut is exactly ⌘⇧D / Ctrl⇧D,
   platform-explicit (no `Common` constant covers it).
 - **On every item's panel**, not just some — the action must be reachable from whichever
   row is selected.
-- **Audit:** grep for `isShowingDetail`; every hit must have a matching
-  `"Toggle Sidebar"` action in the same view and a `useCachedState`-backed flag in the
-  `isShowingDetail` expression. A bare `isShowingDetail={true}` or one with no toggle
-  action is a finding.
+- **Audit:** grep for `isShowingDetail`; every hit must have a matching action titled
+  `"Show Sidebar"` / `"Hide Sidebar"` (chosen from the flag) in the same view, and a
+  `useCachedState`-backed flag in the `isShowingDetail` expression. A bare
+  `isShowingDetail={true}`, a missing action, or a "Toggle Sidebar" title is a finding.
 
 ### `[build]` Prefer `updateCommandMetadata` to surface menu-bar status in the command list
 
@@ -1827,13 +1856,14 @@ form of a rule reports a regression on code that just adopted a helper encoding 
 | `logger` | `both` | self-authored, makes web requests | **block** | Structured logging via `@chrismessina/raycast-logger` |
 | `logger-verbose-copy` | `both` | the extension declares `verboseLogging` | **block** | The copy is fixed too — type this block verbatim |
 | `logger-strict-redaction` | `both` | self-authored, installed logger 1.5.0+ | **report** | Logger 1.5.0+: declare `strictRedaction` beside `verboseLogging` |
+| `pref-description-length` | `both` | all | **report** | Preference `description` ≤ 80 characters, `label` < 50 |
 | `kit` | `both` | self-authored, already being changed | **report** | Prefer `@chrismessina/raycast-kit` for failure toasts and count copy |
 | `show-in-finder` | `both` | all | **block** | Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, "Finder")` |
 | `export-actions` | `both` | writes a file for the user | **block** | A completed file export offers Show in Finder AND Copy Path, both with shortcuts |
 | `csv-formula-guard` | `both` | exports CSV | **block** | A CSV export neutralizes spreadsheet formulas, not just quotes |
 | `first-action` | `both` | all | **block** | Audit the FIRST action of every ActionPanel state, not just the primary one |
 | `keyboard` | `both` | all | **block** | Keyboard shortcuts follow `keyboard-conventions.md` |
-| `toggle-sidebar` | `both` | a list uses `isShowingDetail` | **block** | Every `isShowingDetail` list carries a "Toggle Sidebar" action |
+| `toggle-sidebar` | `both` | a list uses `isShowingDetail` | **block** | Every `isShowingDetail` list carries a "Show Sidebar" / "Hide Sidebar" action |
 | `detail-code-lang` | `both` | renders code in `Detail` | **block** | A fenced code block in `Detail` markdown carries a language tag |
 | `empty-state-assets` | `both` | bundles empty-state art | **block** | Empty-state assets are themed or vector |
 | `monochrome-icon` | `both` | bundles a monochrome icon | **block** | A monochrome bundled icon needs a theme-aware treatment — a bare filename is invisible in one theme |
