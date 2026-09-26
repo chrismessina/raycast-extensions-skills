@@ -71,6 +71,25 @@ curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR
 
 ## 2. Triage — every finding gets a verdict, and "valid" is not automatic
 
+**Greptile's own rules settle some findings before any code is read.** Raycast gives it a rule set
+(mapped in [`reference/greptile-rules.md`](../../reference/greptile-rules.md)). A finding that
+contradicts one of those rules is declined by quoting the rule:
+
+- A missing ellipsis on an `ActionPanel.Submenu` title — Submenu adds its own.
+- "Use a `password` preference so the value is encrypted" — preferences are encrypted regardless
+  of type.
+- A request "dropped" by a deferred execution gated on a ref — trace the re-run path through the
+  dependency array first; a deferred request is not a dropped one.
+- A limitation of Windows media sessions (one session per app, the last media tab, apps like VLC
+  not registering) reported as a bug.
+- "Replace this with `getFavicon()`" when the custom code adds validation, racing, force refresh,
+  or sources `getFavicon` lacks.
+
+**Reply without the affirmation.** No "You're absolutely right" or "Good point" — Raycast's rules
+ask the bot not to write that way, and a reply that opens with it reads the same. State what the
+code does and what changed, with the receipt.
+
+
 | When you are about to… | Read |
 |---|---|
 | comply with a correct finding whose fix is only implied | [`verify-the-remedy-not-just-the-finding`](../../learnings/workflow-issues/verify-the-remedy-not-just-the-finding.md) |

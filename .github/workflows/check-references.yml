@@ -20,3 +20,6 @@ jobs:
 
       - name: Assert every skill reference resolves
         run: bash check-references.sh
+
+      - name: Test the deterministic pre-flight checks
+        run: node --test plugins/raycast-extensions/scripts/preflight.test.mjs

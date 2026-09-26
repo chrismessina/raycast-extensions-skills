@@ -39,7 +39,7 @@ The `develop` ↔ `ship` handoff is two-way: when `ship`'s read-only audit or St
 
 Shared references live in [`plugins/raycast-extensions/reference/`](plugins/raycast-extensions/reference/): `house-style.md` (the tagged convention checklist both the build and the audit read), `keyboard-conventions.md` (including where the linter, the runtime, and the docs disagree), `dep-gates.md`, `store-guidelines.md`, `readme-template.md`, `sparse-checkout-discipline.md`, `pr-and-cleanup.md`, and an `eslint-rules/` directory.
 
-> **Status:** v0.8.0 — all six skills are authored and in use.
+> **Status:** v0.9.0 — all six skills are authored and in use.
 
 ## Also in this repo
 

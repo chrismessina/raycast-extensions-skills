@@ -26,6 +26,16 @@ the README** — it fails on a dangling `reference/X.md` pointer, a skill missin
 table or either manifest description, a version mismatch, a learning no skill or reference
 cites, and a relative link that does not resolve. Exit 0 = clean.
 
+## `scripts/preflight.mjs`
+
+The deterministic half of Raycast's Store-review rules, run by `ship` before anything is read —
+the mapping from each rule to its check is `plugins/raycast-extensions/reference/greptile-rules.md`.
+Zero dependencies, so it runs from any extension root. **Add a check here, not prose to a skill,
+whenever a rule can be decided mechanically**, with a failing test first in
+`scripts/preflight.test.mjs` (`node --test plugins/raycast-extensions/scripts/preflight.test.mjs`;
+CI runs it). Then run it across real extension checkouts before trusting it: a check that fires on
+compliant code costs a review round on every extension it touches.
+
 ## `learnings/`
 
 The learnings live **inside the plugin** so they ship with every install and the skills can

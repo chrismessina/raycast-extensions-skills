@@ -290,7 +290,23 @@ Run before PR. Each layer is gardening, not engineering:
    work was done. Promoted here, and to `develop` step 0, so it is the first thing checked
    rather than the last.)*
 
-0. **Typecheck gate — `npx tsc --noEmit`.** `ray build` (esbuild) and `ray lint`
+0. **Deterministic pre-flight — run the script before reading anything.** Raycast's Store
+   reviewer applies about twenty rules that need no judgment: `$schema`, allowed categories,
+   `platforms`, preference types, CHANGELOG placeholder and date order, screenshots (plus the
+   Store's own 2000×1250 size), unused dependencies, `node-fetch`, ESLint and Prettier config, hand-typed
+   `Preferences`, shortcut platform-key case. Code checks them in 40 ms; reading for them burns
+   tokens and misses some. From the extension root, with `$PUB_DIR` from the staleness gate:
+
+   ```bash
+   node "<plugin>/scripts/preflight.mjs" --published "$PUB_DIR"   # <plugin> = two levels above this skill's base directory
+   ```
+
+   **Any FAIL blocks** — fix it (config and metadata here; code goes to `develop`) and re-run
+   until it exits 0. **WARN lines are judgment:** read each one and either fix it or say in the
+   report why it stands (a binary name like `ipatool` in a title, say). Which reviewer rule each
+   check comes from, and the rules that stay judgment: `reference/greptile-rules.md`.
+
+   **Typecheck gate — `npx tsc --noEmit`.** `ray build` (esbuild) and `ray lint`
    strip/skip types; they pass on code that does NOT typecheck, and an external
    reviewer running `tsc` will catch it. Run `tsc --noEmit` AND `npm run build` AND
    `npm run lint` — a non-zero `tsc` is a failure even when build/lint are green.
