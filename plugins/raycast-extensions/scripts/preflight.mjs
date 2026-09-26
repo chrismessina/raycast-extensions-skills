@@ -58,20 +58,112 @@ function sourceFiles(dir) {
 }
 
 // Every match of a regex across the source tree, with a 1-based line number.
-// Comment lines are skipped: a JSDoc example or commented-out code is not a finding.
+// Replace every comment with spaces, keeping newlines so line numbers stay true. A small lexer,
+// not a regex: `/*` or `//` inside a string, a template literal (including its `${}` parts, which
+// are lexed as code), or a regex literal is not a comment, and a line starting with `*` can be
+// multiplication. Known limit: a regex literal directly after `)` (`if (x) /re/`) reads as
+// division, because telling the two apart needs a parser; that style is rare in extension code.
+const REGEX_AFTER_WORD = new Set([
+  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else",
+  "yield", "await",
+]);
+
+export function stripComments(src) {
+  const out = [];
+  lexCode(src, 0, out, false);
+  return out.join("");
+}
+
+// Lex code from i. With inTemplate, stop after the `}` that closes a template's `${`.
+function lexCode(src, i, out, inTemplate) {
+  let prev = ""; // last significant character, to tell a regex from division
+  let word = ""; // the identifier that ended at prev, if any
+  let depth = 0;
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (inTemplate) {
+      if (c === "{") depth++;
+      else if (c === "}") {
+        if (depth === 0) return (out.push("}"), i + 1);
+        depth--;
+      }
+    }
+    if (c === "/" && n === "/") {
+      while (i < src.length && src[i] !== "\n") out.push(" "), i++;
+      continue;
+    }
+    if (c === "/" && n === "*") {
+      out.push("  ");
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) out.push(src[i] === "\n" ? "\n" : " "), i++;
+      if (i < src.length) out.push("  "), (i += 2);
+      continue;
+    }
+    if (c === "`") {
+      out.push(c);
+      i++;
+      while (i < src.length && src[i] !== "`") {
+        if (src[i] === "\\") out.push(src[i] + (src[i + 1] ?? "")), (i += 2);
+        else if (src[i] === "$" && src[i + 1] === "{") out.push("${"), (i = lexCode(src, i + 2, out, true));
+        else out.push(src[i]), i++;
+      }
+      if (src[i] === "`") out.push("`"), i++;
+      prev = "`";
+      word = "";
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      out.push(c);
+      i++;
+      while (i < src.length && src[i] !== c && src[i] !== "\n") {
+        if (src[i] === "\\") out.push(src[i] + (src[i + 1] ?? "")), (i += 2);
+        else out.push(src[i]), i++;
+      }
+      if (src[i] === c) out.push(c), i++;
+      prev = c;
+      word = "";
+      continue;
+    }
+    const regexContext = prev === "" || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || REGEX_AFTER_WORD.has(word);
+    if (c === "/" && regexContext) {
+      out.push(c);
+      i++;
+      let inClass = false;
+      while (i < src.length && src[i] !== "\n") {
+        const d = src[i];
+        if (d === "\\") out.push(d + (src[i + 1] ?? "")), (i += 2);
+        else {
+          out.push(d);
+          i++;
+          if (d === "[") inClass = true;
+          else if (d === "]") inClass = false;
+          else if (d === "/" && !inClass) break;
+        }
+      }
+      prev = "/";
+      word = "";
+      continue;
+    }
+    out.push(c);
+    if (/[A-Za-z0-9_$]/.test(c)) word = /[A-Za-z0-9_$]/.test(prev) ? word + c : c;
+    else if (!/\s/.test(c)) word = "";
+    if (!/\s/.test(c)) prev = c;
+    i++;
+  }
+  return i;
+}
+
+// Every match of a regex across the source tree, after stripping comments, with a 1-based line
+// number. A JSDoc example or commented-out code is not a finding.
 function grepSources(dir, files, regex) {
   const hits = [];
   for (const file of files) {
-    const lines = (read(file) ?? "").split("\n");
-    let inBlock = false;
-    lines.forEach((line, i) => {
-      const t = line.trim();
-      const comment = inBlock || t.startsWith("//") || t.startsWith("/*") || t.startsWith("*");
-      if (t.startsWith("/*") && !t.includes("*/")) inBlock = true;
-      if (inBlock && t.includes("*/")) inBlock = false;
-      if (!comment && regex.test(line)) hits.push(`${relative(dir, file)}:${i + 1}`);
-      regex.lastIndex = 0;
-    });
+    stripComments(read(file) ?? "")
+      .split("\n")
+      .forEach((line, i) => {
+        if (regex.test(line)) hits.push(`${relative(dir, file)}:${i + 1}`);
+        regex.lastIndex = 0;
+      });
   }
   return hits;
 }
@@ -87,13 +179,14 @@ function changelogHeadings(text) {
     .split("\n")
     .filter((l) => /^##\s/.test(l))
     .map((l) => {
-      const m = l.match(/^##\s+\[(.*?)\]\s*(?:-\s*(.+?))?\s*$/);
-      return { raw: l.trim(), title: m?.[1] ?? l.replace(/^##\s+/, "").trim(), date: m?.[2]?.trim() ?? null };
+      const body = l.replace(/\s+#+\s*$/, ""); // closing-ATX: "## [Unreleased] ##"
+      const m = body.match(/^##\s+\[(.*?)\]\s*(?:-\s*(.+?))?\s*$/);
+      return { raw: l.trim(), title: m?.[1] ?? body.replace(/^##\s+/, "").trim(), date: m?.[2]?.trim() ?? null };
     });
 }
 
 function allPreferences(pkg) {
-  const arr = (v) => (Array.isArray(v) ? v : []);
+  const arr = (v) => (Array.isArray(v) ? v.filter((x) => x !== null && typeof x === "object") : []);
   const prefs = arr(pkg.preferences).map((p) => ({ where: "extension", p }));
   for (const c of arr(pkg.commands)) for (const p of arr(c.preferences)) prefs.push({ where: `command ${c.name}`, p });
   return prefs;
@@ -131,6 +224,13 @@ export function runChecks(dir, opts = {}) {
     (k) => pkg[k] !== undefined && !Array.isArray(pkg[k]),
   );
   if (notArrays.length) add("package-json", "fail", `must be arrays in package.json: ${notArrays.join(", ")}`);
+  const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const badMembers = [];
+  for (const k of ["commands", "preferences"])
+    if (Array.isArray(pkg[k]) && pkg[k].some((v) => !isObj(v))) badMembers.push(k);
+  for (const c of Array.isArray(pkg.commands) ? pkg.commands.filter(isObj) : [])
+    if (Array.isArray(c.preferences) && c.preferences.some((v) => !isObj(v))) badMembers.push(`commands.${c.name}.preferences`);
+  if (badMembers.length) add("package-json", "fail", `every entry must be an object in package.json: ${badMembers.join(", ")}`);
   const files = sourceFiles(dir);
 
   // schema — rule 16
@@ -159,7 +259,7 @@ export function runChecks(dir, opts = {}) {
         badPrefs.map(({ where, p }) => `${p.name} (${where}) is "${p.type}"`).join("; "));
 
   // title-case — rule 11 (heuristic: warn)
-  const commands = Array.isArray(pkg.commands) ? pkg.commands : [];
+  const commands = Array.isArray(pkg.commands) ? pkg.commands.filter((c) => c !== null && typeof c === "object") : [];
   const titles = [["extension", pkg.title], ...commands.map((c) => [`command ${c.name}`, c.title]),
     ...allPreferences(pkg).map(({ where, p }) => [`preference ${p.name} (${where})`, p.title])];
   const untitled = titles.filter(([, t]) => typeof t === "string" && titleCaseProblems(t).length);
@@ -206,7 +306,7 @@ export function runChecks(dir, opts = {}) {
   }
 
   // unused-dependencies — rule 4
-  const sources = files.map((f) => read(f) ?? "").join("\n");
+  const sources = files.map((f) => stripComments(read(f) ?? "")).join("\n");
   const unused = Object.keys(pkg.dependencies ?? {}).filter((dep) => {
     if (dep.startsWith("@types/")) return false;
     const esc = dep.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
@@ -240,7 +340,7 @@ export function runChecks(dir, opts = {}) {
       // .prettierrc may be YAML; read the two keys this rule is about.
       const yaml = {};
       for (const line of prettier.split("\n")) {
-        const m = line.match(/^\s*(printWidth|singleQuote)\s*:\s*([^#\s]+)/);
+        const m = line.match(/^\s*["']?(printWidth|singleQuote)["']?\s*:\s*([^#\s]+)/);
         if (m) yaml[m[1]] = m[1] === "printWidth" ? Number(m[2]) : m[2] === "true" ? true : m[2] === "false" ? false : m[2];
       }
       conf = Object.keys(yaml).length ? yaml : null;

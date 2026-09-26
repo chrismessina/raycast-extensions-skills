@@ -239,6 +239,49 @@ test("prettierrc: YAML syntax is accepted when the values are right, and checked
   assert.ok(failures(makeExt({ files: { ".prettierrc": "printWidth: 80\nsingleQuote: true\n" } })).includes("prettierrc"));
 });
 
+test("comments are stripped lexically: trailing comments, strings containing /*, and continuation lines", () => {
+  const trailing = "const x = 1; /* raycast://extensions/a/b/c */\n";
+  assert.ok(!warnings(makeExt({ files: { "src/a.ts": trailing } })).includes("launch-command"));
+  // A /* inside a template literal must not swallow the rest of the file.
+  const template = 'const glob = `src/*.ts`;\nimport fetch from "node-fetch";\n';
+  assert.ok(failures(makeExt({ files: { "src/a.ts": template } })).includes("native-fetch"));
+  // A line starting with * that is multiplication, not a comment.
+  const cont = 'const n = 2\n  * (await import("node-fetch")).default.length;\n';
+  assert.ok(failures(makeExt({ files: { "src/a.ts": cont } })).includes("native-fetch"));
+  // A regex literal containing /* is not a comment either.
+  const re = 'const r = /a\\/*b/;\nimport fetch from "node-fetch";\n';
+  assert.ok(failures(makeExt({ files: { "src/a.ts": re } })).includes("native-fetch"));
+  // Line numbers still point at the right line after stripping a multi-line comment.
+  const multi = '/*\n a\n b\n*/\nimport fetch from "node-fetch";\n';
+  const f = runChecks(makeExt({ files: { "src/a.ts": multi } })).find((x) => x.id === "native-fetch");
+  assert.deepEqual(f.where, ["src/a.ts:5"]);
+});
+
+test("stripComments: a regex after a keyword and nested template literals keep their content", async () => {
+  const { stripComments } = await import("./preflight.mjs");
+  const kw = 'function f(s) { return /[//]/.test(s) && import("node-fetch"); }';
+  assert.equal(stripComments(kw), kw);
+  const nested = "const u = `x ${`raycast://extensions/a/b/c`} y`; // tail";
+  assert.equal(stripComments(nested), "const u = `x ${`raycast://extensions/a/b/c`} y`;        ");
+  const inner = "const s = `${a /* c */ + b}`;";
+  assert.equal(stripComments(inner), "const s = `${a         + b}`;");
+});
+
+test("prettierrc: YAML with quoted keys is read", () => {
+  const yaml = '"printWidth": 120\n"singleQuote": false\n';
+  assert.ok(!failures(makeExt({ files: { ".prettierrc": yaml } })).includes("prettierrc"));
+});
+
+test("changelog-order: a closing-ATX Unreleased heading still fails", () => {
+  const log = "# Changelog\n\n## [Unreleased] ##\n\n## [Initial Version] - 2026-01-02\n";
+  assert.ok(failures(makeExt({ files: { "CHANGELOG.md": log } })).includes("changelog-order"));
+});
+
+test("null members of commands or preferences fail cleanly instead of crashing", () => {
+  assert.ok(failures(makeExt({ pkg: { commands: [null] } })).includes("package-json"));
+  assert.ok(failures(makeExt({ pkg: { preferences: [null] } })).includes("package-json"));
+});
+
 test("comment lines never trigger a source check", () => {
   const src = "// interface Preferences { apiKey: string }\n/* import fetch from \"node-fetch\"; */\n";
   const f = failures(makeExt({ files: { "src/a.ts": src } }));

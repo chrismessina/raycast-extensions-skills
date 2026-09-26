@@ -18,8 +18,11 @@ directory. FAIL exits 1; WARN never does. Tests: `node --test scripts/preflight.
 
 **Calibrated against the real fleet** (35 extension checkouts, 2026-09-26): every FAIL was a real
 defect on inspection. The one false positive found — a JSDoc comment describing a Store-page link —
-led to two fixes: comment lines are never searched, and only three-segment `raycast://extensions/`
-command links warn.
+led to two fixes: comments are stripped before any source check (by a small lexer that leaves
+strings, template literals including their `${}` parts, and regex literals alone), and only
+three-segment `raycast://extensions/` command links warn. **Known limit:** a regex literal directly
+after `)` — `if (x) /re/` — reads as division, so a `//` inside it would hide the rest of that line.
+Telling the two apart needs a parser, and the style is rare in extension code.
 
 ## Rule → handler
 
@@ -28,7 +31,7 @@ command links warn.
 | 01, 13 | Generated `Preferences` / `Arguments` types; no inline `getPreferenceValues<{…}>` | `preflight` `hand-typed-preferences`; House Style `no-hand-preferences` | FAIL |
 | 02, 07 | CHANGELOG: `{PR_MERGE_DATE}` on the new top entry only, never "Unreleased", dates descending | `preflight` `changelog-order`; House Style `merge-date-placeholder` | FAIL |
 | 03 | A view command needs screenshots in `metadata/` | `preflight` `screenshots`. The same check also asserts 2000×1250 PNG — that size is the Store's own requirement (`store-guidelines.md`), not part of rule 03 | FAIL |
-| 04 | Every dependency is imported under `src/` | `preflight` `unused-dependencies` | FAIL |
+| 04 | Every dependency is imported under `src/` | `preflight` `unused-dependencies` — `@types/*` packages are exempt, since nothing imports them at runtime | FAIL |
 | 05, 14 | ESLint flat config; `defineConfig` from `"eslint/config"`, not `"eslint"` | `preflight` `eslint-config` (legacy `.eslintrc*` fails; no `defineConfig` warns) | FAIL / WARN |
 | 06 | No custom localization; locale-dependent behavior is a preference | `preflight` `localization` (heuristic); House Style `us-english` | WARN |
 | 08 | CHANGELOG created or updated in every PR | `preflight` `changelog-exists`, and `changelog-updated` with `--published` | FAIL |
