@@ -155,10 +155,10 @@ For each finding, decide and say which:
   verified by Chris. Replies also TUNE the rule fleet-wide ("I'll remember it for next
   time!"), and a declined finding left unanswered just re-fires on the next PR.
   Receipt: claude-artifacts #30626 — a posted reasoning drew "I reconsidered it …
-  I'm withdrawing the concern. No change is needed." Draft the reply with receipts and
-  mechanism, no snark, one exchange; **posting it is Chris's call** (same standing
-  rule as never running `gh pr ready`) unless he has already told you to post in this
-  loop.
+  I'm withdrawing the concern. No change is needed." Write the reply with receipts and
+  mechanism, no snark, one exchange, and **post it** once the round is published: see
+  §3 step 6. (Standing instruction from Chris, 2026-09-26. Marking the PR ready for review
+  stays his.)
 - **Confidently wrong API claim, repeated across rounds → disambiguate the code, don't
   debate.** Receipt: get-app-icon #29739 (2026-07-27) — Greptile insisted
   `FileManager.replaceItemAt` throws on a missing destination; verified false three
@@ -216,6 +216,23 @@ unless you supply one. Do not chase the score with changes you can't defend.
    - **Never sequence the restore behind a long-running step inside one backgrounded
      command.** On 2026-09-10 the OS killed exactly such a compound command mid-run;
      the restore had happened, but only an explicit check proved it.
+6. **Reply to every finding in its own thread, after the publish lands.** Every inline
+   finding from the round gets one reply, whether it was fixed, partly fixed, or declined.
+   A finding with no reply reads as ignored, and Greptile re-raises it next round. *(Stated
+   by Chris, 2026-09-26, Mercury #31611.)*
+   - **Only after the push is on the PR.** Name the PR head commit it's fixed in
+     (`gh api repos/raycast/extensions/pulls/$PR/commits --jq '.[-1].sha[0:7]'`), never a
+     local SHA: `ray publish` makes its own commit.
+   - **Terse: two or three sentences.** Open with `@greptile`, then the verdict and the
+     mechanism: "Fixed in `abc1234`. <what changed, naming the function or file>." For a
+     partial fix, say what remains and why. For a decline, give the receipt (a commit
+     author, a measurement, Chris's instruction) in place of the fix.
+   - **Post as a reply to the finding's own comment**, so it lands in that thread:
+     ```bash
+     gh api -X POST "repos/raycast/extensions/pulls/$PR/comments/<comment id>/replies" -f body="$BODY"
+     ```
+     The comment ids come from the §1 inline fetch.
+   - **Public, under Chris's name.** No Claude attribution, no session links, US English.
 
 ## 4. Wait for the next round — the part that went wrong, codified
 
