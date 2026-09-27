@@ -1513,7 +1513,7 @@ verb) · artifact · while (not whilst) · afterward (not afterwards)
 **Audit — two halves.** Tracked files, before shipping; it must print nothing:
 
 ```bash
-git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|afterwards|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
+git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|afterwards|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|canonicalis[a-z]*|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
 ```
 
 Exclude any other path that holds external data verbatim (below). Commit messages and PR

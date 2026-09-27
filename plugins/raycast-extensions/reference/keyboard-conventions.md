@@ -202,7 +202,9 @@ So if `--fix` leaves you with two `Common.Copy` actions in one panel, the collis
 
 > **This is the trap, and it is a trap about you, not about the tool.** Writing an explicit `{ modifiers: ["cmd","shift"], key: "c" }` *feels* like you invented a distinct shortcut. It isn't: it's `Common.Copy` spelled out. The `Common` table below is the only way to know whether the combo you just typed is already taken. **Check every custom shortcut against the table before assigning it** — that's what prevents the collision, not avoiding `--fix`.
 >
-> Learned the hard way, 2026-07-13, on `reader-mode`: assigned Summarize `⌘S` (= `Common.Save`, already on "Save as Markdown") and Copy URL `⌘⇧C` (= `Common.Copy`, already on "Copy as Markdown"). Two collisions, both mine. `--fix` canonicalised them and I briefly blamed the linter.
+> Learned the hard way, 2026-07-13, on `reader-mode`: assigned Summarize `⌘S` (= `Common.Save`, already on "Save as Markdown") and Copy URL `⌘⇧C` (= `Common.Copy`, already on "Copy as Markdown"). Two collisions, both mine. `--fix` canonicalized them and I briefly blamed the linter.
+>
+> Again, 2026-09-26, on `osaurus`: gave "Copy Model Card as Markdown" a literal `⌥⌘C` in a panel whose "Copy Repo ID" already used `Common.CopyName` — which **is** ⌥⌘C. `--fix` rewrote the literal to `Common.CopyName`, and only the pre-ship Codex review caught the duplicate. Same trap, same cause: the table was not checked before typing the combo.
 
 **Three distinct `--fix` hazards** — the two above (a diverging constant's binding moving; a cross-platform match rewriting a macOS-only literal) plus this one. All three are behavior changes, not spelling changes, and none is announced as such.
 
