@@ -41,6 +41,7 @@ fork of it either.** A fork of the monorepo is just as large as the monorepo. Fe
 | building a string or array across lines, tokens, or records inside a loop | [`quadratic-accumulator-paths-in-text-reflow`](../../learnings/design-patterns/quadratic-accumulator-paths-in-text-reflow.md) |
 | a reviewer reports a collision or value you cannot reproduce | [`wrong-vendor-docs-manufacture-review-findings`](../../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) |
 | changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
+| reviewing an AI tool, or offering a green `ray evals` run as evidence it works | [`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md) |
 
 **A PR with green CI is not a reviewed PR.** The defects worth your time here are the ones no gate models: a cache key that does not vary per item, a hook returning stale data alongside an error, an effect that cannot tell a fetch from a cache restore. Each renders the wrong content or leaks state while `tsc`, `ray lint`, and `ray build` stay green. See [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md).
 
@@ -322,32 +323,13 @@ apply. Being the owner changes three things:
   `event: "COMMENT"` unless Chris says to request changes. Write it in his voice, with no
   attribution of any kind (see the global attribution rule).
 
-**AI tools (`src/tools/`, `ai.yaml`) need two more checks:**
-
-- **Does the data window cover the filter?** Tools accept `days` / `since` / `limit`
-  generously, but if the underlying fetch is a fixed-size page, then "last 7 days" quietly
-  means "whatever the page reached back to". The model then presents that as the complete
-  week. Measure the span of the real page (for example, the `merged_at` range of the latest 50
-  PRs) before approving a date filter. PR #31407: the page reached back **about a day**, yet the
-  tool answered "last 7 days".
-- **The evals are mocks. A pass proves only the assertions each eval contains.** A bare
-  `callsTool` proves the tool was called. Argument matchers prove only the arguments they name.
-  Nothing checks how the model reads a real result. PR #31407 passed 6/6, and the live
-  "what's new this week?" call had correct arguments, yet the model answered "no updates"
-  about a 46-match result. When a live Ask AI run goes
-  wrong, have Chris start a new one-prompt conversation and use **Copy Eval** from the Actions
-  panel. It copies the exact arguments the model passed, and it is ready to paste in as a
-  regression eval. Use `not` expectations (`{not: {callsTool: …}}`) to pin down arguments the
-  model must *not* pass.
-- **Read the Copy Eval's `expected` list, not just its mocks.** More than one `callsTool` entry
-  means the model retried. On PR #31407 the first call carried `since: ""`, which the tool
-  rejected as an invalid date. Models routinely send `""` for optional string parameters, and a
-  mocked eval cannot catch a tool that rejects them. That needs a unit test.
-- **Writing evals yourself: an invalid eval fails as `[object Object]` and nothing else.** One
-  cause: `matches` compiles as JavaScript `RegExp`, so an inline flag like `(?i)` is invalid.
-  Spell out the case variants (`[Ss]ep`). Measured 2026-09-26: the same evals failed with `(?i)`
-  and passed 12/12 without it. To verify an eval, add it in the scratch checkout and run
-  `npx ray evals --non-interactive --skipBuild`. Then restore the contributor's file.
+**AI tools (`src/tools/`, `ai.yaml`): a green `ray evals` run is not a review.** Read
+[`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md)
+first. It covers what mocked evals cannot see, the data-window check for date filters, and eval
+syntax traps. For a review, that means: have Chris ask the tool's obvious questions live, and ask
+for a **Copy Eval** of any wrong answer before you diagnose it. Check any eval you propose in the
+scratch checkout (`npx ray evals --non-interactive --skipBuild`), then restore the contributor's
+file.
 
 ## Step 6 — Clean up
 

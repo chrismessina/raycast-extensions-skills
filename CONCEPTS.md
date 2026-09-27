@@ -39,6 +39,9 @@ Raycast, outside a production environment, mounts a command's React tree in stri
 
 Two consequences follow, and both mislead. Diagnosing the duplication by reading the extension's own source cannot succeed, because the cause is in the host runtime. And the host runtime is a *different installed copy* of the Raycast API package than the one in the extension's dependencies, so searching the local copy for the behavior returns nothing — an absence that proves nothing about what actually runs. A fix that must survive the replay coalesces the duplicated work for the replay window only, deliberately narrower than an in-flight lock, so a later genuine refresh still starts new work.
 
+### Copy Eval
+An action in the Actions panel of a single-prompt AI Chat conversation that exports that run as an `ai.yaml` eval. Its `mocks` block is what each tool actually returned, and its `expected` block is the arguments the model actually sent, one `callsTool` entry per call. That makes it the only record that separates wrong arguments, wrong data, and a model misreading correct data. More than one `callsTool` entry for the same tool means the model retried after an error. Contrast with a hand-written eval, whose mocks are the author's assumption and which proves only its own assertions. See `plugins/raycast-extensions/learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md`.
+
 ### Restored value
 A cached value that a caching hook hands back the moment a view mounts, before — and independently of — any request completing. At the call site it is indistinguishable from a freshly fetched one: same shape, same variable, nothing marking which it is. Three consequences follow, and each misleads in a different direction.
 

@@ -41,6 +41,7 @@ All three change code, so they all live here and all hand forward to `ship` when
 | showing, copying, or logging an error that may carry a server response or URL | [`error-display-is-a-credential-disclosure-surface`](../../learnings/security-issues/error-display-is-a-credential-disclosure-surface.md) |
 | reading Reddit without a logged-in session | [`reading-reddit-programmatically-in-2026`](../../learnings/tooling-decisions/reading-reddit-programmatically-in-2026.md) |
 | moving a helper into a shared package, or adding one to the kit | [`deciding-whether-to-extract-a-shared-package`](../../learnings/tooling-decisions/deciding-whether-to-extract-a-shared-package.md) |
+| adding or changing an AI tool (`src/tools/`) or its `ai.yaml` evals | [`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md) |
 | changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
 
 Reach for it when you are about to use a `@raycast/api` or `@raycast/utils` primitive in a way you have not used before, when a hook or platform API behaves differently from how it reads, or when a review finding points at a dependency's runtime behavior rather than at your own code. `CONCEPTS.md` at the repo root defines the terms these learnings use (Fleet, House Style, Command process isolation, Development renderer replay, Restored value).
