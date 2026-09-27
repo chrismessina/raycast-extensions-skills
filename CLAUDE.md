@@ -26,6 +26,16 @@ the README** — it fails on a dangling `reference/X.md` pointer, a skill missin
 table or either manifest description, a version mismatch, a learning no skill or reference
 cites, and a relative link that does not resolve. Exit 0 = clean.
 
+## The pre-push hook
+
+`githooks/pre-push` runs `check-references.sh` and the preflight tests on the commit being pushed —
+exported to a temp dir, so uncommitted or untracked files in the tree (another session's work in
+progress) neither fail nor pass a push they are not part of. It exists because a new skill shipped
+unannounced and CI failed on five pushes in a row before anyone looked. Install once per clone:
+`ln -sf ../../githooks/pre-push .git/hooks/pre-push`. Do not set `core.hooksPath` — it would bypass
+the `commit-msg` hook that blocks session URLs. Never push with `--no-verify` to get past it; fix
+what it reports.
+
 ## `scripts/preflight.mjs`
 
 The deterministic half of Raycast's Store-review rules, run by `ship` before anything is read —

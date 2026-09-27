@@ -59,6 +59,9 @@ claude plugin install raycast-extensions@raycast-extensions-skills
 
 A local-directory marketplace loads the plugin **in place** from your checkout: edits take effect in the next session, or immediately after `/reload-plugins`. No reinstall or version bump is needed to see them.
 
+Install the pre-push hook once per clone — it runs the same checks as CI on the commit you push:
+`ln -sf ../../githooks/pre-push .git/hooks/pre-push`.
+
 Bump `version` in both `plugins/raycast-extensions/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` when you cut a release, so GitHub installs see an update. Run `bash check-references.sh` before committing; CI runs it too.
 
 ## License

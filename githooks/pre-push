@@ -1,0 +1,32 @@
+#!/bin/sh
+# pre-push: run the same checks as CI on the commit being pushed, and refuse the push if any fail.
+#
+# Checks the pushed COMMIT, not the working tree: it exports each pushed sha to a temp dir and runs
+# there, so untracked or uncommitted files (another session's work in progress) can't fail — or
+# pass — a push they are not part of.
+#
+# Install (once per clone):  ln -sf ../../githooks/pre-push .git/hooks/pre-push
+# Bypass in an emergency:    git push --no-verify   (CI still runs the same checks)
+set -eu
+
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # deleting a remote ref: nothing to check
+  tmp=$(mktemp -d)
+  git archive "$local_sha" | tar -x -C "$tmp"
+  echo "pre-push: checking $(git rev-parse --short "$local_sha") ($local_ref)"
+  if ! (cd "$tmp" && bash check-references.sh >"$tmp/.refs.log" 2>&1); then
+    grep -E 'MISSING|UNLISTED|MISMATCH|ORPHAN|BROKEN' "$tmp/.refs.log" || tail -5 "$tmp/.refs.log"
+    echo "pre-push: check-references.sh failed — fix it, or push with --no-verify to let CI report it"
+    status=1
+  fi
+  if [ -f "$tmp/plugins/raycast-extensions/scripts/preflight.test.mjs" ] &&
+    ! (cd "$tmp" && node --test plugins/raycast-extensions/scripts/preflight.test.mjs >"$tmp/.test.log" 2>&1); then
+    grep -E '^not ok' "$tmp/.test.log" || tail -5 "$tmp/.test.log"
+    echo "pre-push: preflight tests failed"
+    status=1
+  fi
+  rm -rf "$tmp"
+done
+exit $status
