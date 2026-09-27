@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review SOMEONE ELSE'S Raycast extension pull request against raycast/extensions — resolve the contributor's fork and head branch, sparse-fetch only the touched extension into a scratch dir, run it locally in Raycast, and report findings. Fires on "review this PR", "check out this extension PR", "run this fork locally", or a pasted github.com/raycast/extensions/pull/<N> URL. Does NOT submit your own extension (that's `ship`) and does NOT change code (that's `develop`).
+description: Review SOMEONE ELSE'S Raycast extension pull request against raycast/extensions — resolve the contributor's fork and head branch, sparse-fetch only the touched extension into a scratch dir, run it locally in Raycast, and report findings. Fires on "review this PR", "check out this extension PR", "run this fork locally", or a pasted github.com/raycast/extensions/pull/<N> URL — including a contributor's PR to one of Chris's OWN extensions ("someone sent a PR to my extension", "give them a punchlist"), which runs Owner mode and posts inline review comments on request. Use this, not `greptile-loop`, for a PR Chris did not open. Does NOT submit your own extension (that's `ship`) and does NOT change code (that's `develop`).
 metadata:
   stage: "8 — inbound review of a third-party PR"
 ---
@@ -59,7 +59,7 @@ PR=29703   # the number from github.com/raycast/extensions/pull/<N>
 
 # Fork clone URL, head branch, author, state.
 gh api "repos/raycast/extensions/pulls/$PR" \
-  --jq '{clone:.head.repo.clone_url, ref:.head.ref, author:.user.login, state:.state, draft:.draft}'
+  --jq '{clone:.head.repo.clone_url, ref:.head.ref, sha:.head.sha, author:.user.login, state:.state, draft:.draft}'
 
 # Which extension(s) the PR touches. --paginate is REQUIRED — the files endpoint caps at
 # per_page=100 and silently truncates beyond it, which would hide a touched extension.
@@ -249,10 +249,16 @@ reviewer adds value a linter can't:
 Then run their gates the way a maintainer would — from the extension root:
 
 ```bash
+npm run build        # FIRST — it generates raycast-env.d.ts
 npx tsc --noEmit     # ray build does NOT typecheck; this catches what it misses
-npm run build
 npm run lint
 ```
+
+> **Build before `tsc`, or `tsc` fails on code that is fine.** In a fresh checkout,
+> `raycast-env.d.ts` does not exist until `ray build` or `ray develop` generates it, so
+> `tsc` fails first with `TS2304: Cannot find name 'Preferences'` on every preference read.
+> That is not the contributor's defect. Measured 2026-09-25 on PR #31407: 6 errors before the
+> build, exit 0 after.
 
 Stop the dev process when done (a live `ray develop` holds the extension in a dev state in
 Raycast).
@@ -277,6 +283,71 @@ review look identical in the output.
 > collisions, `any` casts, unhandled rejections) are fair review comments on anyone's code.
 > Personal conventions are not. This is the forked-extension caveat from
 > [`develop`](../develop/SKILL.md), and it matters more here: you're a guest in their PR.
+
+## Owner mode — a contributor's PR to an extension Chris owns
+
+This applies when `author` in the extension's `package.json` **on upstream `main`** is
+`chrismessina`. Read it from `raw.githubusercontent.com/raycast/extensions/main/extensions/$EXT/package.json`,
+not from the PR checkout. The PR's copy is part of the untrusted change, and a contributor can edit
+`author` to turn Owner mode on or off. Being listed in `contributors` does not count. Steps 1–6 still
+apply. Being the owner changes three things:
+
+- **Your AGENTS.md is the design contract.** The "not House Style" caveat in step 5 is about
+  personal conventions. The extension's own documented design (rate-limit budgets, fail-closed
+  filters, which host is billed) is how the extension actually works, so check the PR against
+  it. Read the contract from upstream `main`
+  (`raw.githubusercontent.com/raycast/extensions/main/extensions/$EXT/AGENTS.md`), not from the PR
+  checkout: a PR can edit AGENTS.md together with the code so that it looks compliant. Read the
+  PR's version separately, as part of the diff. For every mechanism the diff touches, ask whether
+  the PR breaks a documented invariant. Also check whether the PR leaves a claim in the file
+  stale: a new caller of a shared pipeline makes "two commands…" wrong, even when the PR
+  edited a different line of the same file. Treat a stale claim as a finding.
+- **Read the thread before reviewing.** Use `gh api --paginate` on all three:
+  `repos/raycast/extensions/issues/$PR/comments` (conversation), `…/pulls/$PR/comments` (inline),
+  and `…/pulls/$PR/reviews` (review bodies and states, which neither of the others returns). Chris may already have steered the PR (for example, "hold until
+  my PR lands"), and the contributor may already have taken Greptile to its final score.
+  **`greptile-loop` is for PRs Chris opened. Do not run it here.** Greptile's rounds belong to
+  the contributor.
+- **The output is a posted review, but only when Chris asks.** Post one review with inline
+  comments. Don't post comments one at a time:
+  ```bash
+  gh api -X POST repos/raycast/extensions/pulls/$PR/reviews --input review.json
+  # review.json: {commit_id: <head sha>, event: "COMMENT", body, comments: [{path, line, side, body}]}
+  ```
+  `commit_id` is the `sha` from step 1. Re-read `.head.sha` right before posting, and if it
+  changed, the contributor pushed during your review: re-check the diff before posting.
+  Anchor each comment to a line **inside the diff**: `side: "RIGHT"` with the new line number for
+  an added or unchanged line, and `side: "LEFT"` with the old line number for a removed one. To flag a stale line elsewhere in a file,
+  anchor the comment on a changed line and cite the stale line numbers in its text. Use
+  `event: "COMMENT"` unless Chris says to request changes. Write it in his voice, with no
+  attribution of any kind (see the global attribution rule).
+
+**AI tools (`src/tools/`, `ai.yaml`) need two more checks:**
+
+- **Does the data window cover the filter?** Tools accept `days` / `since` / `limit`
+  generously, but if the underlying fetch is a fixed-size page, then "last 7 days" quietly
+  means "whatever the page reached back to". The model then presents that as the complete
+  week. Measure the span of the real page (for example, the `merged_at` range of the latest 50
+  PRs) before approving a date filter. PR #31407: the page reached back **about a day**, yet the
+  tool answered "last 7 days".
+- **The evals are mocks. A pass proves only the assertions each eval contains.** A bare
+  `callsTool` proves the tool was called. Argument matchers prove only the arguments they name.
+  Nothing checks how the model reads a real result. PR #31407 passed 6/6, and the live
+  "what's new this week?" call had correct arguments, yet the model answered "no updates"
+  about a 46-match result. When a live Ask AI run goes
+  wrong, have Chris start a new one-prompt conversation and use **Copy Eval** from the Actions
+  panel. It copies the exact arguments the model passed, and it is ready to paste in as a
+  regression eval. Use `not` expectations (`{not: {callsTool: …}}`) to pin down arguments the
+  model must *not* pass.
+- **Read the Copy Eval's `expected` list, not just its mocks.** More than one `callsTool` entry
+  means the model retried. On PR #31407 the first call carried `since: ""`, which the tool
+  rejected as an invalid date. Models routinely send `""` for optional string parameters, and a
+  mocked eval cannot catch a tool that rejects them. That needs a unit test.
+- **Writing evals yourself: an invalid eval fails as `[object Object]` and nothing else.** One
+  cause: `matches` compiles as JavaScript `RegExp`, so an inline flag like `(?i)` is invalid.
+  Spell out the case variants (`[Ss]ep`). Measured 2026-09-26: the same evals failed with `(?i)`
+  and passed 12/12 without it. To verify an eval, add it in the scratch checkout and run
+  `npx ray evals --non-interactive --skipBuild`. Then restore the contributor's file.
 
 ## Step 6 — Clean up
 
