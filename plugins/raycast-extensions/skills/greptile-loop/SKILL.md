@@ -220,9 +220,20 @@ unless you supply one. Do not chase the score with changes you can't defend.
    finding from the round gets one reply, whether it was fixed, partly fixed, or declined.
    A finding with no reply reads as ignored, and Greptile re-raises it next round. *(Stated
    by Chris, 2026-09-26, Mercury #31611.)*
-   - **Only after the push is on the PR.** Name the PR head commit it's fixed in
-     (`gh api repos/raycast/extensions/pulls/$PR/commits --jq '.[-1].sha[0:7]'`), never a
-     local SHA: `ray publish` makes its own commit.
+   - **Only after a verified publish.** Record the PR head before publishing
+     (`gh api "repos/raycast/extensions/pulls/$PR" --jq '.head.sha[0:7]'`). Reply only when
+     `npm run publish` succeeded and the same call now returns a different SHA. If it
+     doesn't, no new revision landed: post nothing and report that. Name that remote SHA in
+     the reply, never a local one: `ray publish` makes its own commit.
+   - **Except a finding Chris ruled on.** When a finding contradicts something he asked for
+     (§2's first rule), draft the push-back and show it to him. Post it only when he says to.
+   - **Outdated findings:** check whether the change answered the concern (§1). If it did,
+     still reply, briefly, so the thread shows it was seen: "Fixed in `abc1234`." If it
+     didn't, the badge is misleading and the reply says what remains.
+   - **Summary-only rounds:** when an actionable finding appears only in the summary, with
+     no inline comment to answer, post one `@greptile` comment on the PR itself
+     (`gh api -X POST "repos/raycast/extensions/issues/$PR/comments" -f body="$BODY"`). A
+     score with no findings needs no reply.
    - **Terse: two or three sentences.** Open with `@greptile`, then the verdict and the
      mechanism: "Fixed in `abc1234`. <what changed, naming the function or file>." For a
      partial fix, say what remains and why. For a decline, give the receipt (a commit
@@ -231,7 +242,8 @@ unless you supply one. Do not chase the score with changes you can't defend.
      ```bash
      gh api -X POST "repos/raycast/extensions/pulls/$PR/comments/<comment id>/replies" -f body="$BODY"
      ```
-     The comment ids come from the §1 inline fetch.
+     The comment ids come from the §1 inline fetch. Reply to the finding's own
+     (top-level) comment: GitHub doesn't accept a reply to a reply.
    - **Public, under Chris's name.** No Claude attribution, no session links, US English.
 
 ## 4. Wait for the next round — the part that went wrong, codified
