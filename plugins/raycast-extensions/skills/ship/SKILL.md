@@ -1252,6 +1252,16 @@ Once the Store PR is **merged**, the same handful of steps run every time. They'
 
 4. **Refresh any "open at time of writing" references.** If this session wrote docs or a ce-compound learning that described the PR as open/unmerged, update those merge-state phrasings to "shipped." (Narrow — only when such docs exist.)
 
+5. **First release of a NEW extension: set up its GitHub mirror with the script, never by hand.** Each mirror carries `.github/workflows/sync-from-upstream.yml`, which opens a PR when the Store copy changes a file you haven't also changed (the stamped date, recompressed PNGs, a contributor's merged fix). When both sides changed a file it opens an issue and syncs nothing; it never takes gitignored paths, and it regenerates `package-lock.json` rather than copying it. Before the script existed, every mirror was built by copying a sibling's workflow, so the same failures came back one at a time: a push rejected by GitHub's auto-created initial commit, the no-session-URL hook skipped because nothing was pushed yet, Actions not allowed to open PRs, and a first run that recorded no baseline. From the extension root, once the user has created the repo **empty** (no README, license or .gitignore) and added it as `origin`:
+
+   ```bash
+   bash "<plugin>/scripts/setup-mirror.sh"   # <plugin> = two levels above this skill's base directory
+   ```
+
+   It checks the upstream directory and the remote's history, renders `<plugin>/templates/sync-from-upstream.yml` with a cron minute staggered by name, allows Actions to open PRs, and installs the hook once `main` is pushed (a `WARN` line means it didn't; read why). It must run on `main`. It commits and pushes nothing; it prints those steps, which need the user's go-ahead as usual. Do them, and have the user start the first run if you can't. The run must end in one of three states: nothing to sync, and `origin/main`'s newest commit is `github-actions[bot]: chore: record upstream sync baseline …`; upstream differs, and a `sync/upstream-…` PR carries the state file, so the baseline lands when that PR merges; or a conflict issue. **A green run with none of the three is a failed setup.** `.github/` doesn't reach the Store: `ray publish` leaves it out.
+
+   **To fix the workflow, edit the template, not a mirror's copy,** then run the script with `--update` in each mirror; it keeps each one's cron minute and `UPSTREAM_EXT_DIR`. *(2026-09-27, osaurus: all four failures above hit one setup, and fixing the baseline bug meant hand-editing 16 copies.)*
+
 See `reference/pr-and-cleanup.md` for the branch-sweep mechanics.
 
 ## Throughline A (hard rail)
