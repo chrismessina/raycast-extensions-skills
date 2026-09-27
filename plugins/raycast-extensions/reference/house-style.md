@@ -590,6 +590,19 @@ a future extension doesn't regress to `osascript`.
 >   (today debug output is gated on the `verboseLogging` preference instead — fine,
 >   but `isDevelopment` is the idiomatic switch for *dev-only* affordances).
 
+### `[both]` `launchCommand` is awaited inside a try/catch with a failure toast
+
+**ID:** `launch-command-caught` · **Applies:** all
+
+`launchCommand` returns a promise that rejects when Raycast can't open the target command. A bare
+`onAction={() => launchCommand(…)}` fails silently and leaves an unhandled rejection. Route every
+call through one helper that awaits it and shows a failure toast with Copy Error (`copy-error`).
+
+- **Audit:** `rg -n 'launchCommand\(' src`. Every hit is inside a `try` whose `catch` shows a
+  failure toast, or is the one helper that does.
+
+*(2026-09-27, mercury #31611: a Raycast reviewer requested changes over three unwrapped calls.)*
+
 ---
 
 ## Toasts, errors, and logging
@@ -1519,6 +1532,17 @@ const ICON: Image.ImageLike = { source: { light: "glyph-light.svg", dark: "glyph
 - Pin/unpin actions use `Icon.Tack` / `Icon.TackDisabled` (the paired set) — never `Icon.Pin`/`Icon.PinDisabled` (Chris preference, attio 2026-09-01).
 - Person avatars rendered as icons/accessories always carry `mask: Image.Mask.RoundedRectangle` (squircle) — bare circular/unmasked avatar rectangles are a finding (attio, 2026-09-02).
 
+### `[both]` No agent-tool tags in shipped comments
+
+**ID:** `no-tool-tags` · **Applies:** all
+
+A comment prefix that a coding-agent plugin asks for (`ponytail:`, and any like it) is tooling
+residue to a Store reviewer. Keep the explanation and drop the tag.
+
+- **Audit:** `rg -n '//\s*ponytail:|/\*\s*ponytail:' src`. Zero hits.
+
+*(2026-09-27, mercury #31611: a Raycast reviewer flagged three `// ponytail:` notes.)*
+
 ---
 
 ## Copy
@@ -1867,6 +1891,8 @@ form of a rule reports a regression on code that just adopted a helper encoding 
 | `madge-cycles` | `verify` | self-authored | **report** | `madge --circular` runs as a `pretest` gate |
 | `impeccable-off` | `both` | Impeccable plugin installed | **report** | Disable the Impeccable design hook — it is irrelevant to Raycast extensions |
 | `monotonic-elapsed` | `both` | all | **block** | An elapsed-time check uses `performance.now()`, never `Date.now()` |
+| `launch-command-caught` | `both` | all | **block** | `launchCommand` is awaited inside a try/catch with a failure toast |
+| `no-tool-tags` | `both` | all | **report** | No agent-tool tags in shipped comments |
 | `readiness-gate` | `both` | background prep drives `isLoading` | **block** | A readiness gate tracks *did prep finish* and *which items succeeded* separately |
 | `cache-version-derived` | `both` | persists a typed payload | **block** | A cache version is DERIVED from the cached shape, never hand-maintained |
 | `interval-launchtype` | `both` | a command declares `interval` | **block** | Interval-driven commands must branch on `environment.launchType` |
