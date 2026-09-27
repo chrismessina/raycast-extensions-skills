@@ -344,6 +344,26 @@ Two consequences, both learned from live crashes:
   single-object fetch crashes on `.length`. Curried form only where a `pagination`
   object is actually passed to the `<List>`.
 
+### `[build]` A controlled `List.Dropdown` fires `onChange(firstItem)` on mount, ignoring `value`
+
+**ID:** `dropdown-mount-onchange` · **Applies:** any `List.Dropdown` whose `onChange` persists or sets state
+
+**Context:** this showed up where the search-bar dropdown is pressed into service as a
+**settings control** (a chat's model picker, the search bar being the prompt), not as the
+list *filter* it was designed to be. As a filter, a mount-time `onChange(firstItem)` just
+re-filters and nobody notices. It bites only when `onChange` writes a remembered choice.
+If you're building a picker, ask first whether it belongs in the dropdown at all (a
+`Form.Dropdown` in a form, or an action that pushes a picker), and apply this fix when it does.
+
+When the dropdown first renders, Raycast calls `onChange` with its **first** item even when
+`value` names a different one. An `onChange` that saves the pick (to `useCachedState`, `Cache`,
+`LocalStorage`) silently overwrites the saved choice with item 1 on every launch, so the
+command "never remembers" the model or filter the user set. **Fix:** render the item you want
+selected FIRST, so the mount-time call passes the same value. Don't suppress the first call:
+if Raycast ever fixes the quirk, that swallows the user's first real pick.
+*Receipt: raycast-osaurus, 2026-09-26. The debug log showed `changeModel("foundation")`
+right after mount with `value="raptor-…"`, so the default set in Manage Models never took.*
+
 ### `[both]` An elapsed-time check uses `performance.now()`, never `Date.now()`
 
 **ID:** `monotonic-elapsed` · **Applies:** all
@@ -1441,6 +1461,11 @@ does not adjust for the active theme. A glyph authored dark reads fine in light 
 **disappears against the dark background** (and vice versa).
 
 Two supported fixes; either satisfies this rule.
+
+> **Not in a `List.EmptyView`.** *Observed on `raycast-osaurus`, 2026-09-26:* an EmptyView
+> `icon={{ source: "logo.svg", tintColor: Color.SecondaryText }}` rendered **nothing**, and so
+> did the same asset as a PNG. Chris fixed it with fix 2: `logo.svg` + `logo@dark.svg` with
+> the gray baked into each file. Where an asset icon won't render, reach for fix 2 first.
 
 **1. Tint from the code side** (preferred for a single monochrome asset):
 
