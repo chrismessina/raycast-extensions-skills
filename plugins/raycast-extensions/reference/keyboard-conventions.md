@@ -45,7 +45,9 @@ Map ad-hoc `Action` shortcuts to `Keyboard.Shortcut.Common` **by semantics**, an
   import re, json
   p = "/Applications/Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Contents/Resources/api/node_modules/@raycast/api/index.js"
   s = open(p, encoding="utf8", errors="replace").read()
-  i = re.search(r'i\.Common=\{', s).end() - 1
+  # The minified name changes between app builds (`i.Common` in 2.3.0, `A.Common` in 2.6.0),
+  # so match any identifier — a pinned name fails with a bare AttributeError on the next update.
+  i = re.search(r'\b\w+\.Common=\{', s).end() - 1
   d = 0
   for j in range(i, len(s)):
       d += (s[j] == '{') - (s[j] == '}')
@@ -57,7 +59,7 @@ Map ad-hoc `Action` shortcuts to `Keyboard.Shortcut.Common` **by semantics**, an
   ```
   **Extract all 17, not just the five known-diverging ones** — a grep pinned to today's divergence list cannot show you the sixth constant that moves next.
   That directory has no `package.json`, so it carries no version of its own — it is whatever the installed Raycast is. Check the app instead: `plutil -p /Applications/Raycast.app/Contents/Info.plist | grep CFBundleShortVersionString`.
-- **Last verified:** 2026-09-11 against the Raycast **2.3.0.0** runtime shim and `@raycast/eslint-plugin` **2.2.0**. The 2026-07-13 snapshot was taken from the linter alone; by 2026-09-11 it no longer matched the app for five constants. (When the two diverged is not established — see above.) The 2026-06-19 snapshot before it had **five wrong macOS bindings** (`CopyName`, `CopyPath`, `Duplicate`, `Pin`, `Remove`). A wrong table causes the exact mis-mapping this file exists to prevent — regenerate from an artifact, never from prose docs.
+- **Last verified:** 2026-09-30 against the Raycast **2.6.0.0** runtime shim — all 17 bindings unchanged from the table below; only the minified variable name moved. Before that, 2026-09-11 against the Raycast **2.3.0.0** runtime shim and `@raycast/eslint-plugin` **2.2.0**. The 2026-07-13 snapshot was taken from the linter alone; by 2026-09-11 it no longer matched the app for five constants. (When the two diverged is not established — see above.) The 2026-06-19 snapshot before it had **five wrong macOS bindings** (`CopyName`, `CopyPath`, `Duplicate`, `Pin`, `Remove`). A wrong table causes the exact mis-mapping this file exists to prevent — regenerate from an artifact, never from prose docs.
 - **Drift guard:** re-run **both** commands above whenever `@raycast/eslint-config` is bumped **or the Raycast app updates**, and diff the two full 17-member lists against each other — watching only the linter cannot surface a runtime-only change, which is exactly how the 2026-09-11 split went unnoticed. If either set changed, update the table, refresh the divergence list, and bump "last verified".
 - ✅ **The vendor docs are CORRECT as of 2026-09-15 — all 17 rows.** Fetched
   `https://developers.raycast.com/api-reference/keyboard.md` and compared every row against the
