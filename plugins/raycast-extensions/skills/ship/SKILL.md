@@ -752,6 +752,12 @@ returned — paste the actual output, don't assert it:
 - [ ] `npx tsc --noEmit` → exit 0
 - [ ] `npm run build` → exit 0
 - [ ] `npm run lint` → exit 0
+- [ ] **Greptile judgment rules** (`reference/greptile-rules.md`) → one line per rule marked
+      *judgment* or *WARN*, each `pass` / `n/a` with the reason, against the BRANCH DIFF. The
+      preflight script covers only the deterministic rules; a green script says nothing about
+      06 (localization), 15/26 (action order), 17, 20/34 or 21. *(2026-10-01, brew #31820: the
+      script was green and a hardcoded `toLocaleString("en-US")` beside the extension's
+      user-locale counts was caught only when Chris asked whether the Greptile rules had run.)*
 - [ ] **house-style audit** (step 2) → zero violations, having **read `package.json`
       `platforms` first** (absent ⇒ macOS-only; see `reference/house-style.md`)
 - [ ] 🚨 **keyboard shortcut validation** (step 2) → state which runtime version you validated
