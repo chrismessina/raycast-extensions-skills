@@ -21,6 +21,71 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.6.0 — 2026-09-30
+
+Diffed against **2.5.3** (2026-09-28). Runtime claims were checked against **Raycast.app 2.6.0.0**.
+No files were added or removed, and `dist/types/` is byte-identical. The release changes the
+`AI.Model` enum, tightens one exported model-provider type, and changes two CLI behaviors. Raycast's
+changelog page has no 2.6.0 entry; its newest is 2.5.0 (fetched 2026-09-30).
+
+**Fleet impact:** `raycast-reader` uses `AI.Model["OpenAI_GPT-5_nano"]` eight times in
+`/Users/messina/Developer/GitHub/chrismessina/raycast-reader/src/config/ai.ts`, and that member is now
+deprecated in favor of `OpenAI_GPT-5.4_nano`. The id did not change, so the extension still requests
+`openai-gpt-5-nano`. These artifacts do not show whether the backend keeps serving that id. No other
+fleet source references a member deprecated in this release, and none sets `providerOptions`.
+
+### `AI.Model`: 16 members deprecated, 1 added, no id changed
+
+- **Added:** `Anthropic_Claude_Sonnet_5.5` = `anthropic-claude-sonnet-5-5`.
+- **Deprecated, same id:** the diff shows 16 members removed from the active block, and all 16 come back
+  in the deprecated block with identical values. They are `OpenAI_GPT-5_mini`, `OpenAI_GPT-5_nano`,
+  `OpenAI_GPT-4.1` (and its `_mini`/`_nano` variants), `OpenAI_GPT-4`, `OpenAI_GPT-4o` (and `_mini`),
+  `OpenAI_GPT-5.1`, `OpenAI_GPT-5.2`, `OpenAI_GPT-5.3_Instant`, `OpenAI_o4-mini`, `OpenAI_o3-mini`, and
+  `Google_Gemini_2.5_Pro`/`_Flash`/`_Flash_Lite`. Their replacements are `GPT-6_Sol` or `GPT-6_Luna`,
+  `GPT-5.4_mini`/`_nano`, `Gemini_3.1_Pro`, `Gemini_3.8_Flash`, and `Gemini_3.5_Flash_Lite`.
+- **Older deprecated aliases** now point at the new targets. For example, `OpenAI_GPT3.5-turbo` now
+  says to use `GPT-6_Luna` where it used to say `GPT-4o_mini`. Only the doc comments changed; their
+  values did not.
+- The `@defaultValue` doc comment on `Model` changed from `OpenAI_GPT-5.6_Luna` to `OpenAI_GPT-6_Luna`.
+  That is type documentation only. This pass did not locate the runtime default.
+
+This is **not** a repeat of 2.3.0's silent repoint. The sorted `name = value` sets of the two enums
+differ by exactly one line, the Sonnet 5.5 addition (174 → 175 members).
+
+### `AI.ModelProviderOptions` / `AI.ModelRequest`: fields now required
+
+This matters only to an extension that declares `ai.modelProvider` (see 2.5.0). Both types are exported
+from the `AI` namespace as aliases of `declare`d types, so the change is public:
+
+- `ModelRequest.providerOptions` is now **required**; it was optional.
+- `providerOptions.raycast.locale` and `.currentDate` are now **required**; they were optional.
+- New required field: `providerOptions.raycast.sessionId: string`, documented as "the chat/session ID,
+  stable across turns in the same conversation."
+
+The 2.6.0.0 app matches the new types. `backend/index.mjs` builds `raycast` as `locale:
+e.locale??navigator.language`, `currentDate: e.current_date??new Date().toISOString()`, and `sessionId:
+e.thread_id??sn()`, so all three always carry a value. It also sends `messageId`, `bufferId`,
+`resumeFrom`, and `modelId`, none of which are typed. A provider that reads these fields can drop its
+`?.` guards. Code that builds a `ModelRequest` by hand, such as a test fixture, must now supply
+`providerOptions` with all three fields.
+
+### CLI
+
+- **`build-refresh` is silent when Raycast is not running.** The shared app-communication helper
+  (`dist/utils/raycast-app-communication.js`, inlined into `build`, `bundle`, `develop`, and
+  `publish`, which accounts for the +33 bytes in each) now returns without a warning when the command
+  is `build-refresh` and no Raycast process is found. Every other command still warns
+  `Raycast is not running`. `ray build` sends `build-refresh` after a build that has no `--output`, so
+  a headless `ray build` no longer prints that warning.
+- **Private-organization `ray publish` skips notifying Raycast under CI.** After a successful publish to
+  a private organization store, the app notification now also requires `process.env.CI` not to equal
+  `"true"` (case-insensitive). Before, `--skip-notify-raycast` was the only way to suppress it. This is
+  the only notify call site in the `publish` bundle.
+
+`oclif.manifest.json` differs only in `.version`, so no command or flag was added or removed.
+
+---
+
 ## 2.5.3 — 2026-09-28 · **nothing new; see 2.5.0**
 
 A pure version bump against **2.5.2**, verified at byte level. Only `dist/commands/version/index.js`,
