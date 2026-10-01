@@ -813,8 +813,15 @@ returned — paste the actual output, don't assert it:
       > latter, and `threads` had one published from an earlier release; that PR removed it.
       >
       > **Forks are the exception:** never add your own `AGENTS.md` to an extension you do not own.
+      >
+      > **`brew` ships `TODO.md` on purpose — do not flag or remove it there.** Chris, 2026-09-30:
+      > *"TODO.md CAN ship with Brew; this is deliberate and generally an exception because this is
+      > a big extension with many users, so I want others to know what I'll be working on."* It is a
+      > public backlog, written for users. The exception is `brew` only; everywhere else `TODO.md`
+      > is still a leak. The check below skips it for `brew`.
       ```bash
       LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|TODO\.md|CLAUDE\.md|WARP\.md)$'
+      [ "$EXT" = brew ] && LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|CLAUDE\.md|WARP\.md)$'  # brew's TODO.md is a public backlog
       gh api "repos/raycast/extensions/contents/extensions/$EXT" --jq '.[].name' | grep -E "$LEAKS" \
         && echo "^^ public right now — git rm -r these in THIS PR"
       ```
