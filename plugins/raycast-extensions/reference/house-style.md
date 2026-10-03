@@ -739,7 +739,7 @@ apply this:
 [t]: https://developers.raycast.com/api-reference/feedback/toast
 [f]: https://developers.raycast.com/utilities/functions/showfailuretoast
 
-**Four rules for any animated toast held across an `await`:**
+**Five rules for any animated toast held across an `await`:**
 
 1. **Never hide after a genuine failure.** The failure toast has already taken the
    slot; hiding dismisses *it* and the user loses the error entirely. Let the
@@ -758,6 +758,22 @@ apply this:
    and a rejection awaited inside the fetcher turns a *successful* operation into a
    visible failure. Fire and forget with a logged `.catch()` — the same call costs
    nothing and removes the question.
+5. **Never mutate in the same tick you replace.** Every property change
+   (`toast.message = …`, `.title`, `.style`) sends Raycast an `updateToast` carrying
+   the handle's FULL options — its Animated style, title and Cancel action — with
+   no id. Raycast's runtime posts requests in order (`setImmediate` →
+   `postMessage`, read from the bundled `@raycast/api/index.js` inside
+   Raycast.app), but the native side can apply that update after a `showToast`
+   sent right behind it, so the finished toast is overwritten by the progress one.
+   A progress callback that fires on process exit ("Operation completed
+   successfully") followed by an awaited success toast is exactly that shape.
+   Drop updates once settling begins, and hold the final `showToast` until the
+   last update is a few hundred ms old — measure with `performance.now()`. A
+   caller that hides the toast and then shows its own must wait out the same gap,
+   and so must a cancel path before it reports how far the run got. During the
+   gap the finished toast still shows its Cancel action: make that action a
+   no-op once settling has begun, or a click aborts finished work and sends an
+   id-less hide that can dismiss the result toast.
 
 **Put the toast inside the promise, not in a `useEffect` keyed on `isLoading`.**
 The effect-with-cleanup shape is the most inviting way to write this and it is
@@ -787,7 +803,9 @@ const { data } = usePromise(async () => {
 - **Audit:** grep `Toast.Style.Animated` and every `.hide()`. For each, ask: can a
   second toast reach the slot between creation and hide? Flag any `hide()` in a
   `useEffect` cleanup, any hide on a failure path, any `await …hide()` inside a
-  fetcher, and any hide with no ownership guard.
+  fetcher, and any hide with no ownership guard. Then grep every animated-toast
+  property assignment and ask whether one can run in the same tick as the final
+  `showToast` (rule 5).
 - **Evidence:** 2026-09-17, `brew` #31164 — three passes to get one toast right.
   v1 hid in an effect cleanup and would have dismissed the failure toast raised
   microseconds earlier, swallowing the error. v2 fixed that but left the toast
@@ -798,6 +816,10 @@ const { data } = usePromise(async () => {
   abort/revalidate ordering — the API surface does not tell you, and reasoning
   about it from the outside produced three wrong answers in a row. Go to the
   installed source first for any question about hook ordering or lifecycle.
+  2026-10-02, `brew`: an installed tap cask left "Installing Tinycast /
+  Operation completed successfully" with a live Cancel button on screen. The
+  install had succeeded; `execBrewWithProgress` reported its exit as a progress
+  message in the same tick the caller showed the success toast (rule 5).
 
 ### `[both]` Toast copy never says "this window" — a toast is a detached HUD
 
