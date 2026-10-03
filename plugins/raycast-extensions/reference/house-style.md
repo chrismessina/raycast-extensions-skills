@@ -758,22 +758,21 @@ apply this:
    and a rejection awaited inside the fetcher turns a *successful* operation into a
    visible failure. Fire and forget with a logged `.catch()` — the same call costs
    nothing and removes the question.
-5. **Never mutate in the same tick you replace.** Every property change
-   (`toast.message = …`, `.title`, `.style`) sends Raycast an `updateToast` carrying
-   the handle's FULL options — its Animated style, title and Cancel action — with
-   no id. Raycast's runtime posts requests in order (`setImmediate` →
-   `postMessage`, read from the bundled `@raycast/api/index.js` inside
-   Raycast.app), but the native side can apply that update after a `showToast`
-   sent right behind it, so the finished toast is overwritten by the progress one.
-   A progress callback that fires on process exit ("Operation completed
-   successfully") followed by an awaited success toast is exactly that shape.
-   Drop updates once settling begins, and hold the final `showToast` until the
-   last update is a few hundred ms old — measure with `performance.now()`. A
-   caller that hides the toast and then shows its own must wait out the same gap,
-   and so must a cancel path before it reports how far the run got. During the
-   gap the finished toast still shows its Cancel action: make that action a
-   no-op once settling has begun, or a click aborts finished work and sends an
-   id-less hide that can dismiss the result toast.
+5. **Finish an animated toast in place; don't replace it while it is still
+   being updated.** Every property change (`toast.message = …`, `.title`,
+   `.style`) sends Raycast an `updateToast` carrying the handle's FULL options —
+   its Animated style, title and Cancel action — with no id, unawaited
+   (`setImmediate` → `postMessage`, read from the `@raycast/api/index.js` bundled
+   inside Raycast.app). Finishing by `showToast` puts a second kind of request in
+   flight behind it, and the two were seen to apply out of order: the progress
+   update landed on top of the success toast. Finish the way Raycast's docs and
+   212 extensions do — set `style`, `title`, `message = undefined` and
+   `primaryAction = undefined` on the same toast — so every message is one kind
+   of request. (That updates to one toast stay in order is inferred, not proven;
+   confirm with a same-tick repro.) Do **not** reach for a settle delay or a toast
+   controller: a 250 ms gap was built for `brew`, needed four review rounds, kept
+   surfacing late hides that closed other toasts, and was pulled; no extension in
+   the monorepo has a controller, and one is a framework contributors must learn.
 
 **Put the toast inside the promise, not in a `useEffect` keyed on `isLoading`.**
 The effect-with-cleanup shape is the most inviting way to write this and it is
@@ -803,9 +802,8 @@ const { data } = usePromise(async () => {
 - **Audit:** grep `Toast.Style.Animated` and every `.hide()`. For each, ask: can a
   second toast reach the slot between creation and hide? Flag any `hide()` in a
   `useEffect` cleanup, any hide on a failure path, any `await …hide()` inside a
-  fetcher, and any hide with no ownership guard. Then grep every animated-toast
-  property assignment and ask whether one can run in the same tick as the final
-  `showToast` (rule 5).
+  fetcher, and any hide with no ownership guard. Then grep for an animated toast that is finished
+  by a fresh `showToast` while its setters are still in use (rule 5).
 - **Evidence:** 2026-09-17, `brew` #31164 — three passes to get one toast right.
   v1 hid in an effect cleanup and would have dismissed the failure toast raised
   microseconds earlier, swallowing the error. v2 fixed that but left the toast
@@ -819,7 +817,8 @@ const { data } = usePromise(async () => {
   2026-10-02, `brew`: an installed tap cask left "Installing Tinycast /
   Operation completed successfully" with a live Cancel button on screen. The
   install had succeeded; `execBrewWithProgress` reported its exit as a progress
-  message in the same tick the caller showed the success toast (rule 5).
+  message in the same tick `settle` replaced the toast with `showToast`, a
+  pattern brew had adopted on 2026-09-06 in place of finishing in place (rule 5).
 
 ### `[both]` Toast copy never says "this window" — a toast is a detached HUD
 
