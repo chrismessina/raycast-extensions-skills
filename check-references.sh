@@ -59,7 +59,7 @@ echo
 # Guard 2: every skill on disk must be listed in the README table AND in both
 # manifest descriptions. This drift has shipped three times — `review-pr`
 # (misrouted an agent shipping claude-artifacts), `api-changelog`, and
-# `greptile-loop` (shipped undocumented in 0.6.0). A skill nothing announces is
+# `greptile-loop`, now `raycast-pr-loop` (shipped undocumented in 0.6.0). A skill nothing announces is
 # a skill nobody invokes, so catching it by hand has a 0-for-3 record.
 # ---------------------------------------------------------------------------
 README="$REPO_ROOT/README.md"

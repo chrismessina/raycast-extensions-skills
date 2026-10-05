@@ -6,12 +6,12 @@
   },
   "metadata": {
     "description": "Claude Code skills for building, shipping, and reviewing Raycast extensions.",
-    "version": "0.10.0"
+    "version": "0.11.0"
   },
   "plugins": [
     {
       "name": "raycast-extensions",
-      "description": "Stage-keyed skills for the full Raycast-extension lifecycle: api-changelog (derive @raycast/api release notes Raycast doesn't publish), scaffold (new), develop (change code, modernize, house-style audit fix), ship (dep hygiene, house-style audit, Store compliance, PR, cleanup), greptile-loop (drive an open Store PR's automated review to 5/5), review-pr (inbound review of a third-party PR), screenshots (Store screenshots without personal data, via recorded and scrubbed fixtures).",
+      "description": "Stage-keyed skills for the full Raycast-extension lifecycle: api-changelog (derive @raycast/api release notes Raycast doesn't publish), scaffold (new), develop (change code, modernize, house-style audit fix), ship (dep hygiene, house-style audit, Store compliance, PR, cleanup), raycast-pr-loop (drive an open Store PR's automated reviewers — Greptile, Cursor Bugbot — until every one is clear), review-pr (inbound review of a third-party PR), screenshots (Store screenshots without personal data, via recorded and scrubbed fixtures).",
       "author": {
         "name": "Chris Messina",
         "url": "https://github.com/chrismessina",
@@ -26,7 +26,7 @@
         "scaffold",
         "develop",
         "ship",
-        "greptile-loop",
+        "raycast-pr-loop",
         "review-pr",
         "house-style"
       ],

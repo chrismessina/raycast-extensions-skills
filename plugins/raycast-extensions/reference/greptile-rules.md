@@ -46,14 +46,14 @@ Telling the two apart needs a parser, and the style is rare in extension code.
 | 19 | Shortcut platform keys are `Windows` and `macOS` | `preflight` `shortcut-platform-case`; `keyboard-conventions.md` | FAIL |
 | 20, 34 | `getFavicon()` over a hand-built favicon URL — unless the custom code adds validation, racing, force refresh, or sources `getFavicon` lacks | `preflight` `favicon` (heuristic; the exception is judgment) | WARN |
 | 21 | `launchCommand()` over a `raycast://extensions/<author>/<ext>/<command>` deeplink | `preflight` `launch-command` (a two-segment Store-page link is fine) | WARN |
-| 22 | Deferred execution gated on a ref: trace the re-run path before calling a request dropped | `greptile-loop` triage — a reviewer instruction; answer with the dependency-array trace | triage |
+| 22 | Deferred execution gated on a ref: trace the re-run path before calling a request dropped | `raycast-pr-loop` triage — a reviewer instruction; answer with the dependency-array trace | triage |
 | 24 | There is no `number` preference type | `preflight` `preference-type` (any type outside the seven Raycast supports fails) | FAIL |
 | 25 | A PR must be undrafted before the team reviews it | `ship` keeps the PR a draft and **you** mark it ready — unchanged | process |
-| 27 | No "You're absolutely right" in review replies | `greptile-loop` reply rules | process |
-| 28 | Preferences are encrypted regardless of type | `greptile-loop` triage — decline a finding that asks for `password` type *for encryption* | triage |
+| 27 | No "You're absolutely right" in review replies | `raycast-pr-loop` reply rules | process |
+| 28 | Preferences are encrypted regardless of type | `raycast-pr-loop` triage — decline a finding that asks for `password` type *for encryption* | triage |
 | 29 | Inoh-specific action order | Not applicable outside that extension | — |
-| 30 | `ActionPanel.Submenu` adds its own ellipsis | `greptile-loop` triage — decline a "missing ellipsis" finding | triage |
-| 31 | Windows media sessions (SMTC) limitations are not bugs | `greptile-loop` triage | triage |
+| 30 | `ActionPanel.Submenu` adds its own ellipsis | `raycast-pr-loop` triage — decline a "missing ellipsis" finding | triage |
+| 31 | Windows media sessions (SMTC) limitations are not bugs | `raycast-pr-loop` triage | triage |
 | 35 | Shell-only extensions → Script Commands | Marked **inactive** by Raycast; not applied | — |
 
 Numbers 23, 32, and 33 are absent from the export.

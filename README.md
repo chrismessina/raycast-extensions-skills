@@ -32,7 +32,7 @@ Skills are keyed to lifecycle **stages** (verbs), not roles, so their triggers d
 | **`scaffold`** | "create / start a **new** extension" | Ideate and scaffold a net-new extension with House Style applied from the first file. |
 | **`develop`** | "change code", "migrate to ESLint 10 / new Node", "bring this up to house style" | Features and refactors, gated major dependency migrations, and the house-style audit fix. |
 | **`ship`** | "submit / publish to the Store", "address review feedback" | Pre-flight (dependency hygiene, house-style audit, metadata weeding), Store-compliance gate, `ray publish`, PR prep, the review-feedback cycle, and post-merge cleanup. |
-| **`greptile-loop`** | "address the greptile feedback", "loop until 5/5" | Driving an already-submitted Store PR's automated review to 5/5: triage every finding (fix the valid, answer the invalid with receipts), re-publish, wait for the next round. Never marks the PR ready — that's your click. |
+| **`raycast-pr-loop`** | "address the greptile feedback", "look at the bugbot comments", "loop until 5/5" | Driving an already-submitted Store PR's automated reviewers (Greptile, Cursor Bugbot, any new bot) until every one is clear: triage every finding (fix the valid, answer the invalid with receipts), re-publish, wait for the next round. Never marks the PR ready — that's your click. |
 | **`review-pr`** | "review this PR", a pasted `raycast/extensions/pull/<N>` URL | Reviewing **someone else's** submission: resolve their fork and branch, sparse-fetch only the touched extension, run it locally, report findings. |
 | **`screenshots`** | "take / update the screenshots", "the screenshots show my real data" | Store screenshots of an extension that shows personal data (a bank, a CRM, meetings, health) without real data in them: record scrubbed fixtures from your own account with `@chrismessina/raycast-faker` and replay them. Submits nothing — that's `ship`. |
 
@@ -40,7 +40,7 @@ The `develop` ↔ `ship` handoff is two-way: when `ship`'s read-only audit or St
 
 Shared references live in [`plugins/raycast-extensions/reference/`](plugins/raycast-extensions/reference/): `house-style.md` (the tagged convention checklist both the build and the audit read), `keyboard-conventions.md` (including where the linter, the runtime, and the docs disagree), `dep-gates.md`, `store-guidelines.md`, `readme-template.md`, `sparse-checkout-discipline.md`, `pr-and-cleanup.md`, and an `eslint-rules/` directory.
 
-> **Status:** v0.10.0 — all six skills are authored and in use.
+> **Status:** v0.11.0 — all seven skills are authored and in use.
 
 ## Also in this repo
 

@@ -31,7 +31,7 @@ metadata:
 
 > **On a blocking finding from an automated reviewer:** a finding being correct does not make the remedy it implies correct, and a rating that will not clear creates pressure to ship *any* responsive change. Build the implied remedy, measure it against what you have, and report the number — including when it loses. See [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md).
 
-> **Once the PR is open and Greptile posts a scored review, the round-by-round loop is its own skill:** [`greptile-loop`](../greptile-loop/SKILL.md) — triage per finding, re-publish with the secret holdout, and wait for the next round without resident background pollers (repeatedly killed under memory pressure on 2026-09-10; see its §4 for the bounded waiting mechanics).
+> **Once the PR is open and the review bots post (Greptile, Cursor Bugbot), the round-by-round loop is its own skill:** [`raycast-pr-loop`](../raycast-pr-loop/SKILL.md) — triage per finding, re-publish with the secret holdout, and wait for the next round without resident background pollers (repeatedly killed under memory pressure on 2026-09-10; see its §4 for the bounded waiting mechanics).
 
 ## Pre-flight checklist (the "cake")
 

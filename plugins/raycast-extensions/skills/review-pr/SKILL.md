@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review SOMEONE ELSE'S Raycast extension pull request against raycast/extensions — resolve the contributor's fork and head branch, sparse-fetch only the touched extension into a scratch dir, run it locally in Raycast, and report findings. Fires on "review this PR", "check out this extension PR", "run this fork locally", or a pasted github.com/raycast/extensions/pull/<N> URL — including a contributor's PR to one of Chris's OWN extensions ("someone sent a PR to my extension", "give them a punchlist"), which runs Owner mode and posts inline review comments on request. Use this, not `greptile-loop`, for a PR Chris did not open. Does NOT submit your own extension (that's `ship`) and does NOT change code (that's `develop`).
+description: Review SOMEONE ELSE'S Raycast extension pull request against raycast/extensions — resolve the contributor's fork and head branch, sparse-fetch only the touched extension into a scratch dir, run it locally in Raycast, and report findings. Fires on "review this PR", "check out this extension PR", "run this fork locally", or a pasted github.com/raycast/extensions/pull/<N> URL — including a contributor's PR to one of Chris's OWN extensions ("someone sent a PR to my extension", "give them a punchlist"), which runs Owner mode and posts inline review comments on request. Use this, not `raycast-pr-loop`, for a PR Chris did not open. Does NOT submit your own extension (that's `ship`) and does NOT change code (that's `develop`).
 metadata:
   stage: "8 — inbound review of a third-party PR"
 ---
@@ -307,7 +307,7 @@ apply. Being the owner changes three things:
   `repos/raycast/extensions/issues/$PR/comments` (conversation), `…/pulls/$PR/comments` (inline),
   and `…/pulls/$PR/reviews` (review bodies and states, which neither of the others returns). Chris may already have steered the PR (for example, "hold until
   my PR lands"), and the contributor may already have taken Greptile to its final score.
-  **`greptile-loop` is for PRs Chris opened. Do not run it here.** Greptile's rounds belong to
+  **`raycast-pr-loop` is for PRs Chris opened. Do not run it here.** Greptile's rounds belong to
   the contributor.
 - **The output is a posted review, but only when Chris asks.** Post one review with inline
   comments. Don't post comments one at a time:
