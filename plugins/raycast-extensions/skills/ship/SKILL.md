@@ -1068,19 +1068,31 @@ git remote is NOT a blocker here; `ray publish` does not use it.
    this by default; the user reviews prose rather than writing it. **The PR stays a
    draft:** clicking "Ready for review" is the user's step, never yours.
 
-> 🚨 **`ray publish` never consults git — it copies the extension root minus its OWN fixed
-> exclusion list.** Verified against `@raycast/api` 2.1.2
-> (`node_modules/@raycast/api/dist/utils/publish/copy-dir.js`): zero references to `.gitignore`,
-> and the excluded names are exactly `.git`, `.github`, `.direnv`, `.swiftpm`,
-> `.raycast-swift-build`, `compiled_raycast_rust`, `compiled_raycast_swift`, `node_modules`,
-> `raycast-env.d.ts`. **Anything else on disk ships, however thoroughly git ignores it** —
-> `.gitignore` and `.git/info/exclude` only hide a file from `git status`, which is all the
-> clean-tree check reads. A file you are not ready to publish must live **outside the extension
-> root**; the only in-repo exceptions are the nine names above.
+> 🚨 **What ships is decided in TWO steps, and only the extension's own `.gitignore` filters
+> both.** Read from `@raycast/api` 2.2.1:
+>
+> 1. **Copy.** `copyDir` (`dist/utils/publish/copy-dir.js`) copies the extension root into a
+>    checkout of your fork, skipping only `.git`, `.github`, `.direnv`, `.swiftpm`,
+>    `.raycast-swift-build`, `compiled_raycast_rust`, `compiled_raycast_swift`, `node_modules`,
+>    `raycast-env.d.ts`. It never reads an ignore file, so gitignored files land in the fork
+>    checkout too. **The extension's `.gitignore` is itself copied in.**
+> 2. **Stage.** The fork checkout is then committed with a plain, non-forced
+>    `git add "<path>"` (`dist/utils/publish/publish-to-public-repo.js`). That respects every `.gitignore` *inside
+>    the fork checkout*: the monorepo root's and the copied extension `.gitignore`.
+>
+> So a file listed in the **extension's own `.gitignore`** does not reach the PR. Anything hidden
+> only by **your working repo's `.git/info/exclude`** (never copied) or by nothing at all does.
+> Verified 2026-10-04 on `fathom`: `.claude/` and `.compound-engineering/` sit in the extension
+> root, are listed in its `.gitignore`, and are absent from both #31218 and #31922.
+>
+> **Rule:** to hold a file back, list it in the extension's `.gitignore` or move it outside the
+> extension root. Never rely on `.git/info/exclude`. Either way, **read the PR's file list after
+> publishing** (below), because it is the only record of what actually went up.
 > *(2026-08-28, karakeep: a learning doc deliberately held back was excluded via
 > `.git/info/exclude` to get past the dirty-tree check. It shipped into the PR, had to be deleted
 > from the fork branch by API, and that deletion then blocked the next publish as "edits were made
-> on your PR".)*
+> on your PR". This rule previously generalized that to "anything gitignored ships", which the
+> stage step above contradicts.)*
 
 **Known failure — stale fork (expected, not a bug).** `ray publish` may stop with:
 
@@ -1234,15 +1246,15 @@ cursors PR #29493: 143 files, base `chrismessina:main`.)
 >   the PR. No manual cleanup of the fork branch is needed.
 > - **Anything upstream has that you lack is deleted by your publish.** This is why the staleness
 >   gate's `Only in <PUB_DIR>` is a STOP, not noise.
-> - **What shows up uninvited is a GITIGNORED file still on disk.** Publishing refuses a dirty tree
->   (`please commit or discard your uncommited changes first`), so an ordinary untracked file
->   blocks rather than ships — but git status does not list ignored files, and the copy reads the
->   disk minus its own fixed exclusion list (`.git`, `.github`, `node_modules`, `raycast-env.d.ts`,
->   `.direnv`, and the Swift/Rust build folders). A gitignored `CLAUDE.md` or `.claude/` in the
->   extension root ships on every publish; move it outside the root first. The 2026-07-14 case
->   this note once generalized from — `.windsurf/` persisting in an open PR — fits this if the
->   folder was ignored and still present; the record does not say, and the current code gives a
->   tracked, committed deletion no way to linger.
+> - **What shows up uninvited is a file hidden only by `.git/info/exclude`.** Publishing refuses a
+>   dirty tree (`please commit or discard your uncommited changes first`), so an ordinary
+>   untracked file blocks rather than ships. A file excluded via `.git/info/exclude` passes that
+>   check, is copied into the fork checkout, and is staged there, because that exclude file is
+>   not copied. A file listed in the **extension's own `.gitignore`** is copied too, but the
+>   fork-side `git add` skips it (see the two-step callout above). The 2026-07-14 case —
+>   `.windsurf/` persisting in an open PR — fits the exclude path if the folder was hidden that
+>   way; the record does not say, and the current code gives a tracked, committed deletion no
+>   way to linger.
 >
 > **Still read the PR's full file list after every publish**, unfiltered —
 > `gh api repos/raycast/extensions/pulls/<N>/files --paginate --jq '.[] | .status+" "+.filename'`

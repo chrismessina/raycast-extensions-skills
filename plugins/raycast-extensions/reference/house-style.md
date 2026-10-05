@@ -1250,7 +1250,9 @@ added forgets:
 
 ```ts
 function csvCell(value: string): string {
-  const neutralized = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  // Leading whitespace is skipped first: import paths that trim it (Google Sheets does by
+  // default) would otherwise expose the formula behind it.
+  const neutralized = /^[\t\r]|^\s*[=+\-@]/.test(value) ? `'${value}` : value;
   return `"${neutralized.replace(/"/g, '""')}"`;
 }
 ```
@@ -1264,10 +1266,14 @@ row too if any header ever becomes dynamic.
   `.replace(/"/g, '""')`, so both would be false findings. Find the writers —
   `rg -n 'text/csv|\.csv[`"]|toCsv|csvCell' src` — and for each one confirm that **every cell,
   header included if dynamic, passes through one helper whose first step is the formula guard**
-  (`/^[=+\-@\t\r]/`). A test pins it: `csvCell("=1+1")` must start with `"'=`.
+  (`/^[\t\r]|^\s*[=+\-@]/`). Tests pin it: `csvCell("=1+1")` must start with `"'=`, and
+  `csvCell(" =1+1")` with `"' =`. The older first-character-only guard `/^[=+\-@\t\r]/`
+  is a finding: whitespace before the formula slips past it.
 - **Evidence:** 2026-09-08, `raycast-ios-apps` `generateCSV` — correct RFC 4180 quoting on
   `name` and `sellerName`, both straight from the iTunes API, with nothing stopping a leading
   `=`. Found while fixing the export rule above, which the quoting had made *look* handled.
+  2026-10-04, `fathom` #31922: Greptile found that the guard this rule then prescribed
+  checked only the first character, so `" =1+1"` and `"\n=1+1"` passed unguarded.
 
 ---
 
