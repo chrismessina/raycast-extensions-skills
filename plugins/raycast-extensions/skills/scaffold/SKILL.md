@@ -186,6 +186,11 @@ the version where it first exists instead — the derivation is in
 | Provide AI models (`getModels`, `streamCompletion`, `AI.refreshModels`) | `ai.modelProvider` | `^2.5.0` |
 | MCP server (build writes `.mcp.json` unchecked; the app validates it on load — stdio, or http/sse with optional headers and OAuth) | `ai.mcp` / `ai.yaml` | `^2.5.0` |
 
+**Do not scaffold `widgets`.** 2.7.0 added a top-level `widgets` manifest array (`src/widgets/<name>`),
+but it is dark on both sides as of 2.7.2: the public CLI throws *"Widgets require a Development or
+Internal build of @raycast/api."* on any non-empty `widgets`, and the 2.7.2.0 app throws *"Widgets are
+not supported in this build"* when launching one. Re-check the changelog before relying on it.
+
 ## House Style from the start
 
 New code must conform to House Style as it's written — see `reference/house-style.md` (`[build]` entries) and `reference/keyboard-conventions.md`. Don't scaffold code that the `ship` house-style audit would immediately flag.
