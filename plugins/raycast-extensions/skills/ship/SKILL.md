@@ -1039,7 +1039,7 @@ what made the wrong inference feel confirmed. It cost a turn and, in Chris's wor
 "freak-out" that "isn't warranted when it's just the two of us."
 
 **The `ship` rule that stands is narrower than it looks:** *you* never run `gh pr ready`.
-That is about your own actions. It is not a licence to police his.
+That is about your own actions. It is not a license to police his.
 
 ## Submission — `ray publish`
 

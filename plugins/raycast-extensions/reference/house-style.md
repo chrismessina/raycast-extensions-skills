@@ -1233,6 +1233,11 @@ Three further requirements on the write itself, none of which the toast can pape
   pass: the success toast must report `basename(actualPath)`, not the filename it *intended*
   to write — with a collision fallback in place those differ, and the toast would otherwise
   reveal a file that does not exist.
+- **Exception — a downloader keeps Open File in place of Copy Path.** Chris, 2026-10-04, on
+  `fetch`: *"stick with Show in Finder and Open File, since this extension is a
+  downloader."* A toast holds two actions, and for a file the user just fetched, opening it
+  is the next step; Copy File Path stays one ⌘⌃C away in History. The exception covers `fetch`'s
+  download toast only. An export (a file the extension *generated*) still carries Copy Path.
 
 ### `[both]` A CSV export neutralizes spreadsheet formulas, not just quotes
 
@@ -1589,8 +1594,12 @@ verb) · artifact · while (not whilst) · afterward (not afterwards)
 **Audit — two halves.** Tracked files, before shipping; it must print nothing:
 
 ```bash
-git grep -niE '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|afterwards|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|canonicalis[a-z]*|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
+git grep -niP '\b(un|mis|re)?(catalogue|parenthesis(ed|ing)|behaviour|colour|recognis[a-z]*|normalis[a-z]*|serialis[a-z]*|analyse[sd]?|honour[a-z]*|labell(ed|ing)|cancell(ed|ing|able)|centre|defence|artefacts?|whilst|afterwards|organis[a-z]*|summaris[a-z]*|stabilis[a-z]*|customis[a-z]*|prioritis[a-z]*|utilis[a-z]*|minimis[a-z]*|maximis[a-z]*|optimis(e|ed|es|ing|ation)|canonicalis[a-z]*|licence)\b' -- . ':!package-lock.json' ':!**/fixtures/**'
 ```
+
+**`-P`, never `-E`.** Apple's `git grep -E` has no `\b`: it treats the boundary as
+unmatchable, so the audit prints nothing and reads as a pass. Measured 2026-10-04 on
+`fetch` (Apple Git 2.54): `-E` 0 hits, `-P` 44, on a tree full of `Cancelled`.
 
 Exclude any other path that holds external data verbatim (below). Commit messages and PR
 descriptions are not files, so the second half is `[build]`: read them before you push.
@@ -1937,7 +1946,7 @@ form of a rule reports a regression on code that just adopted a helper encoding 
 | `pref-description-length` | `both` | all | **report** | Preference `description` ≤ 80 characters, `label` < 50 |
 | `kit` | `both` | self-authored, already being changed | **report** | Prefer `@chrismessina/raycast-kit` for failure toasts and count copy |
 | `show-in-finder` | `both` | all | **block** | Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, "Finder")` |
-| `export-actions` | `both` | writes a file for the user | **block** | A completed file export offers Show in Finder AND Copy Path, both with shortcuts |
+| `export-actions` | `both` | writes a file for the user | **block** | A completed file export offers Show in Finder AND Copy Path, both with shortcuts (exception: `fetch`'s download toast keeps Open File instead) |
 | `csv-formula-guard` | `both` | exports CSV | **block** | A CSV export neutralizes spreadsheet formulas, not just quotes |
 | `first-action` | `both` | all | **block** | Audit the FIRST action of every ActionPanel state, not just the primary one |
 | `keyboard` | `both` | all | **block** | Keyboard shortcuts follow `keyboard-conventions.md` |
