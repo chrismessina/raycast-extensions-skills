@@ -260,6 +260,22 @@ The retrofit pass: take an extension that works (a fork you're contributing to, 
 
 ---
 
+## Before reporting — audit the copy you wrote
+
+No gate reads words. Before handing work back, run two `house-style.md` checks over every
+string and comment you added, untracked files included (`git grep --untracked -P`):
+
+- **`us-english`** — run its audit regex. A model writing careful prose reaches for
+  `cancelled`, `analyses`, `centred` unprompted.
+- **`empty-state-copy`** — every `List.EmptyView` description you wrote is ONE sentence,
+  with no `\n` joins and no second "Type a URL above…" sentence tacked on. Steps go in
+  the actions.
+
+*Receipt, 2026-10-10, raycast-digger:* a new no-URL view shipped a three-line
+description, and a new component had `let cancelled`. Both rules were already in
+house style. Chris caught them both on his first look, along with an "analyses"
+already in `package.json`.
+
 ## After the change — run it in Raycast, don't just build it
 
 **The static gates are necessary and not sufficient.** `tsc --noEmit`, `ray build`, and
