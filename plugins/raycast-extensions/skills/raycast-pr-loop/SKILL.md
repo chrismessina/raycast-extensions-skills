@@ -226,6 +226,18 @@ For each finding, decide and say which:
   writes true"; Greptile later flagged "untouched checkbox overrides the workspace
   default." Omitting *and* seeding the static default into the display satisfied both.
   If you fix only the current reviewer's half, the other half comes back next round.
+- **Race or concurrency finding → apply the timing test before fixing.** The bots review
+  every repo as if it were a server with concurrent users. A Raycast extension has one
+  person at a keyboard. A race is valid only if that person can hit it at human speed:
+  typing fast into a search bar, pressing Enter twice, leaving a command open in the
+  background while running another, a slow response landing after they moved on. A race
+  that needs two events within the same few milliseconds is **declined**. Answer it
+  in-thread (prefix `@greptile` for Greptile) in one or two sentences: the exact timing
+  required, and why no one can produce it by hand. Do not add a lock, a mutex, or split
+  storage keys for it; that machinery is new surface the next round reviews. If a
+  human-speed version of the same race exists, fix that version and say the
+  millisecond one is declined. Same test as the user-level **`codex-gate` skill**,
+  "Give it the threat model".
 
 **The round bound:** after **three rounds** without every bot clear, stop looping
 autonomously and present the round history — by then the cheap findings are gone and
