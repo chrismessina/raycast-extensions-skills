@@ -78,7 +78,7 @@ leading edge — is `develop`'s modernization intent, and it is gated on this fi
 | Dependency | FLOOR (safe everywhere) | LEADING EDGE (proven, opt-in) | Proven on |
 |---|---|---|---|
 | `node` | 22 | — | local toolchain is v22.22.3 |
-| `@raycast/api` | **`^2.1`** | — | 8 extensions on 2.x, incl. `store-updates` + `karakeep` (2.1.0, first with `Form` + `Grid`) and `context7` (first upstream, merged 2026-08-25). **Floor moved 1.x → `^2.1` on 2026-08-27, Chris confirmed** — see below |
+| `@raycast/api` | **`^1.104`** (newest 1.x, `1.104.25`) | `^2.1` — **only with a declared 2.x-only feature** | **Floor moved back `^2.1` → `^1.104` on 2026-10-10, Chris decided** — a 2.x API excludes every user still on Raycast 1.x. See "2.x needs a declared reason" below. 2.x adopters: `store-updates`, `karakeep`, `context7` and others from the 2026-08-27 floor |
 | `@raycast/utils` | `^2.2` | `^2.3` | `ios-apps` (2.3.0), `context7` (2.3.0); `^1.17` still in use, see note below |
 | `@chrismessina/raycast-logger` | **`^1.5`** | — | `attio`, `digger`, `ios-apps`, `karakeep`, `reader` (all 1.4.0); `fathom` on 1.5.0; **required before `@raycast/api` v2**. Floor moved `^1.4` → `^1.5` on 2026-09-15, Chris confirmed, now that 1.5.0 is published |
 | `@chrismessina/raycast-kit` | **`^0.2.0`** | — | `threads` (0.2.0, first adopter of the `bytes` subpath); floor moved 0.1.4 → 0.2.0 on 2026-09-09, Chris confirmed. Still satisfies the `@raycast/api` v2 peer prerequisite — see below |
@@ -95,6 +95,29 @@ The fleet is genuinely split between `^1.17` and `^2.2`, and **v1 extensions are
 stranded** — they're just on the older major. Treat a `^1.17` → `^2.2` move as a real
 migration (v2 changed hook signatures), not a hygiene bump. Don't bulk-migrate; do it
 when the extension is being worked on anyway.
+
+### `@raycast/api` 2.x needs a declared reason (decided 2026-10-10)
+
+**Stay on the newest 1.x (`1.104.25`) unless the extension uses something only 2.x has.**
+Declaring `@raycast/api` 2.x makes the Store refuse the update for everyone still running
+Raycast 1.x — they keep the old version and never receive the fix. Chris, 2026-10-10, on
+`google-search` (151K installs): *"unless we're making use of 2.x features, we probably
+should rollback … and get a declaration for extension where we do make use of 2.x features
+(like ai commands)."*
+
+- **The declaration:** an extension on 2.x names the 2.x-only API it depends on — in the PR
+  body and, for self-authored extensions, in `AGENTS.md`. No named feature → it goes back to
+  1.x. "Clears an `npm audit` advisory" is **not** a reason: the esbuild advisory 2.x fixes is
+  a Windows dev-server issue in the CLI, never in the shipped bundle.
+- **Raycast enforces this.** Greptile's knowledge base cites a staff rollback, "Restore Qobuz
+  compatibility with Raycast 1.x" (#31899, 2026-10-04), and raised it as a P1 on
+  `google-search` #32169, whose new code (arguments, `fallbackText`, destructive actions,
+  toast `primaryAction`, global `fetch`) all exists in 1.104.
+- **Pending:** Chris asked Raycast on Slack (2026-10-10) whether a general move to 2.x is
+  sanctioned. Revisit this section when that answer arrives.
+- Everything below — the 2026-08-27 floor move and its reasoning — is the history this
+  decision reverses. Its compatibility findings (1.x → 2.x is a soft major) are still true
+  and are what a *declared* 2.x adopter should rely on.
 
 ### `@raycast/api` v2 — leading edge is `^2.1` (assessed 2026-08-27)
 

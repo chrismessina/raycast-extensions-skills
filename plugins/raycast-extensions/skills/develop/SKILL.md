@@ -275,25 +275,19 @@ outsourced back to him, and it comes back as a numbered list.
 npm run dev        # or `ray develop` — whichever the repo defines
 ```
 
-> **A `package.json` PREFERENCE change needs a Raycast RESTART, not a hot-reload.**
-> `ray develop` rewrites the manifest and recompiles the JS, but Raycast caches the
-> **preferences schema** and keeps serving the previous version: renamed titles/labels
-> still show their old text, and a newly added preference is **absent from the pane
-> entirely**. Nothing looks broken — the deploy succeeded, `ray lint` passes, and
-> `diff <(jq -S .preferences package.json) <(jq -S .preferences <deployed>/package.json)`
-> comes back identical. It reads exactly like "my manifest edit didn't work."
+> **⚠️ SUPERSEDED 2026-10-10 — preference changes now HOT-RELOAD. Do NOT tell Chris to quit
+> and restart Raycast after a `package.json` preference change.** Chris, 2026-10-10: *"they do
+> now! no more need to quit and restart raycast to see new preferences!"* Observed on
+> `google-search` with Raycast 2.7.3: moving an extension-level checkbox into a command's
+> `preferences` appeared under that command in Settings on a plain `npm run dev`, no restart,
+> and the toggle kept its existing value. Prescribing a restart is now pure cost — it can
+> blank uncommitted preference values (tokens, toggles) for nothing.
 >
-> **Don't debug the manifest — quit and reopen Raycast.** Verify first that source and
-> deployed agree; if they do, the discrepancy is the cache, and only a restart clears it.
-> Code-only changes (a `.tsx` edit) hot-reload normally and need no restart.
->
-> ⚠️ **A restart clears preference VALUES that were entered but never committed** — a
-> pasted token and a flipped toggle can both come back blank. Warn before suggesting a
-> restart, and expect to ask him to re-enter secrets afterwards.
->
-> *(2026-07-28: a renamed `trackReadStatus` label and a newly-promoted `menuBarScope`
-> both stayed invisible across several hot-reloads. Chris restarted Raycast and both
-> appeared immediately — and his GitHub token and GraphQL toggle were reset.)*
+> The pre-2.7 behavior survives only as a diagnosis aid, for when a preference edit genuinely
+> fails to appear after a *completed* deploy: Raycast used to cache the preferences schema, so
+> renamed labels kept old text and new preferences were absent from the pane (2026-07-28,
+> `store-updates`). Check first that the deploy finished (the `.js` check below) — a
+> half-written install is the likelier cause today.
 >
 > **⚠️ SUPERSEDED 2026-08-24 — do NOT ask which app he is in, and do NOT pre-emptively pass
 > `--target=x`.** Chris: *"`--target=x` is no longer necessary as Raycast v2 is rolling out."*
