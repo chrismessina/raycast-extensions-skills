@@ -231,7 +231,10 @@ For each finding, decide and say which:
   person at a keyboard. A race is valid only if that person can hit it at human speed:
   typing fast into a search bar, pressing Enter twice, leaving a command open in the
   background while running another, a slow response landing after they moved on. A race
-  that needs two events within the same few milliseconds is **declined**. Answer it
+  that needs the person to produce two events within the same few milliseconds is
+  **declined**. A race the extension sets off itself from one normal action (a fetch and
+  its revalidation resolving out of order, a double render, two handlers on one event) is
+  valid however tight the timing. Answer it
   in-thread (prefix `@greptile` for Greptile) in one or two sentences: the exact timing
   required, and why no one can produce it by hand. Do not add a lock, a mutex, or split
   storage keys for it; that machinery is new surface the next round reviews. If a
