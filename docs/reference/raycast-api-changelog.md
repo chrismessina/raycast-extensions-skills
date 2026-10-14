@@ -21,6 +21,96 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.8.0 — 2026-10-14
+
+Diffed against **2.7.3** (2026-10-09). Runtime claims were checked against **Raycast.app 2.8.0.0**.
+No files were added or removed, and `dist/types/` is byte-identical. `package.json` differs only in
+`version`, so no dependency moved. `oclif.manifest.json` is equal apart from `.version` once keys are
+sorted recursively, so no command or flag changed. Raycast's changelog page has no 2.6.x, 2.7.x, or
+2.8.0 entry; its newest is still 2.5.0 (fetched 2026-10-14).
+
+The release does two things: it **repoints 31 deprecated `AI.Model` members to new ids**, and it
+rewrites one branch of the AI-tool schema extractor.
+
+**Fleet impact:** none required. The only fleet source that names `AI.Model` members is
+`raycast-reader`. Its default model, `AI.Model["OpenAI_GPT-5.4_nano"]` (eight uses in
+`/Users/messina/Developer/GitHub/chrismessina/raycast-reader/src/config/ai.ts`), is **deprecated in this
+release** in favor of `OpenAI_GPT-6_Luna`. Its id is unchanged, so the extension still requests
+`openai-gpt-5.4-nano`. These artifacts do not show how long the backend keeps serving that id. The
+other members it uses are still active: `OpenAI_GPT-5.5_Instant` in `prompts.ts` and all seven
+Summary Model preference values. The new `Anthropic_Claude_Haiku_5.5` is not one of those
+preference values.
+
+### `AI.Model`: 31 deprecated members now resolve to different ids (the 2.3.0 pattern again)
+
+177 members (was 176). None was removed. Sorted by `name`, the two enums differ in three ways:
+
+- **Added:** `Anthropic_Claude_Haiku_5.5` = `anthropic-claude-haiku-5-5`.
+- **Deprecated, same id (10):** `OpenAI_GPT-5.3_Codex`, `OpenAI_GPT-5.4_nano`,
+  `Anthropic_Claude_Opus_4.7`, `Anthropic_Claude_Opus_4.8`, `Google_Gemini_3.6_Flash`, `_3.5_Flash`,
+  `_3.1_Flash_Lite`, `_3_Flash`, `xAI_Grok-4.5`, and `xAI_Grok-4.3`. The diff shows each as a `-` in the
+  active block and a `+` in the deprecated block with the same value.
+- **Repointed (31), all already deprecated.** An extension that names one of these now sends a
+  different model id, with no source change:
+
+  | Old id | New id | Members |
+  |---|---|---|
+  | `openai-gpt-4o-mini` | `openai-gpt-6-luna` | 5 (`OpenAI_GPT-4o_mini`, `OpenAI_GPT4o-mini`, `OpenAI_GPT3.5-turbo`, `OpenAI_GPT3.5-turbo-instruct`, `Qwen_2.5_32B`) |
+  | `openai-gpt-4.1-mini`, `-4.1-nano`, `-5-nano`, `openai_o1-o4-mini`, `openai_o1-o3-mini` | `openai-gpt-6-luna` | 9 |
+  | `openai-gpt-4`, `-4o`, `-4.1`, `-5.1`, `-5.2` | `openai-gpt-6-sol` | 8 |
+  | `openai-gpt-5.3-instant` | `openai-gpt-6.1-sol` | 1 |
+  | `openai-gpt-5-mini` | `openai-gpt-5.4-mini` | 2 |
+  | `google-gemini-2.5-flash` | `google-gemini-3.8-flash` | 4 (`Google_Gemini_2.5_Flash`, `_1.5_Flash`, `_1.5_Pro`, `_2.0_Flash_Thinking`) |
+  | `google-gemini-2.5-pro` | `google-gemini-3.1-pro` | 1 |
+  | `google-gemini-2.5-flash-lite` | `google-gemini-3.5-flash-lite` | 1 |
+
+  After this release, no member resolves to any of the 16 old ids. Several targets are a different
+  model family from the name, for example `OpenAI_GPT-5_nano` → `openai-gpt-6-luna` and `OpenAI_GPT-4` →
+  `openai-gpt-6-sol`. Cost, latency, and subscription gating for the new ids were not checked.
+
+Many `@deprecated` hints were also retargeted, for example the whole `xAI_Grok*` family from
+`Grok-4.3`/`4.5` to `Grok-4.6`, and `Anthropic_Claude_*Opus*` to `Opus_5`. A deprecated member's hint and
+value routinely disagree: 32 of them in 2.8.0, and 33 in 2.7.3. The hint names the suggested
+replacement, while the value is what the request actually sends. For example, `xAI_Grok-4` says to use
+`Grok-4.6` but still sends `xai-grok-4.3`.
+
+**Runtime agrees.** The app's live shim
+(`/Applications/Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Contents/Resources/api/node_modules/@raycast/api/index.js`)
+assigns all 177 members, each one to the same id as the 2.8.0 types. No member is missing and none
+is extra. The 2.8.0 npm package has no `main` and no runtime enum values (its `package.json` declares only
+`types`), so an extension's `AI.Model[...]` values come from that shim. The inference is that the
+repoint follows the installed app, not the `@raycast/api` version the extension pins. This pass did
+not run an extension pinned to an older version to observe it.
+
+### Build: the AI-tool schema extractor no longer mutates the checker's union type
+
+This is the only logic change in the bundles. It appears identically in `build`, `bundle`, `develop`,
+`publish`, `publish-to-store`, and `extract-tools-info`, and it accounts for their −160/−170 bytes.
+In the `TypeFlags.Union` branch of the type-to-JSON-schema converter, 2.7.3 dropped `undefined` from
+an optional union by **assigning to the TypeScript checker's own type**
+(`Ie.types=Ie.types.filter(…)`) and recursing. 2.8.0 filters into a local array and makes the
+single-member, all-string-literal (`enum`), and all-boolean-literal checks against that copy.
+
+Reading the two branches, they return the same schema for every union the function accepts. To
+check, `getSchemas` from both tarballs was run against the 16 fleet checkouts that have `src/tools/`.
+Together those give 75 tools, 33 `enum` schemas (from optional string-literal unions such as
+`state?: "todo" | "done"`), and 602 `type` keys. The output was **byte-identical in all 16**. The
+change removes a write into shared checker state. This pass found no input where the old write
+changed the output.
+
+Derivation: identifier churn hides everything in a raw diff. Splitting on `;,{}` and replacing every
+1–4 character identifier (including `$`-prefixed ones) with `X` reduced each bundle diff to these 17
+lines.
+
+---
+
+## 2.7.3 — 2026-10-09 · **nothing new; see 2.7.0**
+
+A pure version bump against **2.7.2**. `version/index.js` and `package.json` each differ in one byte
+(`2` → `3`). `oclif.manifest.json` is equal apart from `.version` once keys are sorted recursively.
+
+---
+
 ## 2.7.2 — 2026-10-08 · **nothing new; see 2.7.0**
 
 A pure version bump against **2.7.1**, verified at byte level. Only `dist/commands/version/index.js`,
@@ -49,7 +139,10 @@ so no command or flag was added or removed and no flag default changed. Raycast'
 no 2.6.x or 2.7.x entry; its newest is 2.5.0 (fetched 2026-10-08).
 
 **Fleet impact:** none required. The `AI.Model` change touches no member the fleet uses: the only
-`AI.Model[...]` source is `raycast-reader`, which still uses `OpenAI_GPT-5_nano` as noted under 2.6.0.
+`AI.Model[...]` source is `raycast-reader`. *(Corrected 2026-10-14: this entry originally said
+`raycast-reader` "still uses `OpenAI_GPT-5_nano`", which was already stale when it was written. That
+extension had switched to `OpenAI_GPT-5.4_nano` in `a0fc458`, 2026-10-04, and neither member changed in
+2.7.0, so the conclusion stands.)*
 The build-output change below needs no source change, but a multi-entry-point extension may now get a
 generated `node_modules/` in its `ray build` output. That happens only when an npm package is
 bundled into at least two entry points, passes the skip rules, and the shared copy is smaller.
