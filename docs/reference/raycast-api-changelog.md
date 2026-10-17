@@ -52,7 +52,7 @@ sorted recursively, so no command or flag changed. Raycast's changelog page has 
 2.8.0 entry; its newest is still 2.5.0 (fetched 2026-10-14).
 
 The release does two things: it **repoints 31 deprecated `AI.Model` members to new ids**, and it
-rewrites one branch of the AI-tool schema extractor.
+fixes one branch of the AI-tool schema extractor that could emit a wrong output schema.
 
 **Fleet impact:** none required. The only fleet source that names `AI.Model` members is
 `raycast-reader`. Its default model, `AI.Model["OpenAI_GPT-5.4_nano"]` (eight uses in
@@ -113,12 +113,28 @@ an optional union by **assigning to the TypeScript checker's own type**
 (`Ie.types=Ie.types.filter(…)`) and recursing. 2.8.0 filters into a local array and makes the
 single-member, all-string-literal (`enum`), and all-boolean-literal checks against that copy.
 
-Reading the two branches, they return the same schema for every union the function accepts. To
-check, `getSchemas` from both tarballs was run against the 16 fleet checkouts that have `src/tools/`.
-Together those give 75 tools, 33 `enum` schemas (from optional string-literal unions such as
-`state?: "todo" | "done"`), and 602 `type` keys. The output was **byte-identical in all 16**. The
-change removes a write into shared checker state. This pass found no input where the old write
-changed the output.
+**This is a bug fix, and it can change generated schemas.** The old write removed `undefined` from
+the checker's own union, so any type resolved *after* the input schema saw the altered union. Both
+versions convert the input before the output type, so a tool's **output** schema could come out
+wrong in 2.7.3. A counterexample, run through each tarball's own `getSchemas` (bundled TypeScript
+6.0.2):
+
+```ts
+type Input = { state?: "todo" | "done" };
+type Output = undefined extends Input["state"] ? "yes" | "present" : "no" | "absent";
+export default function tool(input: Input): Output { … }
+```
+
+2.7.3 emits `{"type":"string","enum":["no","absent"]}`, and 2.8.0 emits
+`{"type":"string","enum":["yes","present"]}`. Both emit the same input schema. Because
+`Input["state"]` includes `undefined`, 2.8.0's result is the correct one. *(Found by the Codex
+review of this entry, 2026-10-16, and reproduced before writing it here.)*
+
+On real code the fix made no difference. `getSchemas` from both tarballs was run against the 16
+fleet checkouts that have `src/tools/`. Together those give 75 tools, 33 `enum` keys (from optional
+string-literal unions such as `state?: "todo" | "done"`), and 599 `type` keys. The output was
+**byte-identical in all 16**. That holds for this sample only. A tool whose types depend on an
+optional union seen earlier in the same extraction can get a different schema under 2.8.0.
 
 Derivation: identifier churn hides everything in a raw diff. Splitting on `;,{}` and replacing every
 1–4 character identifier (including `$`-prefixed ones) with `X` reduced each bundle diff to these 17
@@ -539,7 +555,7 @@ Read from `Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Con
 
 A pure version bump, **verified at byte level** rather than inferred from file sizes. Only
 `dist/commands/version/index.js`, `oclif.manifest.json`, and `package.json` differ from 2.4.0, and
-`cmp -l` reports **exactly one differing byte in each** — `0x60` → `0x61`, i.e. ASCII `0` → `1`.
+`cmp -l` reports **exactly one differing byte in each** — octal `060` → `061` (`cmp -l` prints octal), i.e. ASCII `0` → `1`.
 That is the version string and nothing else. `types/index.d.ts` is byte-identical and the oclif
 command map compares equal.
 

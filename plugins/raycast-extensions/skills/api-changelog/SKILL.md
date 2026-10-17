@@ -156,7 +156,7 @@ for f in dist/commands/version/index.js oclif.manifest.json package.json; do
 done
 ```
 
-A handful of differing bytes that are all digit-to-digit (`0x60`→`0x61` is `0`→`1`) **is** the
+A handful of differing bytes that are all digit-to-digit (`cmp -l` prints octal: `060`→`061` is `0`→`1`) **is** the
 version string and nothing else — then, and only then, report "zero functional change" and stop.
 2.3.1 and 2.4.1 were each exactly this: one differing byte per file.
 
