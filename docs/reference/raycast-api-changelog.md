@@ -21,6 +21,28 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.8.2 — 2026-10-16 · **nothing new; see 2.8.0**
+
+A pure version bump against **2.8.1**. `version/index.js` and `package.json` each differ in one byte
+(`1` → `2`). `oclif.manifest.json` differs in 9,695 bytes at identical size, which is the reverse of
+the 2.8.1 reordering below. Against 2.8.0 it differs in one byte, the version digit. Every other
+file, `types/index.d.ts` included, is byte-identical to 2.8.0. The installed app is 2.8.2.0, and its
+`@raycast/api` shim maps all 177 `AI.Model` members to the same ids as the 2.8.2 types.
+
+**Fleet impact:** nothing.
+
+---
+
+## 2.8.1 — 2026-10-16 · **nothing new; see 2.8.0**
+
+A pure version bump against **2.8.0**. `version/index.js` and `package.json` each differ in one byte
+(`0` → `1`). `oclif.manifest.json` differs in 9,695 bytes at identical size: the `publish` command
+moved from its alphabetical slot to the end of `commands`. With keys sorted recursively, the
+manifests of 2.8.0, 2.8.1 and 2.8.2 are equal apart from `.version`. No app build for 2.8.1 was
+checked.
+
+---
+
 ## 2.8.0 — 2026-10-14
 
 Diffed against **2.7.3** (2026-10-09). Runtime claims were checked against **Raycast.app 2.8.0.0**.
