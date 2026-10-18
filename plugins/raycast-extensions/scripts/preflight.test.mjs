@@ -1,4 +1,4 @@
-// Run: node --test plugins/raycast-extensions/scripts/
+// Run: node --test plugins/raycast-extensions/scripts/*.test.mjs (Node 22 reads a bare directory as a module)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
@@ -297,4 +297,89 @@ test("warn-only heuristics: raycast:// deeplinks, hand-built favicon URLs, shell
   ].join("\n");
   const w = warnings(makeExt({ files: { "src/a.ts": src } }));
   for (const id of ["launch-command", "favicon", "trash", "localization"]) assert.ok(w.includes(id), id);
+});
+
+test("command-renamed: with --published, a vanished command name fails when a new one appears, warns when it is only removed", () => {
+  const two = [
+    { name: "index", title: "Search Items", mode: "view" },
+    { name: "list", title: "List Items", mode: "view" },
+  ];
+  const published = makeExt({ pkg: { commands: two } });
+  const renamed = [two[0], { name: "browse", title: "List Items", mode: "view" }];
+  assert.ok(failures(makeExt({ pkg: { commands: renamed } }), { published }).includes("command-renamed"));
+  const removed = makeExt({ pkg: { commands: [two[0]] } });
+  assert.ok(warnings(removed, { published }).includes("command-renamed"));
+  assert.ok(!failures(removed, { published }).includes("command-renamed"));
+  // A new title on the same name is the sanctioned change and is not a finding.
+  const retitled = [two[0], { ...two[1], title: "Browse Items" }];
+  const ids = runChecks(makeExt({ pkg: { commands: retitled } }), { published }).map((f) => f.id);
+  assert.ok(!ids.includes("command-renamed"));
+  // Without --published there is nothing to compare against.
+  assert.ok(!runChecks(makeExt({ pkg: { commands: renamed } })).some((f) => f.id === "command-renamed"));
+});
+
+test("lockfile: any lock file other than package-lock.json fails", () => {
+  for (const f of ["yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"])
+    assert.ok(failures(makeExt({ files: { [f]: "" } })).includes("lockfile"), f);
+  assert.ok(!failures(makeExt({ files: { "package-lock.json": "{}" } })).includes("lockfile"));
+});
+
+test("npm-registry: a non-npmjs registry in .npmrc or package-lock.json fails", () => {
+  for (const rc of ["registry=https://registry.npmmirror.com/\n", "@acme:registry=https://npm.pkg.github.com\n"])
+    assert.ok(failures(makeExt({ files: { ".npmrc": rc } })).includes("npm-registry"), rc);
+  const fine = "legacy-peer-deps=true\nregistry=https://registry.npmjs.org/\n; registry=https://example.com\n";
+  assert.ok(!failures(makeExt({ files: { ".npmrc": fine } })).includes("npm-registry"));
+  const lock = (url) =>
+    JSON.stringify({ lockfileVersion: 3, packages: { "": {}, "node_modules/x": { resolved: url } } });
+  assert.ok(failures(makeExt({ files: { "package-lock.json": lock("https://registry.npmmirror.com/x/-/x-1.0.0.tgz") } })).includes("npm-registry"));
+  assert.ok(!failures(makeExt({ files: { "package-lock.json": lock("https://registry.npmjs.org/x/-/x-1.0.0.tgz") } })).includes("npm-registry"));
+});
+
+test("npm-registry: hosts are compared, not prefixes; quotes are stripped; escaped JSON and shrinkwrap are read", () => {
+  const lock = (url) => JSON.stringify({ lockfileVersion: 3, packages: { "": {}, "node_modules/x": { resolved: url } } });
+  for (const url of ["https://registry.npmjs.org.evil.example/x.tgz", "https://registry.npmjs.org@evil.example/x.tgz"])
+    assert.ok(failures(makeExt({ files: { "package-lock.json": lock(url) } })).includes("npm-registry"), url);
+  assert.ok(!failures(makeExt({ files: { ".npmrc": 'registry="https://registry.npmjs.org/"\n' } })).includes("npm-registry"));
+  assert.ok(failures(makeExt({ files: { ".npmrc": '"registry"=https://mirror.example/\n' } })).includes("npm-registry"));
+  const escaped = '{"lockfileVersion":3,"packages":{"node_modules/x":{"resolved":"https:\\/\\/mirror.example\\/x.tgz"}}}';
+  assert.ok(failures(makeExt({ files: { "package-lock.json": escaped } })).includes("npm-registry"));
+  const v1 = JSON.stringify({ lockfileVersion: 1, dependencies: { a: { resolved: "https://registry.npmjs.org/a", dependencies: { b: { resolved: "https://mirror.example/b" } } } } });
+  assert.ok(failures(makeExt({ files: { "package-lock.json": v1 } })).includes("npm-registry"));
+  const shrink = makeExt({ files: { "npm-shrinkwrap.json": lock("https://mirror.example/x.tgz") } });
+  assert.ok(failures(shrink).includes("lockfile") && failures(shrink).includes("npm-registry"));
+});
+
+test("command-renamed: an unreadable or malformed published manifest warns instead of passing silently", () => {
+  const missing = makeExt({ files: { "package.json": null } });
+  for (const pub of [missing, makeExt({ files: { "package.json": "{" } }), makeExt({ files: { "package.json": "null" } }), makeExt({ files: { "package.json": '{"commands":{}}' } })])
+    assert.ok(warnings(makeExt(), { published: pub }).includes("command-renamed"));
+  // A nameless published member is malformed data, not a vanished command.
+  const odd = makeExt({ files: { "package.json": JSON.stringify({ ...GOOD_PKG, commands: [{}, GOOD_PKG.commands[0]] }) } });
+  assert.ok(!failures(makeExt(), { published: odd }).includes("command-renamed"));
+});
+
+test("npm-registry: inline comments, last-wins keys, a known host around ${VAR}, and a BOM are handled as npm does", () => {
+  const rc = (s) => failures(makeExt({ files: { ".npmrc": s } })).includes("npm-registry");
+  assert.ok(rc("registry=https://registry.npmmirror.com/ # previously ${NPM_REGISTRY}\n"));
+  assert.ok(!rc("registry=https://registry.npmjs.org ; use npm\n"));
+  assert.ok(!rc("registry=https://mirror.example/\nregistry=https://registry.npmjs.org/\n"));
+  assert.ok(rc("@acme:registry=https://gitlab.com/api/v4/projects/${CI_PROJECT_ID}/packages/npm/\n"));
+  assert.ok(warnings(makeExt({ files: { ".npmrc": "registry=${NPM_REGISTRY}\n" } })).includes("npm-registry"));
+  const lock = "﻿" + JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/x": { resolved: "https://registry.npmmirror.com/x.tgz" } } });
+  assert.ok(failures(makeExt({ files: { "package-lock.json": lock } })).includes("npm-registry"));
+});
+
+test("command-renamed: published members that cannot be compared warn, and valid ones are still compared", () => {
+  const pub = makeExt({ files: { "package.json": JSON.stringify({ ...GOOD_PKG, commands: [null, { name: 123 }, { name: "gone" }] }) } });
+  const ids = runChecks(makeExt(), { published: pub }).filter((f) => f.id === "command-renamed").map((f) => f.level);
+  assert.ok(ids.includes("warn") && ids.includes("fail"), ids.join(","));
+});
+
+test("npm-registry: a ; or # comment needs no space before it, as in npm's ini parser", () => {
+  assert.ok(!failures(makeExt({ files: { ".npmrc": "registry=https://registry.npmjs.org; use public npm\n" } })).includes("npm-registry"));
+  assert.ok(failures(makeExt({ files: { ".npmrc": "registry=https://mirror.example/#mirror\n" } })).includes("npm-registry"));
+});
+
+test("npm-registry: a quoted value keeps its ; or #", () => {
+  assert.ok(!failures(makeExt({ files: { ".npmrc": 'registry="https://registry.npmjs.org/#public" ; note\n' } })).includes("npm-registry"));
 });

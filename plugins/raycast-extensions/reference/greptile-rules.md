@@ -10,7 +10,7 @@ and lives in the skill or reference named in the table.
 
 ```bash
 node <plugin>/scripts/preflight.mjs                          # from the extension root
-node <plugin>/scripts/preflight.mjs --published "$PUB_DIR"   # also checks the CHANGELOG got a new entry
+node <plugin>/scripts/preflight.mjs --published "$PUB_DIR"   # also checks the CHANGELOG got a new entry and no command was renamed
 ```
 
 `<plugin>` is the `raycast-extensions` plugin directory — two levels above any skill's base
@@ -60,3 +60,18 @@ Numbers 23, 32, and 33 are absent from the export.
 
 **Two rules as exported carry broken examples.** Rule 11's "Good" and "Bad" are identical, and rule
 14's "Good" block repeats its "Bad" import. The handlers above follow each rule's stated *What*.
+
+## Rules from Raycast's Copilot instructions
+
+Raycast also keeps review instructions for GitHub Copilot in
+[`.github/copilot-instructions.md`](https://github.com/raycast/extensions/blob/main/.github/copilot-instructions.md)
+(last commit 2025-09-03). None of the six most recent `chrismessina` PRs as of 2026-10-18 (#31929
+through #32483) had a Copilot review; Greptile, Cursor Bugbot and a maintainer reviewed them. Read
+the file as Raycast's stated policy, whether or not Copilot shows up on a given PR. Most of its rules
+repeat ones above. These three do not:
+
+| Rule | Handled by | Level |
+|---|---|---|
+| Never change a command's `name`: it is the key rankings, aliases and hotkeys are saved under. Change the `title` | `preflight` `command-renamed` with `--published`. A name that vanishes while a new one appears fails; a name that only vanishes warns. Either can also mean the checkout is behind upstream, which `develop` step 0 settles. An unreadable published manifest warns that nothing was checked | FAIL / WARN |
+| `package-lock.json` is the only lock file | `preflight` `lockfile` (`npm-shrinkwrap.json`, `yarn.lock`, `pnpm-lock.yaml`, `bun.lock`, `bun.lockb` fail) | FAIL |
+| Packages come only from `https://registry.npmjs.org` | `preflight` `npm-registry`: a `registry=` or `@scope:registry=` line in `.npmrc`, or any `http(s)` `resolved` URL in `package-lock.json` or `npm-shrinkwrap.json`, whose host is not `registry.npmjs.org`. A registry set from `${VAR}` warns. `git+ssh:` and `file:` resolutions are not checked | FAIL / WARN |

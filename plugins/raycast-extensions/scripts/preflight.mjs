@@ -6,7 +6,7 @@
 //   node <plugin>/scripts/preflight.mjs [--published <dir>] [--json]
 //
 // --published points at a sparse checkout of the extension as it exists in raycast/extensions,
-// which enables the "CHANGELOG has a new entry" check. Exit 1 when any check fails; warnings
+// which enables the "CHANGELOG has a new entry" and "no command was renamed" checks. Exit 1 when any check fails; warnings
 // never change the exit code. Rule-by-rule rationale: reference/greptile-rules.md.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -292,6 +292,87 @@ export function runChecks(dir, opts = {}) {
         add("changelog-updated", "fail", `CHANGELOG has no new entry — the top entry is still "${pubTop}"`);
     }
   }
+
+  // command-renamed — a command's `name` is the key Raycast stores rankings, aliases and hotkeys
+  // under, so renaming it resets them for every user; change the `title` instead. A name that
+  // vanishes while a new one appears is rename-shaped and fails; one that only vanishes is
+  // probably a deliberate removal and warns. Either can also mean the checkout is behind upstream:
+  // calibrated 2026-10-18 on 53 fleet checkouts, 3 of the 7 hits were commands upstream had gained.
+  if (opts.published) {
+    // A manifest that is missing, unparseable, not an object, or has a non-array `commands` gives
+    // nothing to compare; say so rather than pass. An object with no `commands` key has none.
+    let pubCommands = null;
+    try {
+      const pub = JSON.parse(read(join(opts.published, "package.json")) ?? "null");
+      if (isObj(pub) && (pub.commands === undefined || Array.isArray(pub.commands))) pubCommands = pub.commands ?? [];
+    } catch {
+      // stays null
+    }
+    if (pubCommands === null)
+      add("command-renamed", "warn", `no readable commands in ${join(opts.published, "package.json")}; renames not checked`);
+    const unnamed = (pubCommands ?? []).filter((c) => !isObj(c) || typeof c.name !== "string").length;
+    if (unnamed)
+      add("command-renamed", "warn", `${unnamed} published command entr${unnamed === 1 ? "y has" : "ies have"} no string name; those were not checked`);
+    const names = (cs) => (Array.isArray(cs) ? cs.filter(isObj).map((c) => c.name).filter((n) => typeof n === "string") : []);
+    const local = names(commands), published = names(pubCommands);
+    const gone = published.filter((n) => !local.includes(n));
+    const added = local.filter((n) => !published.includes(n));
+    if (gone.length)
+      add("command-renamed", added.length ? "fail" : "warn",
+        `published command names are gone: ${gone.join(", ")}` +
+          (added.length ? ` (new: ${added.join(", ")}). Keep the old name and change the title` : " — confirm the removal is intended") +
+          "; if this checkout never had them, it is behind upstream (develop step 0)");
+  }
+
+  // lockfile and npm-registry — from Raycast's Copilot review instructions: package-lock.json is the
+  // only lock file, and packages come only from the official npm registry. npm-shrinkwrap.json counts
+  // as another lock file, and npm reads it ahead of package-lock.json.
+  const LOCKS = ["package-lock.json", "npm-shrinkwrap.json"];
+  const otherLocks = ["npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"].filter((f) => existsSync(join(dir, f)));
+  if (otherLocks.length) add("lockfile", "fail", `only package-lock.json is allowed; remove ${otherLocks.join(", ")}`);
+  const host = (url) => {
+    try {
+      return new URL(url).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  };
+  // .npmrc as npm reads it: an unescaped `;` or `#` starts a comment anywhere, keys and values may be
+  // quoted, and the last setting of a key wins.
+  const settings = new Map();
+  for (const line of (read(join(dir, ".npmrc")) ?? "").split("\n")) {
+    const m = line.match(/^\s*["']?((?:@[^:\s"']+:)?registry)["']?\s*=\s*(.*)$/);
+    if (!m) continue;
+    const quoted = m[2].match(/^\s*(["'])(.*?)\1/); // a quoted value keeps its ; and #
+    settings.set(m[1], quoted ? quoted[2] : m[2].replace(/(^|[^\\])[;#].*$/, "$1").trim());
+  }
+  const registries = [], unresolved = [];
+  for (const [key, value] of settings) {
+    const h = host(value);
+    // A ${VAR} that hides the host cannot be judged here; one elsewhere in the URL can.
+    if (value.includes("${") && (!h || /[${}]/.test(h))) unresolved.push(`.npmrc ${key}=${value}`);
+    else if (h !== "registry.npmjs.org") registries.push(`.npmrc ${key}=${value}`);
+  }
+  for (const lockName of LOCKS) {
+    let lock;
+    try {
+      lock = JSON.parse((read(join(dir, lockName)) ?? "null").replace(/^\uFEFF/, "")); // npm strips a BOM too
+    } catch {
+      continue; // a corrupt lock file fails `npm ci`, which is a louder signal than this check
+    }
+    const resolved = [];
+    const walk = (v) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v !== null && typeof v === "object")
+        for (const [k, x] of Object.entries(v)) k === "resolved" && typeof x === "string" ? resolved.push(x) : walk(x);
+    };
+    walk(lock);
+    const foreign = resolved.filter((u) => /^https?:/i.test(u) && host(u) !== "registry.npmjs.org");
+    const hosts = [...new Set(foreign.map((u) => host(u) ?? u))];
+    if (hosts.length) registries.push(`${lockName} resolves ${foreign.length} package(s) from ${hosts.join(", ")}`);
+  }
+  if (registries.length) add("npm-registry", "fail", "packages must come from https://registry.npmjs.org", registries);
+  if (unresolved.length) add("npm-registry", "warn", "registry set from an environment variable; confirm it is https://registry.npmjs.org", unresolved);
 
   // screenshots — rule 3, plus the Store's 2000×1250 requirement
   if (commands.some((c) => c.mode === "view")) {
