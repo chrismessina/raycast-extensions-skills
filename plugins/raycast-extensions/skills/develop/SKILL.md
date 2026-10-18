@@ -74,11 +74,15 @@ says what to build. These only establish *what baseline*, *where*, and *on what 
 
    # Per-run temp dir — shared /tmp paths collide between concurrent runs.
    WORK="$(mktemp -d "${TMPDIR:-/tmp}/staleness-$EXT.XXXXXX")"
-   trap 'rm -rf "$WORK"' EXIT
+   # No EXIT trap: later steps read the baseline from separate shells, so deleting it
+   # on exit leaves them nothing. macOS prunes old files in $TMPDIR on its own.
+   PUB_DIR=""
 
    # Distinguish a REAL 404 from a failed request — rate limit / network must ABORT.
    HTTP="$(gh api "repos/raycast/extensions/contents/extensions/$EXT" \
-            --silent --include 2>/dev/null | head -1 | grep -oE '[0-9]{3}' | head -1)"
+            --silent --include 2>/dev/null | head -1 | grep -oE '[0-9]{3}' | head -1)" || true
+   # `|| true` is load-bearing: gh exits 1 on a 404, which under `set -euo pipefail` would
+   # kill the script on the assignment, before the case below can say "not published".
    case "$HTTP" in
      200) PUBLISHED=yes ;;
      404) PUBLISHED=no  ;;
@@ -107,16 +111,20 @@ says what to build. These only establish *what baseline*, *where*, and *on what 
        exit 1
      }
 
+     # Capture the status: a bare `diff` returning 1 would trip `set -e` and exit
+     # before the case below classifies it.
+     rc=0
      diff -r -q \
        -x node_modules -x .git -x dist -x .DS_Store \
        -x raycast-env.d.ts -x '.prettierrc*' -x '.eslintrc*' \
-       "$PUB_DIR" .
-     case $? in
+       "$PUB_DIR" . || rc=$?
+     case $rc in
        0) echo "IN SYNC — no content differences" ;;
        1) echo "DIFFERENCES — classify each line below" ;;
        *) echo "ABORT: diff failed (exit 2 = operational error, not a difference)."; exit 1 ;;
      esac
    fi
+   echo "PUB_DIR=$PUB_DIR"   # empty = not published. Set this in the classify step below.
    ```
 
    > ⚠️ **Branch on `diff`'s exit status; never `&& … || …`.** Exit 2 (comparison failed)
@@ -140,8 +148,10 @@ says what to build. These only establish *what baseline*, *where*, and *on what 
    **Either STOP condition means the tree is stale.** Do not edit, do not plan against the
    local code. Reconcile first: adopt the published version as the baseline, then re-apply
    local work on top, checking each change against what the published version already
-   fixed. (`metadata/*.png` differing is usually Raycast CI's screenshot recompression —
-   adopt the smaller upstream copies; see `ship`'s note.)
+   fixed. (`metadata/*.png` differing is usually Raycast CI's screenshot recompression, but
+   adopt one only after `ship`'s pixel triage: a replaced screenshot looks the same to
+   `diff`. A `package.json` that differs only by `"platforms": ["macOS"]` is almost
+   certainly the same merge commit adding the key; adopt it. See `ship`'s note.)
 
    **Why this is step 0 and not a pre-flight item.** `ship`'s pre-flight catches it too —
    but only *after* the work is done, which is exactly how it surfaced on 2026-07-28 on

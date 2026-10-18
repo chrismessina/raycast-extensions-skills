@@ -113,6 +113,10 @@ Follows Raycast's "prepare an extension for the Store" guide:
   Metadata**.
 - **2000 × 1250 PNG, light theme,** up to six (three or more recommended), with one consistent
   wallpaper. Raycast Wallpapers are a good choice.
+- **Raycast's CI fails two more things** (`scripts/check_metadata_images.py`, read 2026-10-18): a
+  screenshot showing your local dev icon in the bottom bar, and any screenshot with no detectable
+  Window Capture frame. That second rule rules out menu bar screenshots, so don't plan a shot of a
+  menu bar command.
 - **Plan at least one shot with the ⌘K action panel open.** Chris likes showing the actions, and
   it's where new capabilities are visible. Check the panel's text too: action titles can carry
   names ("Remove <account>"), which is fine in replay, where they're Twin Peaks names.

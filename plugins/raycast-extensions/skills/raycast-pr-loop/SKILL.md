@@ -400,6 +400,15 @@ resources the whole time it waits.**
   the next likely trigger is another push or the
   user marking the PR ready for review. An unattended loop with no bound is a stuck
   session, not diligence.
+- **The PR itself has a clock.** Raycast's `stale.yml` labels a PR `status: stalled` after
+  **25 days** with no activity and closes it **7 days** later, unless it carries an exempt
+  label (`api`, `documentation`, `dev tools`, `app`, `status: blocked by API`, `rename`,
+  `Dont close`). It scans every 4 hours, so a push or comment clears the label on the next
+  scan, not instantly. Include the PR's last-activity date in the stop report when it is
+  past 3 weeks.
+- **A red `Ensure Maintainer Can Modify` check is not a reviewer.** It fails a fork PR
+  whose "Allow edits by maintainers" box is off. Tick the box on the PR page and re-run
+  the check; no code change is needed.
 
 ## 5. Exit
 
