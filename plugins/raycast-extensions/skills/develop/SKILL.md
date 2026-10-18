@@ -43,6 +43,10 @@ All three change code, so they all live here and all hand forward to `ship` when
 | moving a helper into a shared package, or adding one to the kit | [`deciding-whether-to-extract-a-shared-package`](../../learnings/tooling-decisions/deciding-whether-to-extract-a-shared-package.md) |
 | adding or changing an AI tool (`src/tools/`) or its `ai.yaml` evals | [`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md) |
 | changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
+| fixing two modules that share a data contract, or reviewing a multi-commit branch task by task | [`bugs-concentrate-at-module-seams`](../../learnings/architecture-patterns/bugs-concentrate-at-module-seams.md) |
+| breaking code on purpose to prove a test catches it, or trusting a zero-match grep or empty fetch | [`green-falsification-that-tested-nothing`](../../learnings/workflow-issues/green-falsification-that-tested-nothing.md) |
+| asserting against a constant from the code under test, or one that mirrors a dependency's rule | [`test-against-the-dependency-not-your-own-constant`](../../learnings/workflow-issues/test-against-the-dependency-not-your-own-constant.md) |
+| fixing something whose correctness is on screen: a toast, an icon, a color | [`rendered-output-is-invisible-to-code-review`](../../learnings/workflow-issues/rendered-output-is-invisible-to-code-review.md) |
 
 Reach for it when you are about to use a `@raycast/api` or `@raycast/utils` primitive in a way you have not used before, when a hook or platform API behaves differently from how it reads, or when a review finding points at a dependency's runtime behavior rather than at your own code. `CONCEPTS.md` at the repo root defines the terms these learnings use (Fleet, House Style, Command process isolation, Development renderer replay, Restored value).
 
