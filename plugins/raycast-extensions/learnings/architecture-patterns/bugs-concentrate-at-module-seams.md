@@ -151,5 +151,5 @@ The most durable outcome of this branch was moving cross-module contracts from i
 
 ## Related
 
-- `docs/DESIGN-NOTES.md` in that checkout (deleted 2026-10-18, never copied) — the "Ask vs. Recents" entry documents a *design* seam in the same codebase: two mental models (a search-result list and a conversation list) layered over one dataset. A sibling concept rather than the same lesson — that one is a deliberately deferred UX mismatch, this one is a set of shipped correctness fixes. Worth reading together as two kinds of seam in the same file area.
+- [`docs/DESIGN-NOTES.md`](https://github.com/raycast/extensions/blob/0aad68241aeaa21800e19f4b555b8fd4b00d0d16/extensions/claude/docs/DESIGN-NOTES.md) at #29798's head — the "Ask vs. Recents" entry documents a *design* seam in the same codebase: two mental models (a search-result list and a conversation list) layered over one dataset. A sibling concept rather than the same lesson — that one is a deliberately deferred UX mismatch, this one is a set of correctness fixes made on that branch. Worth reading together as two kinds of seam in the same file area.
 - [raycast/extensions#29798](https://github.com/raycast/extensions/pull/29798) — the branch these defects were found and fixed on.
