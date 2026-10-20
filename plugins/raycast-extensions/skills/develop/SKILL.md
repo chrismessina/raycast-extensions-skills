@@ -42,6 +42,7 @@ All three change code, so they all live here and all hand forward to `ship` when
 | reading Reddit without a logged-in session | [`reading-reddit-programmatically-in-2026`](../../learnings/tooling-decisions/reading-reddit-programmatically-in-2026.md) |
 | moving a helper into a shared package, or adding one to the kit | [`deciding-whether-to-extract-a-shared-package`](../../learnings/tooling-decisions/deciding-whether-to-extract-a-shared-package.md) |
 | adding or changing an AI tool (`src/tools/`) or its `ai.yaml` evals | [`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md) |
+| passing anything from an AI tool's `confirmation` to the tool itself | [`ai-tool-confirmation-runs-in-its-own-process`](../../learnings/design-patterns/ai-tool-confirmation-runs-in-its-own-process.md) |
 | changing a numeric constant on a directional argument, or choosing between two explanations | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
 | fixing two modules that share a data contract, or reviewing a multi-commit branch task by task | [`bugs-concentrate-at-module-seams`](../../learnings/architecture-patterns/bugs-concentrate-at-module-seams.md) |
 | breaking code on purpose to prove a test catches it, or trusting a zero-match grep or empty fetch | [`green-falsification-that-tested-nothing`](../../learnings/workflow-issues/green-falsification-that-tested-nothing.md) |
