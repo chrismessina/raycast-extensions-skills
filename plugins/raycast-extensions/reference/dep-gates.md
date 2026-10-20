@@ -78,7 +78,7 @@ leading edge — is `develop`'s modernization intent, and it is gated on this fi
 | Dependency | FLOOR (safe everywhere) | LEADING EDGE (proven, opt-in) | Proven on |
 |---|---|---|---|
 | `node` | 22 | — | local toolchain is v22.22.3 |
-| `@raycast/api` | **`^1.104`** (newest 1.x, `1.104.25`) | `^2.1` — **only with a declared 2.x-only feature** | **Floor moved back `^2.1` → `^1.104` on 2026-10-10, Chris decided** — a 2.x API excludes every user still on Raycast 1.x. See "2.x needs a declared reason" below. 2.x adopters: `store-updates`, `karakeep`, `context7` and others from the 2026-08-27 floor |
+| `@raycast/api` | `^1.104` (newest 1.x, `1.104.25`) — existing extensions only | **`^2` — the newest 2.x the Raycast app can run; the default for every NEW extension** | **Chris, 2026-10-20: new extensions start on the cutting edge.** Staying on 1.x is a suggestion for large, popular extensions only — see "1.x for large extensions" below. 2.x adopters: `dev-null` (2.8.2), `store-updates`, `karakeep`, `context7` |
 | `@raycast/utils` | `^2.2` | `^2.3` | `ios-apps` (2.3.0), `context7` (2.3.0); `^1.17` still in use, see note below |
 | `@chrismessina/raycast-logger` | **`^1.5`** | — | `attio`, `digger`, `ios-apps`, `karakeep`, `reader` (all 1.4.0); `fathom` on 1.5.0; **required before `@raycast/api` v2**. Floor moved `^1.4` → `^1.5` on 2026-09-15, Chris confirmed, now that 1.5.0 is published |
 | `@chrismessina/raycast-kit` | **`^0.2.0`** | — | `threads` (0.2.0, first adopter of the `bytes` subpath); floor moved 0.1.4 → 0.2.0 on 2026-09-09, Chris confirmed. Still satisfies the `@raycast/api` v2 peer prerequisite — see below |
@@ -96,28 +96,24 @@ stranded** — they're just on the older major. Treat a `^1.17` → `^2.2` move 
 migration (v2 changed hook signatures), not a hygiene bump. Don't bulk-migrate; do it
 when the extension is being worked on anyway.
 
-### `@raycast/api` 2.x needs a declared reason (decided 2026-10-10)
+### `@raycast/api`: 2.x for new extensions, 1.x for large ones (Chris, 2026-10-20)
 
-**Stay on the newest 1.x (`1.104.25`) unless the extension uses something only 2.x has.**
-Declaring `@raycast/api` 2.x makes the Store refuse the update for everyone still running
-Raycast 1.x — they keep the old version and never receive the fix. Chris, 2026-10-10, on
-`google-search` (151K installs): *"unless we're making use of 2.x features, we probably
-should rollback … and get a declaration for extension where we do make use of 2.x features
-(like ai commands)."*
+**New extensions start on the newest 2.x the Raycast app can run. No 2.x-only feature is
+needed to justify it, and none is asked for.** Chris, 2026-10-20, after `dev-null` was
+rolled back to 1.104.25 under the old rule: *"I don't like this rule — banish it. Keep it as
+a suggestion for LARGE/popular extensions. I want all my new extensions to be on the cutting
+edge going forward."* Never roll a new extension back to 1.x at ship time.
 
-- **The declaration:** an extension on 2.x names the 2.x-only API it depends on — in the PR
-  body and, for self-authored extensions, in `AGENTS.md`. No named feature → it goes back to
-  1.x. "Clears an `npm audit` advisory" is **not** a reason: the esbuild advisory 2.x fixes is
-  a Windows dev-server issue in the CLI, never in the shipped bundle.
-- **Raycast enforces this.** Greptile's knowledge base cites a staff rollback, "Restore Qobuz
-  compatibility with Raycast 1.x" (#31899, 2026-10-04), and raised it as a P1 on
-  `google-search` #32169, whose new code (arguments, `fallbackText`, destructive actions,
-  toast `primaryAction`, global `fetch`) all exists in 1.104.
-- **Pending:** Chris asked Raycast on Slack (2026-10-10) whether a general move to 2.x is
-  sanctioned. Revisit this section when that answer arrives.
-- Everything below — the 2026-08-27 floor move and its reasoning — is the history this
-  decision reverses. Its compatibility findings (1.x → 2.x is a soft major) are still true
-  and are what a *declared* 2.x adopter should rely on.
+**1.x for large extensions — a suggestion, not a gate.** Declaring 2.x makes the Store
+refuse an *update* for everyone still on Raycast 1.x: they keep the old version and miss
+the fix. That cost scales with installs, so for a large, popular extension already on 1.x
+(the case that prompted the old rule: `google-search`, 151K installs, 2026-10-10), mention
+in the report that staying on 1.104 keeps its 1.x users updating, and let Chris decide.
+Never block, roll back, or demand a declaration on your own. Background for that
+conversation: Greptile cites a Raycast staff rollback, "Restore Qobuz compatibility with
+Raycast 1.x" (#31899, 2026-10-04), and raised a 1.x P1 on `google-search` #32169.
+
+The compatibility findings below (1.x → 2.x is a soft major) still hold.
 
 ### `@raycast/api` v2 — leading edge is `^2.1` (assessed 2026-08-27)
 

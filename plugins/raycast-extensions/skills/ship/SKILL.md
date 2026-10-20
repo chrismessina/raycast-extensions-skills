@@ -396,9 +396,10 @@ Run before PR. Each layer is gardening, not engineering:
 
    MAJOR="${INSTALLED%%.*}"
    # The FLOOR from dep-gates.md — the only blocking bar. Keep in sync with that table.
-   # 1.x since 2026-10-10: 2.x is opt-in and needs a declared 2.x-only feature (dep-gates.md).
+   # 1.104.25 is the floor for EXISTING extensions. New extensions go on 2.x by default
+   # (Chris, 2026-10-20) — never roll one back to 1.x here. Staying on 1.x is only a
+   # suggestion to raise for large, popular extensions (dep-gates.md).
    FLOOR="1.104.25"
-   [ "$MAJOR" -ge 2 ] && echo "NOTE: on @raycast/api $MAJOR.x — the PR body must name the 2.x-only feature it uses, or roll back to 1.104.x (dep-gates.md, '2.x needs a declared reason')."
    # npm's newest on this major: ADVISORY ONLY. Never the blocking target — it is routinely
    # ahead of every shipped Raycast, and submitting it breaks installs for all existing users.
    TARGET="$(npm view "@raycast/api@^$MAJOR" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'")"
