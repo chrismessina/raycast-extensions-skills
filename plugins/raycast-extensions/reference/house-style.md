@@ -975,11 +975,17 @@ settings width, so the target is **80 characters or fewer**, with room for a nar
   row as the switch.
 - This is a *target measured once*, not a documented Raycast limit. If a screenshot shows a
   line wrapping earlier, lower the number here; do not raise it without one.
+- **Second measurement, 2026-10-22 (`dev-null`):** a text field's description wrapped at about
+  **51 characters**, and the pane showed **two lines** before **Show more** (a 129-character
+  description was cut mid-word). So at that width 80 characters still avoids the disclosure, but
+  takes two lines. Aim for 50 or fewer when the copy allows; 80 stays the hard limit.
+- **Command-level preferences count too.** A command's own `preferences` array renders in the
+  same pane, and the first version of this audit skipped it.
 
 **Audit:**
 
 ```bash
-jq -r '(.preferences // [])[]
+jq -r '[(.preferences // [])[], (.commands[]?.preferences // [])[]][]
   | select((.description // "" | length) > 80 or (.label // "" | length) >= 50)
   | "LONG: \(.name) description=\(.description // "" | length) label=\(.label // "" | length)"' package.json
 ```
