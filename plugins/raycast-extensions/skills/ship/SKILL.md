@@ -323,6 +323,53 @@ Run before PR. Each layer is gardening, not engineering:
    work was done. Promoted here, and to `develop` step 0, so it is the first thing checked
    rather than the last.)*
 
+   **Then, if the extension has a mirror, ask the sync workflow what it already knows.** A
+   mirror's `sync-from-upstream.yml` runs daily and compares upstream with the mirror, so when it
+   is failing it may have found the staleness this gate is looking for, possibly weeks earlier.
+   Read its state before anything else.
+
+   Pin the repo to `origin` (same parsing as `setup-mirror.sh`). Bare `gh` uses its configured
+   default repo, which can be a different mirror. Filter runs to the default branch, because a
+   manual dispatch on another branch can be newer than a failing `main` run. Filter in `jq`, not
+   with `--branch`: on 2026-10-22 the same `--branch main` query returned 0, 1 and 1 runs in a row. Find sync PRs by
+   their `sync/upstream-<sha>` head branch, not with `--search`: the search index lags, and a
+   title search missed an hour-old sync PR on `threads` that the branch filter found.
+
+   ```bash
+   if [ -f .github/workflows/sync-from-upstream.yml ]; then
+     R=$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##; s#/$##')
+     [[ $R =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "ABORT: origin is not a GitHub repo: $R"; exit 1; }
+     B=$(gh repo view "$R" --json defaultBranchRef --jq .defaultBranchRef.name) || { echo "ABORT: cannot read $R"; exit 1; }
+     RUN=$(gh run list -R "$R" --workflow sync-from-upstream.yml --limit 20 \
+       --json databaseId,headBranch,status,conclusion,createdAt \
+       --jq "map(select(.headBranch == \"$B\")) | .[0] // empty | \"\\(.status)/\\(.conclusion)  \\(.createdAt)  id=\\(.databaseId)\"") \
+       || { echo "ABORT: cannot read sync runs"; exit 1; }
+     echo "LATEST $B RUN: ${RUN:-NONE}"
+     gh issue list -R "$R" --label upstream-sync --state open --json number,title,createdAt \
+       --jq '.[] | "OPEN ISSUE #\(.number)  \(.createdAt)  \(.title)"' || { echo "ABORT: cannot read issues"; exit 1; }
+     gh api --paginate "repos/$R/pulls?state=open&per_page=100" \
+       --jq '.[] | select(.head.ref | startswith("sync/upstream-")) | "OPEN SYNC PR #\(.number)  \(.title)"' \
+       || { echo "ABORT: cannot read PRs"; exit 1; }
+   fi
+   ```
+
+   | Result | Meaning | Action |
+   | --- | --- | --- |
+   | open `upstream-sync` issue | a file changed on both sides since the baseline | **STOP**: the issue names the file; reconcile it before publishing |
+   | latest run `completed/failure`, no issue | the job failed somewhere else: API or download errors, a lockfile regeneration, a rejected baseline push | **STOP**: read the failed step's log (`gh run view <id> -R "$R" --log-failed`). Reconcile content only if the log shows a content problem; otherwise fix or rerun the workflow |
+   | an open sync PR | upstream has changes the mirror has not adopted, or a PR left behind after you already adopted them | **STOP**: diff its head against `main`. If it brings real changes, merge it and pull; if it only moves the baseline timestamp, close it. Then rerun this gate |
+   | `NONE`, `in_progress`/`queued`, `cancelled`, `timed_out`, or any state other than `completed/success` | no completed verdict on the default branch | **STOP**: dispatch the workflow (`gh workflow run sync-from-upstream.yml -R "$R"`), wait for it, rerun this gate | <!-- us-english-ok: GitHub API enum -->
+
+   A green sync doesn't show that the mirror matches upstream. It reports one past run, and a run
+   with no recorded baseline keeps any local file that differs, logging it under "kept" instead of treating it as a conflict or failing the run. That is why
+   the content diff above still has to run. A red sync is a STOP even when the content diff looks
+   explainable.
+
+   *(2026-10-21, `threads`: the sync had been failing daily since 2026-10-14 with "Sync halted:
+   README.md", and issue #1 had been open the whole time. The content diff found the same
+   problem, a contributor's merged Analytics and Giveaway release, but only after the release
+   work was finished. The issue named it a week earlier.)*
+
 0. **Deterministic pre-flight — run the script before reading anything.** Raycast's Store
    reviewer applies about twenty rules that need no judgment: `$schema`, allowed categories,
    `platforms`, preference types, CHANGELOG placeholder and date order, screenshots (plus the
