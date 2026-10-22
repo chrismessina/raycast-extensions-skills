@@ -329,18 +329,24 @@ Run before PR. Each layer is gardening, not engineering:
    Read its state before anything else.
 
    Pin the repo to `origin` (same parsing as `setup-mirror.sh`). Bare `gh` uses its configured
-   default repo, which can be a different mirror. Filter runs to the default branch, because a
-   manual dispatch on another branch can be newer than a failing `main` run. Filter in `jq`, not
+   default repo, which can be a different mirror. **From a monorepo or fork checkout, `origin` is
+   not the mirror:** set `MIRROR=<owner>/raycast-<name>` first. The block checks for the workflow
+   on the mirror's default branch, not in your working tree, so a feature branch without the file
+   cannot skip it. Filter runs to the default branch, because a
+   manual dispatch on another branch can be newer than a failing default-branch run. Filter in `jq`, not
    with `--branch`: on 2026-10-22 the same `--branch main` query returned 0, 1 and 1 runs in a row. Find sync PRs by
    their `sync/upstream-<sha>` head branch, not with `--search`: the search index lags, and a
-   title search missed an hour-old sync PR on `threads` that the branch filter found.
+   title search missed an hour-old sync PR on `threads` that the branch filter found. The block
+   runs in a subshell, so an `exit` aborts the check and leaves a pasted-into shell open.
 
    ```bash
-   if [ -f .github/workflows/sync-from-upstream.yml ]; then
-     R=$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##; s#/$##')
-     [[ $R =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "ABORT: origin is not a GitHub repo: $R"; exit 1; }
+   (
+     R=${MIRROR:-$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##; s#/$##')}
+     [[ $R =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "ABORT: not a GitHub repo: $R"; exit 1; }
      B=$(gh repo view "$R" --json defaultBranchRef --jq .defaultBranchRef.name) || { echo "ABORT: cannot read $R"; exit 1; }
-     RUN=$(gh run list -R "$R" --workflow sync-from-upstream.yml --limit 20 \
+     gh api "repos/$R/contents/.github/workflows/sync-from-upstream.yml?ref=$B" --silent 2>/dev/null \
+       || { echo "NO SYNC WORKFLOW on $R@$B (not a mirror, or set MIRROR)"; exit 0; }
+     RUN=$(gh run list -R "$R" --workflow sync-from-upstream.yml --limit 100 \
        --json databaseId,headBranch,status,conclusion,createdAt \
        --jq "map(select(.headBranch == \"$B\")) | .[0] // empty | \"\\(.status)/\\(.conclusion)  \\(.createdAt)  id=\\(.databaseId)\"") \
        || { echo "ABORT: cannot read sync runs"; exit 1; }
@@ -350,14 +356,14 @@ Run before PR. Each layer is gardening, not engineering:
      gh api --paginate "repos/$R/pulls?state=open&per_page=100" \
        --jq '.[] | select(.head.ref | startswith("sync/upstream-")) | "OPEN SYNC PR #\(.number)  \(.title)"' \
        || { echo "ABORT: cannot read PRs"; exit 1; }
-   fi
+   )
    ```
 
    | Result | Meaning | Action |
    | --- | --- | --- |
-   | open `upstream-sync` issue | a file changed on both sides since the baseline | **STOP**: the issue names the file; reconcile it before publishing |
+   | open `upstream-sync` issue | a file changed on both sides since the baseline | **STOP**: the issue names the file; reconcile it, rerun the workflow, and once that run is `completed/success`, close the issue (the workflow never closes it). Then rerun this gate |
    | latest run `completed/failure`, no issue | the job failed somewhere else: API or download errors, a lockfile regeneration, a rejected baseline push | **STOP**: read the failed step's log (`gh run view <id> -R "$R" --log-failed`). Reconcile content only if the log shows a content problem; otherwise fix or rerun the workflow |
-   | an open sync PR | upstream has changes the mirror has not adopted, or a PR left behind after you already adopted them | **STOP**: diff its head against `main`. If it brings real changes, merge it and pull; if it only moves the baseline timestamp, close it. Then rerun this gate |
+   | an open sync PR | upstream has changes the mirror has not adopted, or a PR left behind after you already adopted them | **STOP**: diff its head against the default branch (`$B`). If it brings real changes, merge it and pull; if it only moves the baseline timestamp, close it. Then rerun this gate |
    | `NONE`, `in_progress`/`queued`, `cancelled`, `timed_out`, or any state other than `completed/success` | no completed verdict on the default branch | **STOP**: dispatch the workflow (`gh workflow run sync-from-upstream.yml -R "$R"`), wait for it, rerun this gate | <!-- us-english-ok: GitHub API enum -->
 
    A green sync doesn't show that the mirror matches upstream. It reports one past run, and a run
