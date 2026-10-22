@@ -139,16 +139,15 @@ says what to build. These only establish *what baseline*, *where*, and *on what 
    | --- | --- | --- |
    | `Only in <PUB_DIR>…` | upstream has a file you do not | **STOP** — stale |
    | `Files … differ` | **ambiguous** — upstream edited it, *or* you did | **classify it** (below) |
-   | `Only in .` | your own local work | expected |
+   | `Only in .` | **ambiguous** — your new file, *or* one upstream deleted | **classify it** (below) |
 
-   **Classify every `differ` line before deciding.** In `develop` you are usually at a
-   clean-ish HEAD, so the cheap test is whether the published blob equals your `HEAD`:
-
-   ```bash
-   [ "$(git hash-object "$PUB_DIR/$f")" = "$(git rev-parse "HEAD:$f")" ] \
-     && echo "MINE (published == your HEAD; delta is your working-tree edit)" \
-     || echo "UPSTREAM → STOP, the tree is stale"
-   ```
+   **Classify every difference before deciding.** Use the classifier in [`ship`](../ship/SKILL.md), step −1:
+   it is the same gate, run here before you start rather than after. Run it in the same
+   shell as the block above, from the extension root. It prints one line per difference:
+   `MINE` (published == your `HEAD`); `CHECK` (published == an older commit of yours) and
+   `NEW?` (a file only you have), both resolved by hand as `ship` describes, because an
+   upstream revert or deletion looks the same; and `UPSTREAM`, `ONLY-PUB` or `UNHANDLED`,
+   each of which means STOP.
 
    **Either STOP condition means the tree is stale.** Do not edit, do not plan against the
    local code. Reconcile first: adopt the published version as the baseline, then re-apply

@@ -133,30 +133,88 @@ Run before PR. Each layer is gardening, not engineering:
    necessarily changes files, so treating every `differ` as staleness blocks every normal
    update, and waving them all through defeats the gate. **You must classify each one.**
 
-   Ask git, not your memory: does the published blob match the commit your local work
-   started from?
+   Ask git, not your memory: which of your commits, if any, held the published blob?
 
    ```bash
-   # For each differing path, is the PUBLISHED version something you already had?
-   for f in $DIFFERING_PATHS; do
-     if git cat-file -e "HEAD:$f" 2>/dev/null && \
-        [ "$(git hash-object "$PUB_DIR/$f")" = "$(git rev-parse "HEAD:$f")" ]; then
-       echo "MINE   $f — published == your HEAD; the delta is your uncommitted edit"
-     elif git cat-file -e "HEAD:$f" 2>/dev/null && \
-          git merge-base --is-ancestor HEAD @{u} 2>/dev/null; then
-       echo "CHECK  $f — diverged from HEAD; inspect before publishing"
-     else
-       echo "UPSTREAM $f — published differs from anything in your history → STOP"
-     fi
-   done
+   # Same shell as the step above (PUB_DIR, WORK, EXT set); run from the extension root.
+   if [ -z "$PUB_DIR" ]; then
+     echo "NOT PUBLISHED — nothing to classify"
+   else
+     rc=0
+     diff -r -q \
+       -x node_modules -x .git -x dist -x .DS_Store \
+       -x raycast-env.d.ts -x '.prettierrc*' -x '.eslintrc*' \
+       "$PUB_DIR" . > "$WORK/staleness.txt" || rc=$?
+     [ "$rc" -le 1 ] || { echo "ABORT: diff failed (exit $rc). Do NOT publish."; exit 1; }
+     # `diff` follows symlinks and ignores modes, so a changed link target or executable
+     # bit compares equal. Extensions almost never have either; flag them for a hand check.
+     find "$PUB_DIR" . \( -name node_modules -o -name .git -o -name dist \) -prune \
+       -o -type l -print | sed 's/^/UNHANDLED symlink /; s/$/ → STOP/'
+     git -C "$WORK" ls-tree -r HEAD "extensions/$EXT/" > "$WORK/modes-pub.txt"
+     git ls-tree -r HEAD . > "$WORK/modes-local.txt"   # paths relative to the extension root
+     awk -F '\t' -v pre="extensions/$EXT/" '
+       { split($1, a, " ") }
+       FNR == NR { m[substr($2, length(pre) + 1)] = a[1]; next }
+       ($2 in m) && m[$2] != a[1] { print "UNHANDLED mode " m[$2] " -> " a[1] " " $2 " → STOP" }
+     ' "$WORK/modes-pub.txt" "$WORK/modes-local.txt"
+     # `while read`, never `for f in $PATHS`: zsh does not word-split.
+     while IFS= read -r line; do
+       case $line in
+         "Files $PUB_DIR/"*" differ") ;;
+         "Only in $PUB_DIR"*) echo "ONLY-PUB  ${line#Only in } → STOP"; continue ;;
+         *": "*": "*) echo "UNHANDLED $line (': ' in a name; path is ambiguous) → STOP"; continue ;;
+         "Only in ."*)
+           s=${line#Only in }; d=${s%%: *}; d=${d#.}; d=${d#/}
+           echo "NEW?      ${d:+$d/}${s#*: } — not published: your new file, or deleted upstream"
+           continue ;;
+         *) echo "UNHANDLED $line → STOP"; continue ;;
+       esac
+       # The line is "Files PUB/f and ./f differ"; both halves are the same path, so cut by
+       # length rather than by the " and " separator, which a filename can contain.
+       s=${line#"Files $PUB_DIR/"}; s=${s%" differ"}
+       f=${s:0:$(( (${#s} - 7) / 2 ))}
+       # Compare git object ids on both sides, never `hash-object` of a checked-out file
+       # (filters and EOL rules can change the bytes). `HEAD:./$f` is relative to the
+       # extension root; `HEAD:$f` would resolve from the root of a monorepo checkout.
+       pub=$(git -C "$WORK" rev-parse -q --verify "HEAD:extensions/$EXT/$f" || true)
+       if [ -z "$pub" ]; then
+         echo "UNHANDLED $f — no published blob id → STOP"
+       elif [ "$pub" = "$(git rev-parse -q --verify "HEAD:./$f" || true)" ]; then
+         echo "MINE      $f — published == your HEAD; the delta is uncommitted"
+       elif git --literal-pathspecs log --full-history --diff-merges=separate \
+              --raw --no-abbrev --format= HEAD -- "$f" |
+            awk -v h="$pub" '$4 == h { m = 1 } END { exit !m }'; then
+         echo "CHECK     $f — published == an OLDER commit of yours → read the diff"
+       else
+         echo "UPSTREAM  $f — published blob not found in this path's history → STOP"
+       fi
+     done < "$WORK/staleness.txt"
+   fi
    ```
 
    | Classification | Meaning | Action |
    | --- | --- | --- |
-   | `Only in <PUB_DIR>` | upstream has a file you do not | **STOP** — publishing deletes it |
-   | `UPSTREAM` | published content is not in your history | **STOP** — publishing reverts their fix |
-   | `MINE` | published matches your `HEAD`; you edited locally | expected — this is your change |
-   | `Only in .` | your new local work | expected |
+   | `ONLY-PUB` | upstream has a file you do not | **STOP** — publishing deletes it |
+   | `UPSTREAM` | published content is not in this path's history (a rename you made also lands here) | **STOP** — publishing reverts their fix (a `metadata/*.png` goes to the pixel triage below first) |
+   | `UNHANDLED` | a symlink, a mode change, or a `diff` line the classifier does not parse | **STOP** — classify it by hand |
+   | `CHECK` | published matches an older commit of yours | **resolve before publishing** — see below |
+   | `NEW?` | you have a file the published tree does not | **resolve before publishing** — see below |
+   | `MINE` | published matches your `HEAD` | expected — the delta is your uncommitted change |
+
+   **`CHECK` is the normal result once you have committed your update, and it is also what
+   an upstream revert to an old version of yours looks like.** History alone cannot tell
+   them apart, so read it, with `P` set to the path from that `CHECK` line:
+   `git --literal-pathspecs log --oneline -- "$P"` and `diff "$PUB_DIR/$P" "$P"`. It is
+   yours only if the published version is the last one before your unpublished commits and
+   every hunk is one of those commits. Anything else is upstream → **STOP**.
+
+   **`NEW?` is usually your new file, and it is also what a file upstream deleted looks
+   like**: publishing would bring it back. Set `P` to the path from that `NEW?` line and run
+   `git --literal-pathspecs log --oneline --diff-filter=A -- "$P"`. It is yours if it is
+   untracked or was added in your unpublished commits. If it predates your last merged
+   submission, upstream removed it → **STOP**. On a standalone mirror, `.github/` (the sync
+   workflow) and a gitignored `.claude/` print as `NEW?` on every run: they are yours, and
+   whether they ship is the weeding step's call, not this gate's.
 
    **When in doubt, diff the content and read it** (`diff "$PUB_DIR/<f>" <f>`). A file you
    cannot confidently classify is an upstream change until proven otherwise — fail closed.
@@ -840,7 +898,9 @@ Before any submission command, state explicitly which of these you ran and what 
 returned — paste the actual output, don't assert it:
 
 - [ ] **staleness gate** (step −1) → `diff -r -q` against the sparse-fetched published tree
-      shows no `Only in <PUB_DIR>` and no `Files … differ`. Paste the actual output. A stale
+      shows no `Only in <PUB_DIR>`, and the classifier prints no `UPSTREAM`, `ONLY-PUB` or
+      `UNHANDLED` line and no unresolved `CHECK` or `NEW?`. `MINE` lines are your update. Paste the
+      actual output. A stale
       baseline publishes as a **deletion** of whatever upstream added — and a *content*
       difference publishes as a **revert** of someone else's fix, which a name-only check
       cannot see.
@@ -918,11 +978,17 @@ returned — paste the actual output, don't assert it:
       > **`brew` ships `TODO.md` on purpose — do not flag or remove it there.** Chris, 2026-09-30:
       > *"TODO.md CAN ship with Brew; this is deliberate and generally an exception because this is
       > a big extension with many users, so I want others to know what I'll be working on."* It is a
-      > public backlog, written for users. The exception is `brew` only; everywhere else `TODO.md`
-      > is still a leak. The check below skips it for `brew`.
+      > public backlog, written for users.
+      >
+      > **`dev-null` ships `TODO.md` on purpose too.** Chris, 2026-10-22: it is *"for a developer
+      > extension and it'd be nice if others helped,"* and with so much activity on /dev/null, a
+      > public tracker *"will give other people ideas for where I will take this extension."* The
+      > exceptions are `brew` and `dev-null` only, each by name; everywhere else `TODO.md` is still a
+      > leak, and a new exception needs his say-so. The check below skips it for those two.
       ```bash
       LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|TODO\.md|CLAUDE\.md|WARP\.md)$'
-      [ "$EXT" = brew ] && LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|CLAUDE\.md|WARP\.md)$'  # brew's TODO.md is a public backlog
+      # brew's and dev-null's TODO.md are public backlogs, by Chris's decision.
+      case "$EXT" in brew|dev-null) LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|CLAUDE\.md|WARP\.md)$' ;; esac
       gh api "repos/raycast/extensions/contents/extensions/$EXT" --jq '.[].name' | grep -E "$LEAKS" \
         && echo "^^ public right now — git rm -r these in THIS PR"
       ```
