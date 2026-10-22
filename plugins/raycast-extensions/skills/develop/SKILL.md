@@ -263,6 +263,7 @@ The retrofit pass: take an extension that works (a fork you're contributing to, 
 3. **Present a worklist** of violations before mutating en masse. Fix iteratively; show diffs.
 4. **Apply the keyboard transformation contract** exactly (semantics over combo; drop platform-specific inline objects; fix imports; re-check the conflict invariant after rewriting — a remap can create a new collision).
 5. **Build + lint** to confirm nothing broke — `npx tsc --noEmit`, `ray build`, `ray lint`.
+   Since `@raycast/api` 2.9.0, `ray lint`/`validate`/`publish` **error** on two options with the same `value` in one `dropdown` preference, even under `--relaxed`; `ray build` does not check it ([changelog](../../../../docs/reference/raycast-api-changelog.md)).
 
 > 🚨 **A green `ray lint` does NOT mean the panel is collision-free.** Nothing in `@raycast/eslint-plugin` checks whether two actions in one ActionPanel resolve to the same shortcut — you must assert it by reading the resolved panel.
 >

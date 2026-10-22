@@ -21,6 +21,85 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.9.0 — 2026-10-22
+
+Diffed against **2.8.2** (2026-10-16). Runtime claims were checked against **Raycast.app 2.9.0.0**.
+No files were added or removed, and `dist/types/` is byte-identical. `package.json` and
+`dist/commands/version/index.js` each differ in two bytes, the version string. `oclif.manifest.json`
+is equal apart from `.version` once keys are sorted recursively, so no command or flag changed. The
+only other changes are `types/index.d.ts` (+1,004 bytes) and the `lint`, `validate` and `publish`
+bundles (+663, +663 and +671 bytes). Raycast's changelog page still has no entry newer than 2.5.0
+(fetched 2026-10-22).
+
+The release does three things: it adds **three `AI.Model` members**, adds an optional
+**`revocationEndpoint` to `OAuth.PKCEClient`**, and adds a **manifest check that rejects duplicate
+dropdown preference values**.
+
+**Fleet impact:** nothing required. The new check finds no duplicates in any of the 48
+`/Users/messina/Developer/GitHub/chrismessina/raycast-*/package.json` manifests, scanned with the same
+logic as the CLI, root and per-entry-point preferences included. The scanner flagged a planted
+duplicate before the fleet run. `revocationEndpoint` is opt-in. The three fleet extensions that use
+`PKCEClient`, `raycast-oura`, `raycast-tesla-energy` and `raycast-threads-client`, could adopt it
+when they are next worked on. Whether each provider offers a revocation endpoint was not checked.
+
+### `AI.Model`: three members added
+
+180 members (was 177). None was removed, deprecated or repointed; the diff has no `-` line in the
+enum.
+
+- `Vercel_Muse_Spark_1.3` = `gateway-meta/muse-spark-1.3`
+- `Vercel_Muse_Wonder_1.0` = `gateway-meta/muse-wonder-1.0`
+- `Google_Gemini_4_Argon` = `google-gemini-4-argon`
+
+**The runtime agrees.** The app's live shim
+(`/Applications/Raycast.app/Contents/Resources/macos-app_RaycastDesktopApp.bundle/Contents/Resources/api/node_modules/@raycast/api/index.js`)
+assigns all 180 members, each to the same id as the 2.9.0 types. The backend bundle contains both
+`gateway-meta/…` ids, but not `google-gemini-4-argon`. This pass did not establish what that means
+for availability. Subscription gating for the three ids was not checked.
+
+### OAuth: `PKCEClient.Options.revocationEndpoint`
+
+There is a new optional `revocationEndpoint?: string` on `PKCEClient.Options` and on the client. The
+types say Raycast stores it with the token set, and calls it when the user logs out or
+`removeTokens()` runs. `removeTokens()` resolves once local tokens are removed. Revocation runs in
+the background, and a failure is logged as a warning.
+
+The backend (`…/Resources/backend/index.mjs`, app 2.9.0.0) matches:
+
+- **When tokens are saved**, the endpoint is validated and stored with the token set and the client
+  id. The endpoint must be an `https:` URL with no username, password or fragment, or the call throws
+  `The OAuth revocation endpoint must be an HTTPS URL without credentials or a fragment.`
+- **When tokens are removed**, the token set is deleted locally first. Then, if an endpoint was
+  stored, the backend sends a form-encoded `POST` with `token`, `token_type_hint` and `client_id`. It
+  sends the refresh token when there is one, and otherwise the access token. A failure is logged as
+  `Failed to revoke OAuth tokens after local logout` and is not surfaced.
+- **With no stored client id**, revocation throws
+  `OAuth client ID unavailable for revocation`, and that is caught by the same warning.
+- **A stored token set without `revocationEndpoint`** is deleted locally and not revoked with the
+  provider. Token sets saved by earlier apps are expected to lack the field. That was not checked
+  against a pre-2.9 app or a persisted record.
+
+### Lint: duplicate dropdown preference values are an error
+
+`lint`, `validate` and `publish` each gained one manifest check. It reads root `preferences` and
+the `preferences` of every `commands`, `widgets` and `tools` entry. For each preference of type
+`dropdown`, it reports any string or number `value` that repeats an earlier option:
+
+```
+Duplicate value "x" in dropdown preference "p". Each option must have a unique value.
+```
+
+The level is `error`. The check runs before the `--relaxed` branch, so `--relaxed` does not skip
+it. **Observed:** the same synthetic manifest passed `ray lint` on 2.8.2 (zero matches) and failed
+on 2.9.0, with and without `--relaxed`. The `build` bundle did not change, so `ray build` does not
+run this check. `publish --skip-validation` skips it along with the rest of validation.
+
+**Derivation note:** the message is a template literal, so the step-3 natural-language string diff
+missed it. It turned up only through the identifier diff (`"/preferences"`, `"dropdown"`) and by
+reading the surrounding code.
+
+---
+
 ## 2.8.2 — 2026-10-16 · **nothing new; see 2.8.0**
 
 A pure version bump against **2.8.1**. `version/index.js` and `package.json` each differ in one byte
