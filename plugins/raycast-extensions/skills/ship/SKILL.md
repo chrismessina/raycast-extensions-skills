@@ -272,22 +272,22 @@ Run before PR. Each layer is gardening, not engineering:
          echo "IDENTICAL  $f"
        fi
      else
-       echo "DIFFERENT  $f — pixels differ; KEEP LOCAL (assume the user replaced it)"
+       echo "DIFFERENT  $f — run the decode and provenance check below"
      fi
    done
    ```
 
    | Verdict | Meaning | Action |
    | --- | --- | --- |
-   | `DIFFERENT` | published and local pixels differ | **keep local** — never auto-adopt; adopting reverts new artwork |
+   | `DIFFERENT` | the normalized hashes differ (true for a CI re-encode too) | never auto-adopt — the decode and provenance check below decides |
    | `RECOMPRESS` | pixels byte-identical after normalization, upstream smaller | safe to adopt (`cp "$PUB_DIR/$f" "$f"`) — saves churn |
    | `LOCAL-ONLY` / `UNREADABLE` | no baseline, or normalization failed | **keep local** |
    | `IDENTICAL` | same pixels, no size win | nothing to do |
 
-   **`DIFFERENT` is not a prompt to adopt.** It means the image changed and only a human
-   knows whether that was intentional. In practice it almost always was — the user
-   replaced a screenshot. If you genuinely suspect upstream holds a fix you lack, *look at
-   both images* before touching either.
+   **`DIFFERENT` is not a prompt to adopt, and not proof the user replaced the shot.** A
+   contributor who replaced a screenshot upstream produces the same verdict, and keeping
+   local then reverts *their* image. Settle it with the decode and provenance check in the
+   callout below.
 
    > 🚨 **`norm()` above uses `sips`, which CANNOT decide this. Compare decoded pixels.**
    > Raycast CI's re-encode is **lossless** — it strips a fully-opaque alpha channel and
@@ -303,24 +303,59 @@ Run before PR. Each layer is gardening, not engineering:
    > optimization was "lossy / palette-reduced" and that the two cases were inseparable —
    > wrong on both counts, corrected 2026-08-29.
    >
-   > **Decode instead, and the verdict is decidable:**
+   > **Decode instead, and the verdict is decidable.** Compare size and RGBA: an opaque
+   > image decodes with a `255` alpha plane, so the CI's dropped plane still matches, while
+   > a real transparency change does not. Two things RGBA cannot see send the file to a
+   > human instead: a 16-bit PNG (decoding to 8 bits merges distinct values) and differing
+   > color metadata (`gAMA`, `iCCP`, `sRGB`, `cHRM`), which renders the same bytes
+   > differently. When the pixels differ, the published image is either an older shot of
+   > yours or someone else's, and history can only narrow that down.
    >
    > ```bash
-   > python3 -c "
+   > # Exit 0: same size, RGBA pixels and color metadata. 1: different. 2: cannot tell.
+   > same_px() { python3 -c "
    > from PIL import Image; import sys
+   > if any(open(p, 'rb').read(25)[24] > 8 for p in sys.argv[1:3]): sys.exit(2)  # IHDR bit depth
    > a, b = Image.open(sys.argv[1]), Image.open(sys.argv[2])
-   > print('SAME-PIXELS' if a.convert('RGB').tobytes()==b.convert('RGB').tobytes()
-   >       else 'DIFFERENT-IMAGE')" "$PUB_DIR/$f" "$f"
+   > meta = lambda im: [im.info.get(k) for k in ('gamma', 'icc_profile', 'srgb', 'chromaticity')]
+   > sys.exit(0 if a.size == b.size and meta(a) == meta(b) and
+   >          a.convert('RGBA').tobytes() == b.convert('RGBA').tobytes() else 1)" "$1" "$2"; }
+   >
+   > # Call once per DIFFERENT path: png_triage metadata/<name>-1.png
+   > png_triage() {
+   >   local f=$1 r=0 prior tmp
+   >   same_px "$PUB_DIR/$f" "$f" || r=$?
+   >   case $r in
+   >     0) echo "SAME-PIXELS $f"; return ;;
+   >     2) echo "UNDECIDED   $f — 16-bit PNG → look at both by eye"; return ;;
+   >   esac
+   >   tmp=$(mktemp)
+   >   # `|| true`: `break` closes the pipe, and git's SIGPIPE must not trip pipefail.
+   >   prior=$(git --literal-pathspecs log --full-history --diff-filter=d --format=%H HEAD -- "$f" |
+   >     while IFS= read -r c; do
+   >       git show "$c:./$f" > "$tmp" 2>/dev/null || continue
+   >       same_px "$PUB_DIR/$f" "$tmp" && { echo "$c"; break; }
+   >     done || true)
+   >   rm -f "$tmp"
+   >   if [ -n "$prior" ]; then
+   >     echo "OLDER-SHOT  $f — published == the version in ${prior:0:7} → resolve like CHECK"
+   >   else
+   >     echo "NOT-YOURS   $f — published matches no version in your history → STOP"
+   >   fi
+   > }
    > ```
    >
    > | Result | Case | Action |
    > | --- | --- | --- |
-   > | `SAME-PIXELS`, upstream smaller | CI re-encoded *your* submission | **adopt upstream** — it is what ships |
-   > | `DIFFERENT-IMAGE` | the user replaced the shot | **keep local** — adopting reverts their work |
+   > | `SAME-PIXELS` | CI re-encoded the shot you have | **adopt upstream** — it is what ships |
+   > | `OLDER-SHOT` | published is a version in your history; local is a different shot | **resolve before publishing**: keep local only if that commit is the shot you last submitted and the local one is your newer replacement. A contributor's shot pulled in by a sync, or an old shot upstream restored, also lands here → **STOP** |
+   > | `NOT-YOURS` | in none of your commits: a contributor's shot, or one you never committed | **STOP** — look at both images and ask the user; keeping local reverts a contributor's shot |
+   > | `UNDECIDED` | 16-bit PNG | **STOP** — compare by eye and ask the user |
    >
    > Confirm by eye on the way past — it costs one look — but the decode is the decider, not
-   > the eyeball. Adopt whenever pixels match: the published bytes are what users see, and
-   > keeping the local original leaves the file differing from upstream on every future run.
+   > the eyeball. Adopt whenever pixels match, smaller or not: the published bytes are what
+   > users see, and keeping the local original leaves the file differing from upstream on
+   > every future run.
 
    Then assert the kept files still meet spec (`2000 × 1250`) — a replaced screenshot is
    the most likely thing in the tree to be the wrong size.
@@ -1334,7 +1369,7 @@ time, and the naive resolution is wrong for both:**
 | Conflicted file | ❌ Wrong | ✅ Right |
 | --- | --- | --- |
 | `CHANGELOG.md` | `--ours` | **theirs for the history, ours for the new entry** |
-| `metadata/*.png`, `media/*.png` | `--theirs` | **ours** when the user replaced the shot; **theirs** when it's a CI re-encode of a shot you already submitted. Run the PNG triage above and use its decoded-pixel check — a file hash says "differs" for BOTH cases; only the decode separates them. |
+| `metadata/*.png`, `media/*.png` | `--theirs` | Run the PNG triage above on the working file, then confirm the incoming side is the published one: `git show :3:./<f> > /tmp/theirs.png` and `same_px "$PUB_DIR/<f>" /tmp/theirs.png` must exit 0, or the triage verdict does not apply to it. Then **theirs** on `SAME-PIXELS`; **ours** on a resolved `OLDER-SHOT`; ask the user on `NOT-YOURS` or `UNDECIDED`. A file hash says "differs" for every case; only the decode separates them. |
 
 **CHANGELOG — never `git checkout --ours`.** Your side holds `{PR_MERGE_DATE}` on entries
 that *already shipped*; their side holds the real dates. Taking ours re-stamps shipped
