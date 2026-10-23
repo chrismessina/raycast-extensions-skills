@@ -264,8 +264,11 @@ unless you supply one. Do not chase the score with changes you can't defend.
    the `pull-contributions` dance per `ship` (CHANGELOG rebuilds from
    HEAD + MERGE_HEAD; never `--ours`).
 5. **The secret holdout procedure — defined here, since `ship` documents only the
-   underlying rule** (`ray publish` copies everything except its nine hardcoded names, so any
-   secret or local-only path inside the extension root ships):
+   underlying rule**. `ray publish` copies everything except its nine hardcoded names into
+   the fork checkout, and only the extension's own `.gitignore` keeps a file out of the PR
+   (`ship`, "What ships is decided in TWO steps"). The holdout covers an entry missing from
+   that `.gitignore`, and keeps local-only files safe while `publish` and
+   `pull-contributions` run (`ship`, `pull-contributions` step 3):
    - **Move out, recording an inventory:** before publish, move every local-only
      entry (`.env`, `.claude`, `.superpowers`, and anything else `ls -A` shows that
      is not part of the extension) to a session temp dir, writing each name to an

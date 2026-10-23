@@ -1375,7 +1375,9 @@ files with the same names in place. The disappearance was not reproduced, and it
 unknown.)* Git cannot restore a file whose contents it never recorded.
 
 Then `npx @raycast/api@latest pull-contributions --non-interactive` (there is **no
-`--dry-run`**). It leaves a merge in progress. **Two conflict classes recur every single
+`--dry-run`**). When there is something to pull, it leaves a merge in progress. It can
+also print `no new contributions` and start no merge (otty #32699, 2026-10-23): then re-run
+`publish`, which went through on the retry there. **When it does merge, two conflict classes recur every single
 time, and the naive resolution is wrong for both:**
 
 | Conflicted file | ❌ Wrong | ✅ Right |
