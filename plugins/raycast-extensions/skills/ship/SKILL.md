@@ -1362,6 +1362,18 @@ done
 echo "(no output = fork and upstream agree; the merge will be pure noise)"
 ```
 
+**3. Hold the gitignored local-only files out first, with the inventory from the
+`raycast-pr-loop` secret holdout (reuse it if a holdout is already in progress).** Keep them out
+until the merge is finished: conflicts resolved, gates green, and the merge committed or
+aborted. If `pull-contributions` reports `no new contributions`, restore right away. Then
+restore every inventory entry and verify each one; a later `publish` gets its own holdout
+cycle. *(Receipt, otty #32699, 2026-10-23: the extension's gitignored `CLAUDE.md` and
+`TODO.md` were gone after the first `publish` failed with "contributions are available" and
+`pull-contributions` then reported `no new contributions`. Both were recovered, from Claude
+Code's file history and the session transcript. A later successful `publish` left placeholder
+files with the same names in place. The disappearance was not reproduced, and its cause is
+unknown.)* Git cannot restore a file whose contents it never recorded.
+
 Then `npx @raycast/api@latest pull-contributions --non-interactive` (there is **no
 `--dry-run`**). It leaves a merge in progress. **Two conflict classes recur every single
 time, and the naive resolution is wrong for both:**
