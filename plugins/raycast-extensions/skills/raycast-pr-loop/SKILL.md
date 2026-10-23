@@ -19,6 +19,13 @@ reply channel:
 | **Greptile** | `greptile-apps[bot]` | One summary **issue comment, edited in place** (score `N/5`, P1/P2 badges, `Last reviewed commit`), plus inline review comments | **5/5** and the summary's `Last reviewed commit` is the current head | In-thread reply prefixed **`@greptile`** — verified to work; on #31927 it answered both fix replies within ~25s and withdrew both findings |
 | **Cursor Bugbot** | `cursor[bot]` | A **review per commit** whose body ends `Reviewed by Cursor Bugbot for commit <sha>`, plus inline comments headed `### <title>` / `**<N> Severity**`. No score. | Its review **for the current head** raises nothing that is not already answered. A finding you declined with receipts counts as answered; if the next current-head review **re-raises** it, stop and hand it to the user rather than replying again (no evidence Bugbot reads replies, so a second reply changes nothing) | Plain in-thread reply, so the thread shows the finding was seen. **No evidence Bugbot reads replies:** on #31927 (2026-10-04) both fix replies drew no response; its next per-commit review is the real answer. Update this cell if that ever changes |
 
+**Bugbot appears to be switched off on `raycast/extensions` (seen 2026-10-23).** It never
+reviewed #32699, through draft, ready for review and three pushes, and none of the 15 most
+recently updated PRs had a Bugbot review newer than 2026-10-02 (#31312). Keep reading its
+comments in the §1 census in case it comes back, but **do not wait on it**: with no
+`cursor[bot]` review on the PR, Greptile alone decides whether the round is clear. Report
+it as "Bugbot: not running on this repo", not "Bugbot: no review yet".
+
 A bot not in this table → read its comments anyway (the fetch below lists every `[bot]`
 author), work out its "clear" signal from its own text, and **add a row here**.
 
