@@ -21,6 +21,136 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.10.0 — 2026-10-28 · **bump `@types/react` with it**
+
+Diffed against **2.9.0** (2026-10-22). Runtime claims were checked against **Raycast.app 2.10.0.0**.
+One file was added, `dist/utils/composer-mention-tools.js`. `dist/types/` differs only in minifier
+renames. Most bundle churn is dependency movement: the four `@oclif/*` packages each went up a
+major (`core` 4→5, `plugin-autocomplete` 3→4, `plugin-help` 6→7, `plugin-not-found` 3→4), and
+`clipboardy` and `open` are now real dependencies instead of being bundled, which is why `token`
+shrank from 34 KB to 7 KB. Raycast's v2.10 Slack announcement was the lead list. Each of its claims is
+checked below, and the note left out the `AI.Model` repoints and the `--verbose` flag.
+
+**Fleet impact: one required action, for any extension moving to 2.10.0 while its `@types/react`
+resolves to 19.0.x.** Bump `@types/react` to `19.3.0` in the same change. That is the version the
+package depends on, and 19.2.14 also passed the probes. Otherwise `tsc` rejects Raycast components
+used as JSX (48 sites in `raycast-reader`). Moving `@types/node` to `26.6.5` removes the duplicate
+copy, but it was not needed to fix any error. Today 12 fleet extensions already on 2.x resolve
+`@types/react` to 19.0.10: `app-store-connect`, `central-icon-system`, `claude-artifacts`,
+`dev-null`, `digger`, `fetch`, `google-fonts`, `mercury`, `osaurus`, `otty`, `printing-press` and
+`reader`. Eleven pin it exactly. `mercury` declares `^19.0.10` and is held there by its lockfile.
+Their lockfiles also hold `@raycast/api` below 2.10, so nothing breaks until someone bumps it. None of the 32 repointed `AI.Model` members is used in the
+fleet (`raycast-reader`'s preference keys and source were checked).
+
+### Peer pins moved, and a stale `@types/react` splits the types
+
+`peerDependencies` went from `@types/node 22.19.17 / @types/react 19.0.10 / react-devtools 6.1.1` to
+**`26.6.5 / 19.3.0 / 8.0.0`**, still exact pins. The same `@types/*` versions are also regular
+`dependencies`. So when the extension pins something else, npm 10.9.8 does **not** raise ERESOLVE.
+It quietly installs a second copy under `node_modules/@raycast/api/node_modules/@types/`. With
+`@types/react` 19.0.x that second copy breaks JSX:
+
+```
+error TS2786: 'Detail' cannot be used as a JSX component.
+  … Property 'children' is missing in type 'ReactElement<…>' but required in type 'ReactPortal'.
+```
+
+**Observed** (scratch `tsc --noEmit`, `strict`, `jsx: react-jsx`):
+
+| `@raycast/api` | `@types/node` | `@types/react` | Result |
+|---|---|---|---|
+| 2.9.0 | 22.19.17 | 19.0.10 | exit 0 |
+| 2.10.0 | 22.19.17 | **19.0.10** | **TS2786** on every component |
+| 2.10.0 | 22.19.17 | 19.2.14 | exit 0 (nested 19.3.0 copy present, still fine) |
+| 2.10.0 | 22.19.17 | 19.3.0 | exit 0 |
+| 2.10.0 | 26.6.5 | 19.3.0 | exit 0, no nested copies |
+
+A real case: a scratch copy of `raycast-reader` had 4 errors on 2.9.0, all of them from the missing
+generated `raycast-env.d.ts`. On 2.10.0 it had **52**, the 48 new ones all TS2786. After
+`@types/react@19.3.0` it was back to the same 4. The split `@types/node` copy produced no errors in
+these probes, so it is a tidiness bump, not a fix. `ray build` itself was not run.
+
+`types/index.d.ts` also changed `import { JSX } from 'react/jsx-runtime'` to `from 'react'`.
+
+### Runtime: Node 26.12.1
+
+The app bundles `node/node-v26.12.1-darwin-arm64.tar.gz`, and `node-runtime-arm64.json` says
+`"nodeVersion":"26.12.1"`. `engines.node` in the package is unchanged at `>=22.22.2`.
+The CLI now depends on `react 19.3.1` (was 19.0.0). This pass did not check which React version the
+app's extension runtime loads.
+
+### `Clipboard.paste(content, options?)`: `closeMainWindow`
+
+New `Clipboard.PasteOptions = { closeMainWindow?: boolean }` (default `true`). The app shim passes
+`closeMainWindow: s?.closeMainWindow ?? !0` to the native `paste` call, so leaving it out behaves as
+before. It is opt-in. Fleet users of `Clipboard.paste`: `central-icon-system`, `trimmy`,
+`wrap-unwrap`.
+
+### AI mentions: `functionalities: ["AI mention search"]` and `resourceProvider`
+
+The app's manifest schema (backend and main-window bundles) gives `tools` and `commands` entries an
+optional `functionalities` array of `"AI mention search" | "AI tool"`. The CLI (`build`, `develop`,
+`bundle`, `publish`) gained a top-level `resourceProvider` manifest key, a `src/` file
+built as its own entry point (`could not find an entry point for the resource provider "…"`), and
+contract checks from `composer-mention-tools.js` run against each tool's extracted schema:
+
+- A mention-search tool takes either `{ query: string }`, a **search**, or no `query` at all, a
+  **fixed list**. Any other required input is rejected. The app's backend marks a tool with no
+  `query` property `static: true` and calls it with `{}`. It returns items of
+  `{ title: string; uri?; content?; description?; icon? }`, as an array or as `{ items: [...] }`,
+  and each item needs `uri` or `content`. A tool that fails these checks gets a **warning**, and
+  `AI mention search` is removed from its `functionalities`. The tool survives only if another
+  functionality (such as `AI tool`) remains. Otherwise it is dropped from the generated tools list.
+- A `resourceProvider` must take `{ uri: string }` and return `string` or
+  `{ text: string; mimeType?: string }`, or the build reports an **error**.
+- An item schema that **declares** `uri` with no `resourceProvider` in the manifest is an
+  **error**, even when the items also carry `content`.
+- **Runtime limits** (app 2.10.0.0 backend): results are capped at **50** accepted items. Inline
+  `content` longer than **4,000** characters is discarded, so an item with no `uri` vanishes
+  silently.
+
+The app shim loads the provider as `require(resourceProviderPath)[namedExport || "default"]`.
+
+**What it is for.** In the AI Chat composer, typing `@` offers items from extensions. Picking one
+attaches that item's content to the message, the way attaching a file would. The source for this is
+the CLI's contract and the release note, not a hands-on test. Read the shapes as two patterns:
+
+- **Return `content` inline.** Use this when each item is small and cheap to build: a snippet, a
+  short record, a contact card. It must stay under 4,000 characters. You need no
+  `resourceProvider`, and the item schema must not declare `uri`.
+- **Return `uri`, read it in a `resourceProvider`.** Use this when the body is large or costs an
+  API call: a full document, an issue thread, a transcript. Search and reading are separate entry
+  points, so the search does not have to fetch bodies.
+- **Search or fixed list.** Take `query` when the set is large, as with issues or notes. Leave it
+  out for a short fixed set, such as projects or saved views.
+
+**When it earns a place.** Mentions pay off when the item has a **body** worth attaching: the text
+of a note, an issue's description and comments, a meeting transcript. A mention whose content is
+just a title and a URL adds little. It gives the model a precise reference, not the linked page's
+body, and an ordinary AI tool that lists the same records already lets the model look them up when
+asked. Two more things to know:
+- An existing AI tool with other required inputs cannot opt in. It needs a separate search tool.
+- Adopting this means a floor of `@raycast/api` 2.10.0, with the `@types/react` bump above.
+Subscription gating for the composer @ menu was not checked. Raycast's "Composer Mentions" doc page
+was not fetched.
+
+### `AI.Model`: 32 repoints, 3 deprecations
+
+Still 180 members, none removed. Three moved from the active block to `@deprecated` with their ids
+unchanged: `Anthropic_Claude_Haiku_4.5` (→ Haiku 5.5), `Mistral_Nemo` (→ `Mistral_Small`) and
+`Google_Gemini_3.7_Flash` (→ 3.8 Flash). These look like removals if you read only the `-` lines.
+32 deprecated members now resolve to new ids, mostly to the successor their `@deprecated` tag already
+named: Opus 4.7/4.8 → `anthropic-claude-opus-5`, the Grok 4.3/4.5 aliases → `xai-grok-4.6`,
+the GPT-5.3 Codex/5.4 nano/5.6 Sol aliases → 6 Sol/6 Luna/6.1 Sol, and the Gemini 3–3.6 Flash
+aliases → 3.8 Flash. The app shim assigns all 180 members the same ids as the 2.10.0 types.
+
+### CLI: `--verbose` on `build` and `develop`
+
+`"Print more details during the build process"`. Before this release only `publish` had the flag.
+Nothing else in the oclif manifest changed beyond the `publish` description's URL formatting.
+
+---
+
 ## 2.9.0 — 2026-10-22
 
 Diffed against **2.8.2** (2026-10-16). Runtime claims were checked against **Raycast.app 2.9.0.0**.

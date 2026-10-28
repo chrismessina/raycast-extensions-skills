@@ -87,7 +87,7 @@ leading edge — is `develop`'s modernization intent, and it is gated on this fi
 | `typescript` | `^5.9` | `^6` | `airbuddy` (6.0.3), `tesla-energy` (6.0.2) |
 | `@raycast/eslint-config` | `^2.1` | `^2.2` | `airbuddy` (2.2.0) |
 | `prettier` | `^3` | — | fleet-wide |
-| `@types/react` | `^19` | — | fleet-wide |
+| `@types/react` | `^19`. **Not 19.0.x with `@raycast/api` 2.10.0**: use `19.3.0` | — | fleet-wide. 2.10.0 peer-pins `@types/react 19.3.0` and `@types/node 26.6.5`. If `@types/react` still resolves to 19.0.x, npm installs a second copy and Raycast components used as JSX fail with TS2786. 19.2.14 and 19.3.0 both passed. Bump it in the same change as the API. The `@types/node` bump is tidiness, not a fix. Recheck on later API releases. Receipts: `docs/reference/raycast-api-changelog.md` § 2.10.0 |
 
 ### `@raycast/utils` — a split, not a gate
 
