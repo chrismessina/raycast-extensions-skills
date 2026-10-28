@@ -88,7 +88,7 @@ Everything else exists to handle a holder that died
 |---|---|---|
 | **Ownership token** | `atomic-file.ts:61` | An unconditional `unlink` deletes a lock this process does not hold, admitting a second writer. Only the holder removes one. |
 | **1 s heartbeat** | `atomic-file.ts:36`, `:130` | A live holder slower than the stale threshold gets reclaimed. Refreshing mtime while held means only a genuinely dead holder is reclaimable. |
-| **Age re-check before unlink** | `atomic-file.ts:185` | Two reclaimers judge one stale lock; the first reclaims, a third acquires the freed path, the second's delete removes *that successor's* lock. |
+| **Age re-check before unlink** | `atomic-file.ts:185` | Two reclaimers judge one stale lock; the first reclaims, a third acquires the freed path, the second's delete removes *that successor's* lock. **Narrows this, does not close it**: a reclaimer that re-read before the successor acquired still unlinks it (see Examples). |
 
 All three were reported by reviewers as separate findings. None is redundant.
 
@@ -128,8 +128,10 @@ defensible to the reviewer, which is what actually unblocked the PR.
 
 Second: **bound the failure, then accept it.** With atomic writes underneath, the residual costs
 one lost add/remove — never a corrupted store. A residual whose worst case is bounded and whose
-trigger requires a >10 s stall between two adjacent syscalls is a different object from an
-unbounded one, and worth saying out loud rather than leaving as an unqualified "known race."
+trigger needs a crashed holder plus two waiters reclaiming it within a few syscalls of each
+other is a different object from an unbounded one, and worth saying out loud rather than
+leaving as an unqualified "known race." Do not overstate the margin, though: the window is a
+few syscalls wide, not `LOCK_STALE_MS` (see the correction under Examples).
 
 ## When to Apply
 
@@ -176,8 +178,14 @@ if (content !== staleToken || Date.now() - stats.mtimeMs <= LOCK_STALE_MS) {
 await unlink(lockPath);
 ```
 
-Deleting a successor now requires stalling past `LOCK_STALE_MS` (10 s) *between those two
-statements* — at which point this process's own heartbeat has stopped and it is the hung holder.
+**Correction (2026-10-28, Codex review of raycast-at-profile).** An earlier version of this doc
+said deleting a successor "requires stalling past `LOCK_STALE_MS` (10 s) between those two
+statements". That is false. The age re-check only stops a reclaimer whose read comes *after* the
+successor's lock exists. The real interleaving: reclaimers B and C both re-read the crashed lock
+and pass both checks; B unlinks it and acquires a fresh lock; C's unlink, already decided, then
+removes B's new lock. C needs no stall at all, only to be a few syscalls behind B. The re-check
+narrows the window to that; it does not make it need 10 s. Bounded to one lost update after a
+crash, and still not closable without `flock` or a single-owner process.
 
 ## Verification
 
