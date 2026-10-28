@@ -305,6 +305,8 @@ unless you supply one. Do not chase the score with changes you can't defend.
      no inline comment to answer, post one `@greptile` comment on the PR itself
      (`gh api -X POST "repos/raycast/extensions/issues/$PR/comments" -f body="$BODY"`). A
      score with no findings needs no reply.
+   - **Run `ship`'s gate −2 scan on every reply and comment before posting it.** A reply that
+     quotes a reproduction URL or ID leaks it just as a commit would.
    - **Terse: two or three sentences.** On a Greptile thread open with `@greptile`; on a
      Bugbot thread, no prefix (unverified whether any prefix helps). Then the verdict and the
      mechanism: "Fixed in `abc1234`. <what changed, naming the function or file>." For a

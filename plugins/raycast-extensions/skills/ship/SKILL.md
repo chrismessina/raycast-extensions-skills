@@ -37,6 +37,64 @@ metadata:
 
 Run before PR. Each layer is gardening, not engineering:
 
+−2. **USER-SUPPLIED EXAMPLES GATE — ask before any of them goes public.** *(Stated by Chris,
+   2026-10-27.)* When Chris hands over a real example to reproduce a bug (a URL, a username,
+   a handle, an email, a post or video ID, a file path with a name in it), it is often
+   personal, chosen because it's where *he* hit the bug. It is not a fixture. **Before
+   anything leaves the machine for GitHub, list every such value and everything derived from
+   it, and get his explicit OK for each one.** That means every public write: `npm run
+   publish` and every re-publish in `raycast-pr-loop`, a direct push or `gh pr create`, a PR
+   title or body (initial or splice), a PR comment or a reply to a review bot, a mirror push,
+   and a commit made by API. Derived values include a post's shortcode, the media IDs or
+   usernames an API returned for it, and filenames built from it; list encoded or split forms
+   too if the code stores them that way. A value without his OK goes on the **forbidden
+   list** and is replaced with an obviously fake one (`AbCdEfGhIjK`, `example_user`) in code,
+   tests, comments, the CHANGELOG, commit messages, and the PR text. Approved values stay off
+   the list. This overrides the rule against touching dated CHANGELOG entries: a forbidden
+   value in an old entry gets replaced, and the entry keeps its date.
+
+   **Scan the payload itself, not a diff of it.** `ray publish` copies the whole extension
+   root, untracked and gitignored files included, minus a fixed skip list (`.git`, `.github`,
+   `.direnv`, `.swiftpm`, `.raycast-swift-build`, `compiled_raycast_rust`,
+   `compiled_raycast_swift`, `node_modules`, `raycast-env.d.ts`; see *What ships* under
+   Submission). So scan those files' contents **and their names**, not the changes. Commit
+   subjects become ray's commit message. PR text gets scanned as the exact file you are about
+   to send. Literal matching from a file means no regex escaping:
+
+   ```bash
+   # One forbidden value per line, written OUTSIDE the extension root. Run from the extension root.
+   FORBID="$SCRATCHPAD/forbidden.txt"; touch "$FORBID"
+   [ -s "$FORBID" ] || echo "forbidden list is empty: every example was approved, say so in the receipt"
+   SKIP=(--exclude-dir={.git,.github,.direnv,.swiftpm,.raycast-swift-build,compiled_raycast_rust,compiled_raycast_swift,node_modules} --exclude=raycast-env.d.ts)
+   GATE=PASS
+   scan() {  # grep: 0 = match, 1 = clean, 2 = error. Only 1 passes. Never aborts under `set -e`,
+     local rc=0; grep -rnIF -f "$FORBID" "$@" || rc=$?   # so every scan runs and reports.
+     case $rc in 1) echo "CLEAN: $*" ;; 0) echo "LEAK: $*"; GATE=FAIL ;; *) echo "SCAN FAILED: $*"; GATE=FAIL ;; esac; }
+   scan "${SKIP[@]}" .                                   # file contents, as ray copies them
+   if find . \( -name .git -o -name .github -o -name .direnv -o -name .swiftpm -o -name .raycast-swift-build \
+     -o -name compiled_raycast_rust -o -name compiled_raycast_swift -o -name node_modules \) -prune \
+     -o ! -name raycast-env.d.ts -print > "$SCRATCHPAD/paths.txt"
+   then scan "$SCRATCHPAD/paths.txt"; else echo "SCAN FAILED: path inventory"; GATE=FAIL; fi  # file NAMES
+   TAG="__raycast_latest_publish_ext/$(jq -r .name package.json)__"
+   # Same range ray uses (`HEAD...<tag>`, or all history with no tag), not limited to a path.
+   RANGE=(); git rev-parse -q --verify "$TAG" >/dev/null && RANGE=("HEAD...$TAG")
+   if git log --format=%B ${RANGE[@]+"${RANGE[@]}"} > "$SCRATCHPAD/msgs.txt"; then scan "$SCRATCHPAD/msgs.txt"
+   else echo "SCAN FAILED: git log"; GATE=FAIL; fi      # ray's commit message is built from these
+   scan "$SCRATCHPAD/pr-body.md"                         # each PR body, comment or reply, before sending
+   echo "GATE: $GATE"
+   ```
+
+   Binary files (screenshots, icons) are skipped by `-I`. If one could show a forbidden value,
+   look at it. The receipt is the `CLEAN:` lines plus `GATE: PASS`. **`GATE: FAIL` blocks**: it
+   means some line said `LEAK:` or `SCAN FAILED:` (including the path inventory or `git log`).
+
+   **Why this is a gate and not a review note:** once it's on GitHub, it can't be fully taken
+   back. A force-push leaves the old commit reachable by SHA, the PR description's edit
+   history keeps every revision, and a full purge needs a GitHub Support request.
+   *(instagram-media-downloader #32858, 2026-10-27: a reproduction post's shortcode and its
+   four media IDs shipped in tests, the CHANGELOG, and the PR body. Chris removed it from
+   the body by hand. The rest stayed in the commit.)*
+
 −1. **STALENESS GATE — is the local tree behind the PUBLISHED extension?** This runs
    *before* the typecheck because a green build on a stale baseline is the dangerous
    case: publishing it **deletes whatever upstream has that you lack.**
@@ -469,7 +527,7 @@ Run before PR. Each layer is gardening, not engineering:
    problem, a contributor's merged Analytics and Giveaway release, but only after the release
    work was finished. The issue named it a week earlier.)*
 
-0. **Deterministic pre-flight — run the script before reading anything.** Raycast's Store
+0. **Deterministic pre-flight — run the script before reading the extension's code** (after −2 and −1). Raycast's Store
    reviewer applies about twenty rules that need no judgment: `$schema`, allowed categories,
    `platforms`, preference types, CHANGELOG placeholder and date order, screenshots (plus the
    Store's own 2000×1250 size), unused dependencies, `node-fetch`, ESLint and Prettier config, hand-typed
@@ -921,7 +979,7 @@ Run before PR. Each layer is gardening, not engineering:
 ## HARD GATE — no PR without a green pre-flight
 
 **The pre-flight above is a gate, not a suggestion. Do not open OR update a Store PR —
-`ray publish`, `gh pr create`, or a push to an existing PR branch — until steps 0–3 have
+`ray publish`, `gh pr create`, or a push to an existing PR branch — until steps −2 through 3 have
 actually been RUN and are green.**
 
 This exists because it was violated. On 2026-07-13 the house-style audit was skipped
@@ -932,6 +990,8 @@ caught them *after* submission. The audit is worthless if it runs after the PR.
 Before any submission command, state explicitly which of these you ran and what they
 returned — paste the actual output, don't assert it:
 
+- [ ] **user-supplied examples gate** (step −2) → each `CLEAN:` line from the scan, or
+      "no user-supplied examples in this change", ending in `GATE: PASS`. `GATE: FAIL` blocks.
 - [ ] **staleness gate** (step −1) → `diff -r -q` against the sparse-fetched published tree
       shows no `Only in <PUB_DIR>`, and the classifier prints no `UPSTREAM`, `ONLY-PUB` or
       `UNHANDLED` line and no unresolved `CHECK` or `NEW?`. `MINE` lines are your update. Paste the
@@ -1069,8 +1129,9 @@ composing it.
 
 > 🚧 **Post the body. Do NOT mark the PR ready for review.** Marking it ready submits it
 > to Raycast's reviewers — an outward-facing action that is the user's call, and one they
-> make *after* reading the body. Posting a body onto a draft is reversible (one more
-> PATCH); publishing a submission is not. **Never run `gh pr ready`.**
+> make *after* reading the body. Posting a body onto a draft can be corrected with one more
+> PATCH, but GitHub keeps every revision in the body's edit history, so a forbidden value
+> (step −2) is public the moment it is posted. Publishing a submission cannot be undone. **Never run `gh pr ready`.**
 
 **1. Ground the body in what actually changed — never in session memory.** The point of
 the draft is to save the user writing, which it only does if the content is right.
@@ -1337,6 +1398,45 @@ that branch by API, is your own commit coming back. In that second case `pull-co
 correctly reports `no new contributions` and starts no merge, because the edit was a deletion of a
 file that does not exist locally either. **That is success, not a loop — re-run `publish`, do not
 run `pull-contributions` again.**
+
+**Known failure — `checking for new contributions` → `git checkout .` / `pathspec '.' did not
+match any file(s) known to git`. Seen once, caused by a missing baseline tag.** It can happen
+when the extension is already in the Store, its `ext/<name>` branch is not on your fork, and
+no `__raycast_latest_publish_ext/<name>__` tag exists locally. Typically that is the first
+publish of an existing extension from a monorepo clone (`extensions-sparse`). A brand-new
+extension skips this check. The check runs **in your local repo**: ray checks out that tag,
+copies in the extension as it is on **upstream** `main` (the clone resets to it), and checks
+for changes. With no tag, it falls back to the last root commit from `git rev-list
+--max-parents=0 HEAD`. In the monorepo, that is raycast's 2021 initial commit, where the
+extension does not exist, so `git checkout .` matches nothing. Ray then attempts `git
+checkout -` back to your branch. Confirm with `git branch --show-current` and `git reflog -3`.
+
+**The tag decides what ray treats as a contribution, so creating one by hand switches that
+check off.** Make it only after the staleness gate (−1) is clean against current upstream,
+which is the real proof that no contributor's change is about to be overwritten. Put it on
+your branch's base commit, and only if that commit's copy of the extension equals upstream's.
+Then re-run `publish`:
+
+```bash
+# From any directory. Ray compares against UPSTREAM main, not your fork's main.
+# Each step stops on its own failure, with its own message; nothing falls through to the tag.
+BASE=<base>; P=":(top)extensions/${EXT}"; T="__raycast_latest_publish_ext/${EXT}__"
+seed_tag() {
+  git fetch -q upstream main                         || { echo "STOP: fetch failed"; return 1; }
+  [ -n "$(git ls-tree -d --name-only upstream/main -- "$P")" ] || { echo "STOP: not on upstream"; return 1; }
+  [ -n "$(git ls-tree -d --name-only "$BASE" -- "$P")" ]       || { echo "STOP: not in $BASE"; return 1; }
+  local rc=0; git diff --quiet "$BASE" upstream/main -- "$P" || rc=$?
+  case $rc in 0) ;; 1) echo "STOP: $BASE differs from upstream; reconcile first"; return 1 ;;
+              *) echo "STOP: diff failed (exit $rc)"; return 1 ;; esac
+  git rev-parse -q --verify "refs/tags/$T" >/dev/null && { echo "STOP: $T already exists"; return 1; }
+  git tag -a "$T" -m "baseline for first ray publish" "$BASE" || { echo "STOP: git tag failed"; return 1; }
+  echo "TAGGED $T -> $(git rev-parse --short "$BASE")"; }
+seed_tag
+```
+
+The tag stays local (ray pushes only the branch). Ray moves it with `git tag -f` once the
+branch push succeeds, even if opening the PR then fails. *(Read from `@raycast/api` 2.9.0 `publish-to-public-repo.js`; instagram-media-downloader
+#32858, 2026-10-27: this fixed it on the first retry.)*
 
 **Known failure — `checking for new contributions` → run `pull-contributions`, then resolve
 the SAME two conflicts every time.** `ray publish` stops with:

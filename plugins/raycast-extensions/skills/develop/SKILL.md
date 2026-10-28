@@ -221,6 +221,20 @@ list as written.
 
 ---
 
+## Real examples Chris gives you stay out of the code (all three intents)
+
+*(Stated by Chris, 2026-10-27.)* A URL, username, handle, email, post or video ID, or named
+path that Chris hands you to reproduce a bug is often personal, chosen because it's where
+*he* hit the bug. Use it to reproduce, then **write fakes from the start** everywhere that
+ships: test fixtures, code comments, CHANGELOG examples, commit messages. That covers
+values derived from it too: a post's shortcode, the media IDs or usernames an API returned
+for it, and filenames built from it. Use an obviously fake value (`AbCdEfGhIjK`,
+`example_user`) shaped like the real one, so the test still exercises the same format. If
+a real value is genuinely needed, ask him first. `ship`'s gate −2 is the backstop that
+greps for these before publishing; writing fakes here means it finds nothing.
+*(instagram-media-downloader #32858, 2026-10-27: a reproduction post's shortcode and its
+four media IDs went into tests and the CHANGELOG, then shipped.)*
+
 ## Intent 1 — Feature / refactor
 
 Ordinary code work. The only non-default obligation: **write to House Style as you go.** Don't add a failure toast without a Copy-Error action; don't add an `Action` with an ad-hoc shortcut where a `Keyboard.Shortcut.Common` fits. See House Style below — applying it inline is cheaper than letting `ship`'s audit bounce it back.
