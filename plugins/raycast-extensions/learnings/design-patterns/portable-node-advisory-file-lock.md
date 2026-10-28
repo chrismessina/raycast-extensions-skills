@@ -80,14 +80,14 @@ the caller does `stat` calls and React state updates between its read and the pr
 ### 5. The three guards on the lock itself
 
 `open(path, "wx")` is the primitive — exclusive create is atomic, so exactly one process wins.
-Everything else exists to handle a holder that died
+Everything else manages ownership and recovery from a stale lock
 (`extensions/context7/src/lib/atomic-file.ts:69`, inside
 `withFileLock` at `:56`):
 
 | Guard | Line | The interleaving it closes |
 |---|---|---|
-| **Ownership token** | `atomic-file.ts:61` | An unconditional `unlink` deletes a lock this process does not hold, admitting a second writer. Only the holder removes one. |
-| **1 s heartbeat** | `atomic-file.ts:36`, `:130` | A live holder slower than the stale threshold gets reclaimed. Refreshing mtime while held means only a genuinely dead holder is reclaimable. |
+| **Ownership token** | `atomic-file.ts:61` | An unconditional `unlink` deletes a lock this process does not hold, admitting a second writer. Normal release checks the token before unlinking. That narrows accidental successor deletion, but it does not make the unlink conditional. |
+| **1 s heartbeat** | `atomic-file.ts:36`, `:130` | A live holder slower than the stale threshold gets reclaimed. The heartbeat tries to refresh mtime every second. Reclaiming requires an observed mtime older than 10 s. That does not establish that the process died, or whether its heartbeat is still running: an event loop blocked past the threshold qualifies, and a refresh can land between the final check and the unlink. |
 | **Age re-check before unlink** | `atomic-file.ts:185` | Two reclaimers judge one stale lock; the first reclaims, a third acquires the freed path, the second's delete removes *that successor's* lock. **Narrows this, does not close it**: a reclaimer that re-read before the successor acquired still unlinks it (see Examples). |
 
 All three were reported by reviewers as separate findings. None is redundant.
@@ -126,12 +126,19 @@ compiled module converts "which design is safer" from a debate into a number, an
 said the sophisticated design was worse. That measurement is also what made the position
 defensible to the reviewer, which is what actually unblocked the PR.
 
-Second: **bound the failure, then accept it.** With atomic writes underneath, the residual costs
-one lost add/remove — never a corrupted store. A residual whose worst case is bounded and whose
-trigger needs a crashed holder plus two waiters reclaiming it within a few syscalls of each
-other is a different object from an unbounded one, and worth saying out loud rather than
-leaving as an unqualified "known race." Do not overstate the margin, though: the window is a
-few syscalls wide, not `LOCK_STALE_MS` (see the correction under Examples).
+Second: **name the residual precisely, then accept it.** Two things define it: what triggers it,
+and what atomic writes underneath still guarantee. It needs a lock observed as stale, meaning an
+mtime more than 10 s old, plus a reclaimer whose unlink is still pending when a new lock appears.
+Two reclaimers racing is one way that happens. The other needs only one reclaimer. A live holder
+that stalled past the threshold resumes and releases normally (its token still matches). A new
+holder acquires, and the reclaimer's pending unlink removes that new lock. Atomic writes keep the store whole JSON:
+every write replaces the file entirely, so a reader never sees a torn one. They do **not** bound how
+many logical updates are lost. Once a successor's lock is deleted, two critical sections overlap.
+The stale one's write can then erase any updates that committed in between, one or several. Say
+"never corrupt, can drop updates", not "at most one lost update". That sentence is wrong,
+and the precise version is still a different thing from an unqualified "known race". Do not
+overstate the margin either: the window is set by the retry interval and syscall timing, not by
+`LOCK_STALE_MS` (see the correction under Examples).
 
 ## When to Apply
 
@@ -181,11 +188,20 @@ await unlink(lockPath);
 **Correction (2026-10-28, Codex review of raycast-at-profile).** An earlier version of this doc
 said deleting a successor "requires stalling past `LOCK_STALE_MS` (10 s) between those two
 statements". That is false. The age re-check only stops a reclaimer whose read comes *after* the
-successor's lock exists. The real interleaving: reclaimers B and C both re-read the crashed lock
-and pass both checks; B unlinks it and acquires a fresh lock; C's unlink, already decided, then
-removes B's new lock. C needs no stall at all, only to be a few syscalls behind B. The re-check
-narrows the window to that; it does not make it need 10 s. Bounded to one lost update after a
-crash, and still not closable without `flock` or a single-owner process.
+successor's lock exists. The real interleaving: reclaimers B and C both re-read the stale lock and
+pass both checks, and B unlinks it. Any contender's next acquire then creates a fresh lock at the
+path, and C's unlink, already decided, removes it. In both implementations a reclaimer sleeps
+`LOCK_RETRY_MS` (20 ms) after reclaiming before it retries: `atomic-file.ts:108–109` here, and
+`/Users/messina/Developer/GitHub/chrismessina/raycast-at-profile/src/helpers/file-lock.ts:60–61`.
+So for B itself to be the victim, C's unlink has to still be pending across that sleep. A third
+waiter whose retry happens to fire in the gap can be the victim sooner. No 10 s stall is needed
+either way.
+
+Then the damage. Say C's unlink removed holder H's fresh lock while H was mid-operation. Another
+process acquires, commits and releases, perhaps several in turn. H then writes the snapshot it read
+earlier, erasing every one of those commits. The store stays valid JSON, but the number of lost
+updates is not bounded. Its frequency was never measured, and it is not closable without `flock` or a
+single-owner process.
 
 ## Verification
 
