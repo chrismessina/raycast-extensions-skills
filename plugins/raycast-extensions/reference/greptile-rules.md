@@ -66,7 +66,7 @@ Numbers 23, 32, and 33 are absent from the export.
 Raycast also keeps review instructions for GitHub Copilot in
 [`.github/copilot-instructions.md`](https://github.com/raycast/extensions/blob/main/.github/copilot-instructions.md)
 (last commit 2025-09-03). None of the six most recent `chrismessina` PRs as of 2026-10-18 (#31929
-through #32483) had a Copilot review; Greptile, Cursor Bugbot and a maintainer reviewed them. Read
+through #32483) had a Copilot review; Greptile and a maintainer reviewed them. Read
 the file as Raycast's stated policy, whether or not Copilot shows up on a given PR. Most of its rules
 repeat ones above. These three do not:
 

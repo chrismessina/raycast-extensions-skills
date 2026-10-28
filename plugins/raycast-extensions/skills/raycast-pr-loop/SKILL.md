@@ -1,30 +1,22 @@
 ---
 name: raycast-pr-loop
-description: Drive a submitted Raycast Store PR through its automated reviewers — Greptile (scored N/5) and Cursor Bugbot (severity-tagged findings), plus any bot that joins them — until every reviewer is clear for the current revision. Fetches each round from EVERY bot, triages every finding (fix the valid, answer the invalid with receipts), re-publishes, replies in each finding's thread, and waits for the next round WITHOUT resource-hungry polling. Fires on "address the greptile feedback", "look at the bugbot comments", "loop until 5/5", "greptile gave us N/5", "address the review bots", or a pasted bot review. Runs AFTER `ship` has opened the PR; hands code changes through the same gates ship requires. Does NOT mark the PR ready for review — that is always the user's click.
+description: Drive a submitted Raycast Store PR through its automated reviewers — Greptile (scored N/5), plus any bot that joins it — until every reviewer is clear for the current revision. Fetches each round from EVERY bot, triages every finding (fix the valid, answer the invalid with receipts), re-publishes, replies in each finding's thread, and waits for the next round WITHOUT resource-hungry polling. Fires on "address the greptile feedback", "loop until 5/5", "greptile gave us N/5", "address the review bots", or a pasted bot review. Runs AFTER `ship` has opened the PR; hands code changes through the same gates ship requires. Does NOT mark the PR ready for review — that is always the user's click.
 metadata:
   stage: "7b — automated-review feedback loop on an open Store PR"
 ---
 
 # raycast-pr-loop
 
-*(Renamed from `greptile-loop` on 2026-10-04: the old name and its `test("greptile")`
-filters hid Cursor Bugbot entirely, and Bugbot found two real bugs Greptile missed.)*
+*(Renamed from `greptile-loop` on 2026-10-04, when Cursor Bugbot also reviewed Store PRs.
+Raycast has since gone back to Greptile alone (Chris, 2026-10-28), so the loop waits on
+Greptile only. The name stays generic because the census below still reads every bot.)*
 
-Raycast runs more than one review bot on Store PRs, and **every one of them must be read
-every round.** Each bot has its own comment author, its own idea of "done", and its own
-reply channel:
+Greptile is the reviewer Raycast runs on Store PRs today. Read it every round, and run the
+§1 census anyway, so a bot Raycast adds later can't go unread:
 
 | Bot | Author login | Where its round lives | Clear when | Reply channel |
 |---|---|---|---|---|
 | **Greptile** | `greptile-apps[bot]` | One summary **issue comment, edited in place** (score `N/5`, P1/P2 badges, `Last reviewed commit`), plus inline review comments | **5/5** and the summary's `Last reviewed commit` is the current head | In-thread reply prefixed **`@greptile`** — verified to work; on #31927 it answered both fix replies within ~25s and withdrew both findings |
-| **Cursor Bugbot** | `cursor[bot]` | A **review per commit** whose body ends `Reviewed by Cursor Bugbot for commit <sha>`, plus inline comments headed `### <title>` / `**<N> Severity**`. No score. | Its review **for the current head** raises nothing that is not already answered. A finding you declined with receipts counts as answered; if the next current-head review **re-raises** it, stop and hand it to the user rather than replying again (no evidence Bugbot reads replies, so a second reply changes nothing) | Plain in-thread reply, so the thread shows the finding was seen. **No evidence Bugbot reads replies:** on #31927 (2026-10-04) both fix replies drew no response; its next per-commit review is the real answer. Update this cell if that ever changes |
-
-**Bugbot appears to be switched off on `raycast/extensions` (seen 2026-10-23).** It never
-reviewed #32699, through draft, ready for review and three pushes, and none of the 15 most
-recently updated PRs had a Bugbot review newer than 2026-10-02 (#31312). Keep reading its
-comments in the §1 census in case it comes back, but **do not wait on it**: with no
-`cursor[bot]` review on the PR, Greptile alone decides whether the round is clear. Report
-it as "Bugbot: not running on this repo", not "Bugbot: no review yet".
 
 A bot not in this table → read its comments anyway (the fetch below lists every `[bot]`
 author), work out its "clear" signal from its own text, and **add a row here**.
@@ -40,10 +32,7 @@ no-re-review bound is hit
 
 **Receipt for the whole shape:** attio 2.0 (#30881) went 3/5 → 4/5 → 5/5 across three
 rounds, and the create/AI release (#30956) went 4/5 → 5/5 in one — every round triaged,
-some findings fixed, some answered with receipts. **Receipt for reading every bot:**
-ejection-seat #31927 (2026-10-04) — Greptile 4/5 with two findings, and Cursor Bugbot two
-more on the same commit (a `stat()` with no timeout, a vanished volume reading as "Scan
-failed"). A Greptile-only fetch would have reported the round as two findings.
+some findings fixed, some answered with receipts.
 
 ## 1. Fetch the round — from every bot
 
@@ -57,21 +46,6 @@ for ep in issues/$PR/comments pulls/$PR/comments pulls/$PR/reviews; do
 done | sort | uniq -c
 # raycastbot's "Thank you for the update!" is not a review; ignore it.
 ```
-
-**Cursor Bugbot.** Inline findings are review comments by `cursor[bot]`; the per-commit
-review body names the commit it graded. Read the full bodies — the finding sits between
-`<!-- DESCRIPTION START -->` and `<!-- DESCRIPTION END -->`, and `<!-- LOCATIONS START`
-lists every location it cites (often more than the one line it anchors to):
-
-```bash
-curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR/comments?per_page=100" \
-  | jq -r '.[] | select(.user.login == "cursor[bot]") | "── \(.path):\(.line // .original_line)  [id \(.id), commit \(.commit_id[0:7])]\n\(.body)\n"'
-curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR/reviews?per_page=100" \
-  | jq -r '.[] | select(.user.login == "cursor[bot]") | "\(.submitted_at)  \(.commit_id[0:7])  \(.body | capture("found (?<n>[0-9]+) potential").n // "?") findings"'
-```
-
-A Bugbot round is tied to a revision by the review's `commit_id` — no sticky score to
-second-guess. Its "Fix in Cursor" / autofix links are not for us; fix through the gates.
 
 **Greptile.** Its summary lands as an **issue comment that it EDITS IN PLACE on every
 re-review** — one comment, updated forever, so `created_at` never moves and only
@@ -114,8 +88,8 @@ curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR
   is not the same as unaddressed — the edited summary reflects the revision it LAST
   REVIEWED (not necessarily current HEAD, per the sticky-score rule); the inline
   trail may lag further still.
-- **The user often pastes the round faster than the API surfaces it** — from any bot (the
-  Greptile dashboard, a Bugbot review email) it lands before the PR comments do. A pasted
+- **The user often pastes the round faster than the API surfaces it** — from the Greptile
+  dashboard it lands before the PR comments do. A pasted
   round is authoritative; don't re-fetch to "confirm" it — but still run the §1 census
   once, since a paste covers one bot and the others may have spoken too.
 
@@ -264,7 +238,7 @@ unless you supply one. Do not chase the score with changes you can't defend.
 
 1. Gates green (`npx tsc --noEmit`, `npm run build`, `npm run lint`, test suite).
 2. Commit with a message that names the round and every bot it answers
-   (`Addresses Greptile and Cursor Bugbot review on #<N>`).
+   (`Addresses Greptile review on #<N>`).
 3. **The secret holdout comes BEFORE the publish** — see step 5 for the procedure;
    run its move-out half first, publish, then its restore half.
 4. **Re-publish the way `ship` does** — `npm run publish`. Expect and handle
@@ -307,8 +281,7 @@ unless you supply one. Do not chase the score with changes you can't defend.
      score with no findings needs no reply.
    - **Run `ship`'s gate −2 scan on every reply and comment before posting it.** A reply that
      quotes a reproduction URL or ID leaks it just as a commit would.
-   - **Terse: two or three sentences.** On a Greptile thread open with `@greptile`; on a
-     Bugbot thread, no prefix (unverified whether any prefix helps). Then the verdict and the
+   - **Terse: two or three sentences.** On a Greptile thread open with `@greptile`. Then the verdict and the
      mechanism: "Fixed in `abc1234`. <what changed, naming the function or file>." For a
      partial fix, say what remains and why. For a decline, give the receipt (a commit
      author, a measurement, Chris's instruction) in place of the fix.
@@ -378,24 +351,12 @@ resources the whole time it waits.**
     *)   echo "CHECK FAILED (http $code) — not the same as no change" ;;
   esac
   ```
-  **Bugbot needs its own check, on a different endpoint:** a new round is a `cursor[bot]`
-  review whose `commit_id` is the head you just published. One unauthenticated call:
-  ```bash
-  HEAD_SHA=$(curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR" | jq -r .head.sha)
-  curl -s --max-time 20 "https://api.github.com/repos/raycast/extensions/pulls/$PR/reviews?per_page=100" \
-    | jq -r --arg h "$HEAD_SHA" '[.[] | select(.user.login == "cursor[bot]" and .commit_id == $h)] | if length == 0 then "no bugbot round for \($h[0:7]) yet" else "BUGBOT ROUND for \($h[0:7]): \(.[-1].body | capture("found (?<n>[0-9]+) potential").n // "0") findings" end'
-  ```
-  The `found N potential issues` count is a convenience, not the verdict: the body
-  wording is Bugbot's and can change. Confirm a "0" by also counting `cursor[bot]` inline
-  comments anchored to the same head —
-  `.../pulls/$PR/comments` filtered on `user.login == "cursor[bot]" and original_commit_id == $h` —
-  and by reading the review body once. Clean means both are empty of new findings.
-  **Filter on `original_commit_id`, never `commit_id`:** GitHub rewrites `commit_id` to the
-  newest commit for every comment whose lines did not move, so an old finding carried
-  forward looks like a new one (#31927: Bugbot's `cb9a51a` "Gone volume" comment read
-  `commit_id 2debfc1` an hour after the push, with no new review). The same holds for the
-  §1 inline listings: the `commit` they print is where a comment sits now, not where it
-  was raised.
+  **Telling a new inline finding from an old one: filter on `original_commit_id`, never
+  `commit_id`.** GitHub rewrites `commit_id` to the newest commit for every comment whose
+  lines did not move, so an old finding carried forward looks like a new one (#31927: a
+  `cb9a51a` comment read `commit_id 2debfc1` an hour after the push, with no new review).
+  The same holds for the §1 inline listings: the `commit` they print is where a comment sits
+  now, not where it was raised.
 
   The Greptile `seen` marker keys on the **summary comment's `updated_at`** — the summary is
   Greptile's FIRST issue comment (`min_by(.created_at)`), edited in place forever, so
@@ -404,12 +365,11 @@ resources the whole time it waits.**
   sessions must never loop the same PR concurrently. A human commenting must not read as a new round. Inline-only updates
   (rare) won't trip this endpoint; when a round seems missing, fetch both endpoints
   from §1 once.
-- **Bound the wait.** Neither bot is guaranteed to re-review a draft push. If no new
+- **Bound the wait.** Greptile is not guaranteed to re-review a draft push. If no new
   round arrives after **a few checks spanning ~2 hours** (or the user's patience, whichever
-  ends first), stop and report exactly that, **per bot**: the fixes are pushed; Greptile's standing
+  ends first), stop and report exactly that: the fixes are pushed; Greptile's standing
   score (if its `Last reviewed commit` is older than the head) belongs to the previous
-  revision; Bugbot has no review for the head yet (or has one — say what it found); and
-  the next likely trigger is another push or the
+  revision; and the next likely trigger is another push or the
   user marking the PR ready for review. An unattended loop with no bound is a stuck
   session, not diligence.
 - **The PR itself has a clock.** Raycast's `stale.yml` labels a PR `status: stalled` after
@@ -425,13 +385,13 @@ resources the whole time it waits.**
 ## 5. Exit
 
 - **Every bot clear for the current revision** — Greptile 5/5 with `Last reviewed commit`
-  equal to the head, and a Bugbot review for that head with no findings **→** report it
+  equal to the head **→** report it
   plainly with the round-by-round history: what was fixed, what
   was declined and why. **Do not mark the PR ready for review** — same rule as `ship`:
   that click is the user's, always.
 - **Stopping rule fired →** present the finding chain and the defense for the current
   state; the user decides whether to push back on the review or concede a change.
-- **No re-review within the bound →** report each bot's state separately and honestly
+- **No re-review within the bound →** report the reviewer's state and honestly
   (see §4) and stop; the loop resumes on the next round's arrival, from whatever channel.
 - **Round needs a code change bigger than a finding-fix** (a redesign, a new control) →
   that is `develop` work; hand it there with the finding as the brief, then come back.
