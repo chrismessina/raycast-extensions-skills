@@ -659,7 +659,7 @@ Run before PR. Each layer is gardening, not engineering:
      `@raycast/eslint-plugin` disagrees with the runtime and the published docs on five
      `Common` constants, and it never checks the conflict invariant. If `ray lint --fix`
      touched a shortcut, re-derive every rewritten binding from the runtime before shipping.
-   - **`kit` (report only):** note the adoption opportunity in one line. The `^0.2.0` floor, the
+   - **`kit` (report only):** note the adoption opportunity in one line. The `^0.3.0` floor, the
      `bytes` subpath, its `Node16` tsconfig requirement, and the base-1024 display change are
      in `reference/dep-gates.md`.
    - **Disable the Impeccable design hook first** if it is installed (`impeccable-off`), so a

@@ -237,7 +237,7 @@ four media IDs went into tests and the CHANGELOG, then shipped.)*
 
 ## Intent 1 — Feature / refactor
 
-Ordinary code work. The only non-default obligation: **write to House Style as you go.** Don't add a failure toast without a Copy-Error action; don't add an `Action` with an ad-hoc shortcut where a `Keyboard.Shortcut.Common` fits. See House Style below — applying it inline is cheaper than letting `ship`'s audit bounce it back.
+Ordinary code work. The only non-default obligation: **write to House Style as you go.** In a self-authored extension (`author: chrismessina`), **every failure toast you write or touch is `showError` / `failToast` / `onErrorToast` from `@chrismessina/raycast-kit`** (existing toasts you are not touching need not be converted; never on a fork you don't own) — add the dependency the first time you need one, rather than hand-rolling `Toast.Style.Failure` or reaching for `showFailureToast`; for a `useCachedPromise` / `usePromise`, pass `onError: onErrorToast({ title })` (its `failureToastOptions` cannot see the error). The `kit` rule in house-style is not only an audit finding for `ship`: it applies at the moment you write the toast. *(cosign, 2026-11-04: the kit was adopted only after Chris asked "should we use my raycast-kit?" — the agent had hand-rolled seven failure toasts plus a Copy Error helper the kit already provides.)* Elsewhere, don't add a failure toast without a Copy-Error action; don't add an `Action` with an ad-hoc shortcut where a `Keyboard.Shortcut.Common` fits. See House Style below — applying it inline is cheaper than letting `ship`'s audit bounce it back.
 
 ## Intent 2 — Modernization (gated)
 
@@ -267,11 +267,12 @@ The retrofit pass: take an extension that works (a fork you're contributing to, 
    - Shortcuts → find every `<Action>` with an inline `shortcut={{...}}`; map by semantics (see `keyboard-conventions.md`).
    - Web requests → grep `fetch`/`axios`/`node-fetch`/`useFetch`; if present, check for `@chrismessina/raycast-logger`.
    - Custom icons → grep `icon=`/`source:` for a bare `.svg`/`.png` filename with no adjacent `tintColor`; a monochrome glyph without one is invisible in one of the two themes, and `fill="currentColor"` in the asset does **not** fix it.
-   - **Self-authored only** → failure toasts, `instanceof Error` ternaries, and `${n} items` /
-     `item(s)` copy are candidates for `@chrismessina/raycast-kit` (`showError`,
-     `getErrorMessage`, `countOf`). Offer it as part of the worklist; it is a *preference*, not
-     a violation — the violation is a missing copy action or `"1 items"`, which the kit happens
-     to make unrepresentable. **Skip entirely on forks.**
+   - **Self-authored only** → failure-toast code this pass touches follows Intent 1's kit
+     obligation (`showError` / `failToast` / `onErrorToast`). For untouched toasts,
+     `instanceof Error` ternaries, and `${n} items` / `item(s)` copy, offer
+     `@chrismessina/raycast-kit` (`showError`, `getErrorMessage`, `countOf`) as part of the
+     worklist; it is a *preference*, not a violation — the violation is a missing copy action
+     or `"1 items"`, which the kit happens to make unrepresentable. **Skip entirely on forks.**
    - `[lint]` rules (hand-defined `Preferences`/`Arguments`, `any` casts) — fix if found, but the durable home is ESLint; you're the backstop.
 3. **Present a worklist** of violations before mutating en masse. Fix iteratively; show diffs.
 4. **Apply the keyboard transformation contract** exactly (semantics over combo; drop platform-specific inline objects; fix imports; re-check the conflict invariant after rewriting — a remap can create a new collision).

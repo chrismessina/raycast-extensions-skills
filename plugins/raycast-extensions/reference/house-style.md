@@ -1001,9 +1001,18 @@ What belongs in the kit, and what does not, was decided in
 
 1. The extension is **self-authored** (`package.json` `author: chrismessina`), AND
 2. it is **already being changed** for some other reason, AND
-3. it has a `Toast.Style.Failure`, an `instanceof Error` unwrap ternary, count-bearing copy, or a
-   hand-rolled byte formatter (`bytes / 1024`, `toFixed(1) + " MB"` — the kit's `bytes` subpath
-   replaces it; floor and tsconfig requirement in `dep-gates.md`).
+3. it has failure handling — a `Toast.Style.Failure`, a `showFailureToast`, or a data hook
+   (`usePromise` / `useCachedPromise` / `useFetch`) whose rejection shows the default failure
+   toast — or an `instanceof Error` unwrap ternary, count-bearing copy, or a hand-rolled byte
+   formatter (`bytes / 1024`, `toFixed(1) + " MB"` — the kit's `bytes` subpath replaces it;
+   floor and tsconfig requirement in `dep-gates.md`).
+
+**Build obligation — failure toasts.** In a self-authored extension, new or touched
+failure-toast code uses `showError`, `failToast` or `onErrorToast` from
+`@chrismessina/raycast-kit@^0.3.0`, including the failures a data hook produces. Existing
+toasts you are not touching need not be converted, and the count-copy, unwrap and
+byte-formatting helpers stay a preference bundled with substantive work. `develop` applies
+this at write time; `ship`'s audit only reports it (see *Audit posture* below).
 
 **Never on a fork you don't own** — this is a personal dependency, the same call as the
 logger. And **never as a standalone change**: sorting imports or swapping a helper is not
@@ -1027,7 +1036,7 @@ The house-style rule and the ergonomic path point in opposite directions, and th
 path wins. A dependency inverts that: the compliant call becomes the shortest one.
 
 **Status:** published — [`@chrismessina/raycast-kit`](https://www.npmjs.com/package/@chrismessina/raycast-kit)
-**0.2.0** (first published 2026-07-25; floor `^0.2.0`, see `dep-gates.md`), zero runtime deps,
+**0.3.0** (first published 2026-07-25; floor `^0.3.0`, see `dep-gates.md`), zero runtime deps,
 `@raycast/api` peer. First adoption: `get-app-icon`
 (`c1de11b`), which converted 4 non-compliant failure toasts and deleted a duplicate
 `pluralize`, net −22 lines.
@@ -1035,7 +1044,7 @@ path wins. A dependency inverts that: the compliant call becomes the shortest on
 **The mapping:**
 
 ```ts
-import { showError, failToast, getErrorMessage, countOf } from "@chrismessina/raycast-kit";
+import { showError, failToast, onErrorToast, getErrorMessage, countOf } from "@chrismessina/raycast-kit";
 
 // BEFORE — Copy-Error block hand-written (or, more often, omitted)
 const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1050,6 +1059,13 @@ await showError(error, { title: "Failed to Load" });
 const toast = await showToast({ style: Toast.Style.Animated, title: "Exporting…" });
 try { await work(); toast.style = Toast.Style.Success; }
 catch (error) { failToast(toast, error, { title: "Export Failed" }); }
+
+// A data hook — failureToastOptions receives no error argument; its default toast offers
+// Retry plus Copy Logs or Report Error, never Copy Error
+useCachedPromise(load, [id], { onError: onErrorToast({ title: "Couldn't Load Funding" }) });
+
+// Raw server/protocol text stays out of the toast: short message, raw text as `cause`
+throw new Error("Cosign didn't provide a valid response.", { cause: rpcError.message });
 
 // BEFORE — says "1 items" at count 1
 `${n} items`  /  `${n} item(s)`
@@ -1123,7 +1139,8 @@ Check the entry point before concluding the kit doesn't fit.)*
 opportunity and moves on. The hard gate stays on the *underlying* rules (a failure toast
 without a Copy-Error action fails the audit whether or not the kit is involved) — hand-rolling
 the compliant block is still perfectly correct. What fails is a missing copy action, not a
-missing dependency.
+missing dependency. At ship time, missing kit adoption stays report-only; during development,
+the build obligation above governs new or touched failure-toast code.
 
 **Out of scope, deliberately.** The same audit considered and **rejected** date, text, and
 number helpers: eight `formatDate` implementations across the fleet had eight different
@@ -1444,6 +1461,16 @@ const [showDetail, setShowDetail] = useCachedState<boolean>("show-detail-<view>"
   `"Show Sidebar"` / `"Hide Sidebar"` (chosen from the flag) in the same view, and a
   `useCachedState`-backed flag in the `isShowingDetail` expression. A bare
   `isShowingDetail={true}`, a missing action, or a "Toggle Sidebar" title is a finding.
+- **With the sidebar showing, a row has about half the width: no wide accessories.** Tags,
+  full dates and long text accessories truncate the title to a few characters. Move the
+  value somewhere that costs no row width: a `List.Section` per value when it groups rows
+  (a team, a year), or a shorter form that the section makes unambiguous ("May 28" under
+  "2026"). When the sidebar is hidden there is room again, so the full form may come back
+  (`showDetail ? short : full`). Reference: `FundingView` (year sections) and `JobsView`
+  (team sections) in
+  `/Users/messina/Developer/GitHub/chrismessina/raycast-cosign/src/components/entities.tsx`.
+  *(cosign, 2026-11-04: a colored team tag left "Business Devel…" beside "Education + Pro";
+  Chris: "the accessories are too wide w/ the sidebar visible.")*
 
 ### `[build]` Prefer `updateCommandMetadata` to surface menu-bar status in the command list
 
@@ -1649,6 +1676,24 @@ you carefully put on separate lines arrive as one wall of text.
 > screen. The rule is good regardless of the mechanism — a one-line description with the
 > steps in the actions is the better empty state either way.
 
+- **A thrown error's message IS toast copy.** Without a message override or a custom error
+  handler, `useCachedPromise` / `usePromise` failure toasts and `showFailureToast(error)` display
+  `Error.message`, and `toast.message = error.message` displays it directly — so an `Error`
+  thrown in `lib/` code obeys this rule as if it were a toast literal:
+  one short sentence a person can act on. Protocol or server text (`MCP error -32602: Output
+  validation error: …`, a raw HTTP body) never goes in the message — put it on the error as a
+  the standard `cause` — `throw new Error("Cosign didn't provide a valid response.", { cause:
+  raw })` — and the kit (`showError` / `failToast` / `onErrorToast`, `^0.3.0`) copies it as
+  `Caused by: …` under Copy Error, never in the toast. `failureToastOptions` receives no error
+  argument, and the default hook toast offers Retry plus Copy Logs (development or private
+  extensions) or Report Error (otherwise); both use the error's stack or message, and neither
+  walks `cause`. So in a self-authored extension, new or touched hook failure handling passes
+  `onError: onErrorToast({ title })` with a short concrete title. On a fork, keep the
+  personal-dependency exemption and give the hook an `onError` that shows Copy Error with the
+  extension's existing helpers.
+  *(cosign, 2026-11-04: a rewrite produced "Cosign couldn't send this; the problem is on
+  Cosign's side. Details: MCP error -32602: …" — four lines in the toast. Chris: "That UI copy
+  is still far too long… It should simply say 'Cosign didn't provide a valid response.'")*
 - **Error `Detail` screens** use the heading form `` `# Error\n\n${message}` ``
   (`raycast-fathom/src/search-meetings.tsx:335`,
   `raycast-reader/src/views/ArticleReaderView.tsx:120`,

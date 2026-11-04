@@ -4,7 +4,7 @@ Known-good dependency targets for Raycast extensions. Consulted by `develop`'s
 **Intent 2 — Modernization** before any *major-version* migration, and by `ship`'s dep
 hygiene to know where the non-breaking ceiling is.
 
-- **Last verified:** 2026-09-17 for the `@chrismessina/raycast-downloader` row (floor moved to `^0.1.5`); 2026-09-15 for the `@chrismessina/raycast-logger` row (floor moved to `^1.5`); 2026-09-09 for the `@chrismessina/raycast-kit` row (floor moved to `^0.2.0`); 2026-08-27 for the `@raycast/api` row (floor moved to `^2.1`); 2026-08-25 for `@raycast/utils` /
+- **Last verified:** 2026-09-17 for the `@chrismessina/raycast-downloader` row (floor moved to `^0.1.5`); 2026-09-15 for the `@chrismessina/raycast-logger` row (floor moved to `^1.5`); 2026-11-04 for the `@chrismessina/raycast-kit` row (floor moved to `^0.3.0`); 2026-08-27 for the `@raycast/api` row (floor moved to `^2.1`); 2026-08-25 for `@raycast/utils` /
   `@chrismessina/raycast-logger` (second adopter, `context7`, plus census of the
   13 fleet extensions that depend on it); 2026-08-21 for the `@raycast/api` /
   `@raycast/utils` rows (see the v2 section); 2026-07-13 for the rest, by census of all 34
@@ -81,7 +81,7 @@ leading edge — is `develop`'s modernization intent, and it is gated on this fi
 | `@raycast/api` | `^1.104` (newest 1.x, `1.104.25`) — existing extensions only | **`^2` — the newest 2.x the Raycast app can run; the default for every NEW extension** | **Chris, 2026-10-20: new extensions start on the cutting edge.** Staying on 1.x is a suggestion for large, popular extensions only — see "1.x for large extensions" below. 2.x adopters: `dev-null` (2.8.2), `store-updates`, `karakeep`, `context7` |
 | `@raycast/utils` | `^2.2` | `^2.3` | `ios-apps` (2.3.0), `context7` (2.3.0); `^1.17` still in use, see note below |
 | `@chrismessina/raycast-logger` | **`^1.5`** | — | `attio`, `digger`, `ios-apps`, `karakeep`, `reader` (all 1.4.0); `fathom` on 1.5.0; **required before `@raycast/api` v2**. Floor moved `^1.4` → `^1.5` on 2026-09-15, Chris confirmed, now that 1.5.0 is published |
-| `@chrismessina/raycast-kit` | **`^0.2.0`** | — | `threads` (0.2.0, first adopter of the `bytes` subpath); floor moved 0.1.4 → 0.2.0 on 2026-09-09, Chris confirmed. Still satisfies the `@raycast/api` v2 peer prerequisite — see below |
+| `@chrismessina/raycast-kit` | **`^0.3.0`** | — | `cosign` (0.3.0, first adopter of `onErrorToast` and the `cause` chain); floor moved 0.2.0 → 0.3.0 on 2026-11-04 with the release Chris requested. `threads` was the first `bytes` adopter (0.2.0). Still satisfies the `@raycast/api` v2 peer prerequisite — see below |
 | `@chrismessina/raycast-downloader` | **`^0.1.5`** | — | `fathom` (0.1.5). Floor moved `^0.1.0` → `^0.1.5` on 2026-09-17, Chris confirmed: every release in between is a resume-path **correctness** fix, and an adopter below the floor corrupts files rather than merely missing a feature. Declares `@raycast/api` `^1.0.0 \|\| ^2.0.0`, so no companion bump for v2 — see below |
 | `eslint` | `^9` | `^10` | `airbuddy` (10.5.0), `tesla-energy` (10.1.0) |
 | `typescript` | `^5.9` | `^6` | `airbuddy` (6.0.3), `tesla-energy` (6.0.2) |
@@ -278,10 +278,16 @@ logger 2.0 ships; it is a major with a new emission path (records and transports
 replacing direct `console` calls), so it will be a genuine migration with its own
 leading-edge tier, not a hygiene bump.
 
-### `@chrismessina/raycast-kit` — floor is `^0.2.0` (moved 2026-09-09)
+### `@chrismessina/raycast-kit` — floor is `^0.3.0` (moved 2026-11-04)
 
-`0.2.0` adds a **`bytes` subpath** — `formatBytes` and `formatSpeed` — which is where the
-floor move comes from: it replaces a hand-rolled byte formatter in every extension that
+`0.3.0` adds three things the failure-toast rules now rely on: Copy Error carries the ⌘⇧C
+shortcut (`Keyboard.Shortcut.Common.Copy`); `onErrorToast({ title })`, an `onError` for
+`usePromise` / `useCachedPromise` whose `failureToastOptions` cannot see the error; and the
+clipboard includes the error's `cause` chain, so raw server text can stay out of the toast.
+No breaking changes, so moving an adopter from `^0.2.0` is a version bump only.
+
+`0.2.0` added a **`bytes` subpath** — `formatBytes` and `formatSpeed` — which is where the
+0.2.0 floor move came from: it replaces a hand-rolled byte formatter in every extension that
 shows a download or file size, and those copies had already drifted apart.
 
 **Its default convention differs from most hand-rolled copies, deliberately.** The kit
@@ -301,13 +307,13 @@ figure sits next to something the user can also read in Finder.
 > `tsc`/`ray build`/`ray lint` all clean. Full rationale in `house-style.md`'s pure-TS
 > subpaths rule.
 
-Adopting the kit at `^0.2.0` also satisfies the `@raycast/api` v2 peer prerequisite below,
+Adopting the kit at `^0.3.0` also satisfies the `@raycast/api` v2 peer prerequisite below,
 so a v2 migration needs no separate kit bump.
 
 ### `@chrismessina/raycast-kit` — the second v2 peer-range prerequisite
 
 > 📌 **Resolved.** The 2026-08-25 note here said 0.1.4 was not yet on npm. It published, and
-> `0.2.0` is now the floor (see the section above). `npm view @chrismessina/raycast-kit
+> `0.3.0` is now the floor (see the section above). `npm view @chrismessina/raycast-kit
 > version` returned `0.2.0` on 2026-09-09.
 
 Same shape as the logger callout above, and it bit for the same reason: through **0.1.3**
@@ -329,8 +335,9 @@ under 1.104.x, 83/83 under 2.0.6.
 > **So checking for a failed install is not sufficient. Run `npm ls @raycast/api` after any
 > v2 bump** and require a clean exit, not just a successful `npm install`.
 
-**Before migrating any kit-consuming extension to `@raycast/api` v2, bump the kit to
-`^0.1.4` first** — otherwise the failure looks like a v2 problem when it is not. As of
+**Before migrating any kit-consuming extension to `@raycast/api` v2, bump the kit to the
+current floor, `^0.3.0`, first** (`0.1.4` is where the v2-compatible peer range arrived; it
+is a historical minimum, not the adoption target) — otherwise the failure looks like a v2 problem when it is not. As of
 2026-08-25 **five** extensions depend on the kit, all pinned `^0.1.3`: `claude-artifacts`,
 `fathom`, `fetch`, `get-app-icon`, `store-updates`. Widening a peer range is
 backward-compatible, so none of them are affected by the bump itself. Re-census with:
