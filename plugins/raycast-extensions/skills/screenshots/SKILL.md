@@ -44,6 +44,15 @@ List, for this extension:
 - **Transfers outside `fetch`**: curl or `raycast-downloader`, AppleScript, SDKs with their own
   transport, reading local files. **The faker can't cover these.** Plan screens that don't show
   their results.
+- **The extension runs a CLI for its data** (Day One's `dayone`, `brew`, `gh`). There's no
+  `fetch` to wrap, so skip steps 2–3: use the faker's replay switch with **hand-written fixtures**
+  at the point where the extension runs the CLI. Procedure: `raycast-faker/docs/CLI-EXTENSIONS.md`.
+  Reference adopter: `raycast-day-one` (`src/lib/demo.ts`; its fixtures are a developer's journal
+  about building extensions). You write the content, so agree on the story with the user first.
+  An extension that reads the mode file itself has no faker dependency, so `npx raycast-faker` fails
+  with an npm E404 until the kit is published. Run
+  `node /Users/messina/Developer/GitHub/chrismessina/raycast-faker/dist/cli.js replay` (and `off`)
+  from the extension root instead. *(Day One, 2026-11-11.)*
 - **Identity captured at setup** (an account name saved when a token is added). Replay starts from
   an empty store, so the setup flow must work against fixtures. That means recording the
   endpoint it calls (Mercury: Update Token re-runs `/organization`).
