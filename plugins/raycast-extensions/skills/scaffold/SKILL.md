@@ -24,6 +24,7 @@ Mechanical checks run through the plugin's `rx` runner (`<plugin>` = two levels 
 <!-- learnings:start -->
 | When you are about to… | Read |
 |---|---|
+| add Swift (or any native helper) to a Raycast extension | [`raycast-swift-helper-built-from-source`](../../learnings/architecture-patterns/raycast-swift-helper-built-from-source.md) |
 | call `useCachedPromise` / `useCachedState`, or branch on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
 | drive a third-party Mac app through AppleScript or JXA | [`raycast-applescript-jxa-integration`](../../learnings/architecture-patterns/raycast-applescript-jxa-integration.md) |
 | share mutable state between commands, or between an AI tool and an open command | [`portable-node-advisory-file-lock`](../../learnings/design-patterns/portable-node-advisory-file-lock.md) |

@@ -40,6 +40,7 @@ A command prints `VERDICT  check-id  message` lines and exits 0 (PASS/WARN/N/A o
 | When you are about to… | Read |
 |---|---|
 | add or edit a verboseLogging, strictRedaction, or any preference description or label | [`logger-preference-copy-and-length-measurements`](../../learnings/tooling-decisions/logger-preference-copy-and-length-measurements.md) |
+| add Swift (or any native helper) to a Raycast extension | [`raycast-swift-helper-built-from-source`](../../learnings/architecture-patterns/raycast-swift-helper-built-from-source.md) |
 | add, change, or review an AI tool (`src/tools/`) or its `ai.yaml` evals, or offer a green `ray evals` run as evidence it works | [`mocked-ai-evals-prove-only-their-assertions`](../../learnings/workflow-issues/mocked-ai-evals-prove-only-their-assertions.md) |
 | adopt @chrismessina/raycast-kit or import one of its subpaths | [`raycast-kit-adoption-and-subpath-resolution`](../../learnings/tooling-decisions/raycast-kit-adoption-and-subpath-resolution.md) |
 | assert against a constant from the code under test, or one that mirrors a dependency's rule | [`test-against-the-dependency-not-your-own-constant`](../../learnings/workflow-issues/test-against-the-dependency-not-your-own-constant.md) |
