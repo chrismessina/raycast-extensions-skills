@@ -1,0 +1,15 @@
+{
+  "why": "Preset rule logger applies to a self-authored extension that makes web requests: no @chrismessina/raycast-logger FAILs.",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 1,
+      "checks": {
+        "logger": "FAIL",
+        "logger-verbose-copy": "N/A",
+        "prettierrc": "PASS"
+      }
+    }
+  ]
+}

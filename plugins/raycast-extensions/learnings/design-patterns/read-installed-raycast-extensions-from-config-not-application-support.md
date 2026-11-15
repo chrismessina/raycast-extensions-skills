@@ -1,6 +1,8 @@
 ---
 title: "Raycast's installed-extension list lives in ~/.config, not Application Support"
 date: 2026-09-23
+applies_to: ["develop"]
+trigger: "when you are about to list or filter by the user's installed extensions, or walk up from `environment.supportPath` / `assetsPath`"
 category: design-patterns
 module: extension-storage
 component: installed-extension-detection

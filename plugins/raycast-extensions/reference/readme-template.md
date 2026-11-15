@@ -18,7 +18,7 @@ the personal follow/stars badges transfer *your* identity onto someone else's ex
 ## The template
 
 Replace every `<placeholder>`. `<slug>` is `package.json` `name`; `<repo>` is the standalone
-standalone repo, normally `raycast-<slug>`.
+repo, normally `raycast-<slug>`.
 
 ````markdown
 <div align="center">
@@ -28,7 +28,7 @@ standalone repo, normally `raycast-<slug>`.
 # <Extension Title>
 
 [![Raycast Store](https://img.shields.io/badge/Raycast-Store-FF6363?style=flat-square&logo=raycast&logoColor=white)](https://www.raycast.com/chrismessina/<slug>)
-[![License MIT](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
+[![License MIT](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](https://github.com/chrismessina/<repo>/blob/main/LICENSE)
 [![Follow @chrismessina](https://img.shields.io/github/followers/chrismessina?label=Follow%20chrismessina&style=social)](https://github.com/chrismessina)
 [![Stars](https://img.shields.io/github/stars/chrismessina/<repo>?style=social)](https://github.com/chrismessina/<repo>/stargazers)
 
@@ -176,12 +176,11 @@ mkdir -p media && cp "assets/$ICON" "media/$ICON"
 ```
 
 **Why a copy, when `assets/<icon>` already ships?** Because `ship`'s pre-flight asserts the
-README references neither `metadata/` nor `assets/`:
-
-```bash
-grep -o 'metadata/[^)"]*' README.md                        # must be empty
-grep -oE '\(assets/[^)"]*\.(png|jpg|jpeg|gif)' README.md   # must be empty
-```
+README embeds no image from `metadata/` or `assets/` — `rx preflight`: `readme-assets` must pass.
+It judges rendered image destinations in every Markdown and HTML form (`![…](…)`, reference-style
+definitions, `<img src>`, `srcset`), excludes fenced and inline code, and ignores a plain link to an
+asset; `readme-links` checks that every relative link in the README resolves. There is no grep to
+re-type: a folder name mentioned in a code block is not a finding, and a reference-style image is.
 
 `assets/` is the **runtime** folder — everything in it is downloaded by every user — so the
 rule exists to stop a 1.6 MB README screenshot riding along in the bundle. The icon is an
@@ -241,24 +240,25 @@ time**, not at scaffold time — and when auditing, check the URL resolves rathe
 that the block exists. (`central-icon-system` carried the badge while its Store URL 404'd —
 the reason for this rule.)
 
-### The License badge links to a `LICENSE` file — which must actually exist
+### The License badge links to the mirror's `LICENSE` — by absolute URL
 
-`[![License MIT](…)](LICENSE)` is a relative link. With no `LICENSE` file in the repo it is
-a 404 on both GitHub and the Store page, and nothing in `ray build`/`ray lint` checks it.
+The badge points at `https://github.com/chrismessina/<repo>/blob/main/LICENSE`, the file in the
+standalone mirror. A relative `](LICENSE)` resolves only where the file sits beside the README,
+and since 2026-10-30 a `LICENSE` stays out of the Store copy unless it is already published there:
+Greptile's `no-dev-material` flags one a PR adds, because `raycast/extensions`' MIT license covers
+every extension (`ship`, step 3). The absolute link works on GitHub and on the Store page either
+way. Nothing in `ray build`/`ray lint` checks it.
 
 **Known fleet debt (2026-08-29):** `raycast-ios-apps` and `raycast-get-app-icon` — the two
 extensions this template was drawn from — both carry the badge with **no `LICENSE` file**.
-`raycast-digger` and `raycast-reader` do it correctly. Fix on next touch; don't propagate.
-
-Assert it whenever the badge is present:
+Fix on next touch; don't propagate.
 
 ```bash
-grep -q '](LICENSE)' README.md && { [ -f LICENSE ] || echo "BROKEN: License badge, no LICENSE file"; }
+[ -f LICENSE ] || echo "BROKEN: no LICENSE file in the mirror"
+grep -q '](LICENSE)' README.md && echo "FIX: relative License badge; link the mirror's LICENSE by absolute URL"
 ```
 
-`package.json` `"license": "MIT"` is a *declaration*; the file is what makes the badge
-resolve. `LICENSE` ships to the monorepo (verified: `extensions/digger`,
-`extensions/reader-mode`), so adding it is safe.
+`package.json` `"license": "MIT"` is a *declaration*; the mirror's file is what the badge resolves to.
 
 ### Badge order is deliberate
 

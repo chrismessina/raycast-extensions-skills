@@ -1,6 +1,8 @@
 ---
 title: "useCachedPromise: four caching behaviors that every gate passes"
 date: 2026-09-17
+applies_to: ["develop", "review-pr", "scaffold"]
+trigger: "when you are about to call `useCachedPromise` / `useCachedState`, or branch on its `error`"
 category: design-patterns
 module: extension-caching
 component: use-cached-promise
@@ -199,7 +201,7 @@ malformed entries, clock skew) testable with plain `assert`, with no test framew
 
 ## Related
 
-- `../workflow-issues/answer-a-blocking-review-with-a-measurement.md`
+- `../workflow-issues/verify-the-remedy-not-just-the-finding.md` (Evidence B absorbed the former `answer-a-blocking-review-with-a-measurement`)
   — behavior 1 was flagged by a
   reviewer whose implied remedy would have been expensive; measuring it (all cached documents
   totalled 0.71 MB against `Cache`'s 10 MB default) is what made the cheap fix defensible.

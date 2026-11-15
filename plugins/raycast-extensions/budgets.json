@@ -1,0 +1,11 @@
+{
+  "skills": {
+    "skills/api-changelog/SKILL.md": 220,
+    "skills/develop/SKILL.md": 300,
+    "skills/raycast-pr-loop/SKILL.md": 220,
+    "skills/review-pr/SKILL.md": 260,
+    "skills/scaffold/SKILL.md": 220,
+    "skills/screenshots/SKILL.md": 164,
+    "skills/ship/SKILL.md": 450
+  }
+}

@@ -1,0 +1,1144 @@
+{
+  "schema": 1,
+  "owner": "chrismessina",
+  "rules": [
+    {
+      "id": "prettierrc",
+      "title": "`.prettierrc` is this exact file, in every self-authored extension",
+      "anchor": "../reference/house-style.md#prettierrc",
+      "tag": "both",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "prettierrc",
+          "coverage": "partial",
+          "options": {
+            "printWidth": 120,
+            "singleQuote": false,
+            "sortImports": {
+              "plugin": "@ianvs/prettier-plugin-sort-imports",
+              "importOrder": [
+                "<BUILTIN_MODULES>",
+                "<THIRD_PARTY_MODULES>",
+                "^@raycast/(.*)$",
+                "^[.]"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "judgment",
+          "check": "prettierrc",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "no-hand-preferences",
+      "title": "Never hand-define `Preferences` or `Arguments` types",
+      "anchor": "../reference/house-style.md#no-hand-preferences",
+      "tag": "lint",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "hand-typed-preferences",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "no-any",
+      "title": "No `any` type casting",
+      "anchor": "../reference/house-style.md#no-any",
+      "tag": "lint",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "no-any",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "catch-unwrap",
+      "title": "Unwrap unknown catch values with the `instanceof Error` ternary",
+      "anchor": "../reference/house-style.md#catch-unwrap",
+      "tag": "lint",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "catch-unwrap",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "tsc-gate",
+      "title": "Typecheck with `tsc --noEmit` — `ray lint` never typechecks, and a plain `ray build` does not either",
+      "anchor": "../reference/house-style.md#tsc-gate",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "tsc",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "react-hooks-lint",
+      "title": "`eslint-plugin-react-hooks` with `rules-of-hooks: error` is present",
+      "anchor": "../reference/house-style.md#react-hooks-lint",
+      "tag": "verify",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "react-hooks-lint",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "madge-cycles",
+      "title": "`madge --circular` runs as a `pretest` gate",
+      "anchor": "../reference/house-style.md#madge-cycles",
+      "tag": "verify",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "madge-cycles",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "extension-root",
+      "title": "Run every `ray`/`npm` command from the extension root, never a parent",
+      "anchor": "../reference/house-style.md#extension-root",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "launch-before-done",
+      "title": "A UI change is not done until the app has been LAUNCHED",
+      "anchor": "../reference/house-style.md#launch-before-done",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "impeccable-off",
+      "title": "Disable the Impeccable design hook — it is irrelevant to Raycast extensions",
+      "anchor": "../reference/house-style.md#impeccable-off",
+      "tag": "both",
+      "applies": {
+        "manual": "Impeccable plugin installed"
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "impeccable-off",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "ucp-keying",
+      "title": "`useCachedPromise` keying: the fn's TEXT is the namespace, args are the key",
+      "anchor": "../reference/house-style.md#ucp-keying",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "dropdown-mount-onchange",
+      "title": "A controlled `List.Dropdown` fires `onChange(firstItem)` on mount, ignoring `value`",
+      "anchor": "../reference/house-style.md#dropdown-mount-onchange",
+      "tag": "build",
+      "applies": {
+        "manual": "any `List.Dropdown` whose `onChange` persists or sets state"
+      },
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "monotonic-elapsed",
+      "title": "An elapsed-time check uses `performance.now()`, never `Date.now()`",
+      "anchor": "../reference/house-style.md#monotonic-elapsed",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "monotonic-elapsed",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "readiness-gate",
+      "title": "A readiness gate tracks *did prep finish* and *which items succeeded* separately",
+      "anchor": "../reference/house-style.md#readiness-gate",
+      "tag": "both",
+      "applies": {
+        "manual": "background prep drives `isLoading`"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "readiness-gate",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "cache-version-derived",
+      "title": "A cache version is DERIVED from the cached shape, never hand-maintained",
+      "anchor": "../reference/house-style.md#cache-version-derived",
+      "tag": "both",
+      "applies": {
+        "manual": "persists a typed payload"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "cache-version-derived",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "interval-launchtype",
+      "title": "Interval-driven commands must branch on `environment.launchType`",
+      "anchor": "../reference/house-style.md#interval-launchtype",
+      "tag": "both",
+      "applies": {
+        "declaresInterval": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "interval-launchtype",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "ai-access",
+      "title": "Handle no-AI-access on every Raycast-AI call",
+      "anchor": "../reference/house-style.md#ai-access",
+      "tag": "both",
+      "applies": {
+        "callsAI": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "ai-access",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "supportpath-internal",
+      "title": "`environment.supportPath` is for INTERNAL state only — user files go to a preference dir",
+      "anchor": "../reference/house-style.md#supportpath-internal",
+      "tag": "both",
+      "applies": {
+        "writesFiles": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "supportpath-internal",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "selection-api",
+      "title": "Read the active selection via the platform API, never a shell-out",
+      "anchor": "../reference/house-style.md#selection-api",
+      "tag": "verify",
+      "applies": {
+        "manual": "reads the selection"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "selection-api",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "launch-command-caught",
+      "title": "`launchCommand` is awaited inside a try/catch with a failure toast",
+      "anchor": "../reference/house-style.md#launch-command-caught",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "launch-command-caught",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "copy-error",
+      "title": "Every failure toast carries a \"Copy Error\" action",
+      "anchor": "../reference/house-style.md#copy-error",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "eslint",
+          "check": "copy-error-pairing",
+          "coverage": "partial"
+        },
+        {
+          "kind": "judgment",
+          "check": "copy-error",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "no-hud-before-actions",
+      "title": "In a `no-view` command, never `showHUD` before a toast that carries actions",
+      "anchor": "../reference/house-style.md#no-hud-before-actions",
+      "tag": "both",
+      "applies": {
+        "commandMode": "no-view"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "no-hud-before-actions",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "animated-means-work",
+      "title": "`Toast.Style.Animated` is a promise that work is in flight — never spin for a synchronous write",
+      "anchor": "../reference/house-style.md#animated-means-work",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "animated-means-work",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "toast-no-id",
+      "title": "A toast has no id — `hide()` and mutation act on whatever is on screen NOW",
+      "anchor": "../reference/house-style.md#toast-no-id",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "eslint",
+          "check": "no-toast-hide-in-cleanup",
+          "coverage": "partial"
+        },
+        {
+          "kind": "judgment",
+          "check": "toast-no-id",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "toast-window-copy",
+      "title": "Toast copy never says \"this window\" — a toast is a detached HUD",
+      "anchor": "../reference/house-style.md#toast-window-copy",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "toast-window-copy",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "logger",
+      "title": "Structured logging via `@chrismessina/raycast-logger`",
+      "anchor": "../reference/house-style.md#logger",
+      "tag": "both",
+      "applies": {
+        "all": [
+          {
+            "selfAuthored": true
+          },
+          {
+            "webRequests": true
+          }
+        ]
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "logger",
+          "coverage": "full",
+          "options": {
+            "package": "@chrismessina/raycast-logger",
+            "preference": "verboseLogging"
+          }
+        }
+      ]
+    },
+    {
+      "id": "logger-verbose-copy",
+      "title": "The copy is fixed too — type this block verbatim",
+      "anchor": "../reference/house-style.md#logger-verbose-copy",
+      "tag": "both",
+      "applies": {
+        "declaresPreference": "verboseLogging"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "logger-verbose-copy",
+          "coverage": "full",
+          "options": {
+            "expected": {
+              "name": "verboseLogging",
+              "title": "Debug Logging",
+              "label": "Enable extra diagnostics in the console",
+              "description": "Show detailed logs in the console for debugging.",
+              "type": "checkbox",
+              "required": false,
+              "default": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "logger-strict-redaction",
+      "title": "Logger 1.5.0+: declare `strictRedaction` beside `verboseLogging`",
+      "anchor": "../reference/house-style.md#logger-strict-redaction",
+      "tag": "both",
+      "applies": {
+        "all": [
+          {
+            "selfAuthored": true
+          },
+          {
+            "dependency": {
+              "name": "@chrismessina/raycast-logger",
+              "minVersion": "1.5.0"
+            }
+          }
+        ]
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "logger-strict-redaction",
+          "coverage": "full",
+          "options": {
+            "expected": {
+              "name": "strictRedaction",
+              "type": "checkbox",
+              "required": false,
+              "title": "Strict Redaction",
+              "label": "Also hide URL query strings and fragments in logs",
+              "description": "Turn on before reproducing an issue, then share only the new log lines.",
+              "default": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "pref-description-length",
+      "title": "Preference descriptions fit on one line — 80 characters or fewer",
+      "anchor": "../reference/house-style.md#pref-description-length",
+      "tag": "both",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "pref-description-length",
+          "coverage": "full",
+          "options": {
+            "max": 80
+          }
+        },
+        {
+          "kind": "rx",
+          "check": "pref-label-length",
+          "coverage": "full",
+          "options": {
+            "max": 49
+          }
+        }
+      ]
+    },
+    {
+      "id": "kit",
+      "title": "Prefer `@chrismessina/raycast-kit` for failure toasts and count copy",
+      "anchor": "../reference/house-style.md#kit",
+      "tag": "both",
+      "applies": {
+        "all": [
+          {
+            "selfAuthored": true
+          },
+          {
+            "manual": "already being changed"
+          }
+        ]
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "kit",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "show-in-finder",
+      "title": "Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, \"Finder\")`",
+      "anchor": "../reference/house-style.md#show-in-finder",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "show-in-finder",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "export-actions",
+      "title": "A completed file export offers Show in Finder AND Copy Path, both with shortcuts",
+      "anchor": "../reference/house-style.md#export-actions",
+      "tag": "both",
+      "applies": {
+        "manual": "writes a file for the user"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "export-actions",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "csv-formula-guard",
+      "title": "A CSV export neutralizes spreadsheet formulas, not just quotes",
+      "anchor": "../reference/house-style.md#csv-formula-guard",
+      "tag": "both",
+      "applies": {
+        "manual": "exports CSV"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "csv-formula-guard",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "actionpanel-sections",
+      "title": "An ActionPanel spanning two scopes is split into `ActionPanel.Section`",
+      "anchor": "../reference/house-style.md#actionpanel-sections",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "first-action",
+      "title": "Audit the FIRST action of every ActionPanel state, not just the primary one",
+      "anchor": "../reference/house-style.md#first-action",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "first-action",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "keyboard",
+      "title": "Keyboard shortcuts follow `keyboard-conventions.md`",
+      "anchor": "../reference/house-style.md#keyboard",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "eslint",
+          "check": "no-ambiguous-shortcut",
+          "coverage": "partial"
+        },
+        {
+          "kind": "rx",
+          "check": "shortcut-ambiguous",
+          "coverage": "partial"
+        },
+        {
+          "kind": "rx",
+          "check": "shortcut-reserved",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "toggle-sidebar",
+      "title": "Every `isShowingDetail` list carries a \"Show Sidebar\" / \"Hide Sidebar\" action",
+      "anchor": "../reference/house-style.md#toggle-sidebar",
+      "tag": "both",
+      "applies": {
+        "manual": "a list uses `isShowingDetail`"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "toggle-sidebar",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "menubar-metadata",
+      "title": "Prefer `updateCommandMetadata` to surface menu-bar status in the command list",
+      "anchor": "../reference/house-style.md#menubar-metadata",
+      "tag": "build",
+      "applies": {
+        "commandMode": "menu-bar"
+      },
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "detail-code-lang",
+      "title": "A fenced code block in `Detail` markdown carries a language tag",
+      "anchor": "../reference/house-style.md#detail-code-lang",
+      "tag": "both",
+      "applies": {
+        "manual": "renders code in `Detail`"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "detail-code-lang",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "empty-state-assets",
+      "title": "Empty-state assets are themed or vector",
+      "anchor": "../reference/house-style.md#empty-state-assets",
+      "tag": "both",
+      "applies": {
+        "manual": "bundles empty-state art"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "empty-state-assets",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "monochrome-icon",
+      "title": "A monochrome bundled icon needs a theme-aware treatment — a bare filename is invisible in one theme",
+      "anchor": "../reference/house-style.md#monochrome-icon",
+      "tag": "both",
+      "applies": {
+        "manual": "bundles a monochrome icon"
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "monochrome-icon",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "icon-choices",
+      "title": "Pin actions use the Tack icons; person avatars use the squircle mask",
+      "anchor": "../reference/house-style.md#icon-choices",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "no-tool-tags",
+      "title": "No agent-tool tags in shipped comments",
+      "anchor": "../reference/house-style.md#no-tool-tags",
+      "tag": "both",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "no-tool-tags",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "us-english",
+      "title": "US English everywhere — UI copy, comments, docs, identifiers",
+      "anchor": "../reference/house-style.md#us-english",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "us-english",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "empty-state-copy",
+      "title": "Empty/error state copy: short title, one-line description, steps in the actions",
+      "anchor": "../reference/house-style.md#empty-state-copy",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "eslint",
+          "check": "no-multiline-emptyview-description",
+          "coverage": "partial"
+        },
+        {
+          "kind": "judgment",
+          "check": "empty-state-copy",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "toggle-copy",
+      "title": "Toggle copy states the resulting direction (on/off), never a bare \"Toggled\"",
+      "anchor": "../reference/house-style.md#toggle-copy",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "plural-copy",
+      "title": "Count-bearing copy uses correct singular/plural agreement — never `item(s)`",
+      "anchor": "../reference/house-style.md#plural-copy",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "plural-copy",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "src-folders",
+      "title": "Organize `src/` into role folders once a command file grows past ~150 lines",
+      "anchor": "../reference/house-style.md#src-folders",
+      "tag": "build",
+      "applies": true,
+      "severity": "report",
+      "bindings": []
+    },
+    {
+      "id": "readme-preamble",
+      "title": "Original extensions ship the social-badge preamble and `FUNDING.yml`",
+      "anchor": "../reference/house-style.md#readme-preamble",
+      "tag": "verify",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "readme-preamble",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "merge-date-placeholder",
+      "title": "Never hand-invent a merge date — keep the `{PR_MERGE_DATE}` placeholder",
+      "anchor": "../reference/house-style.md#merge-date-placeholder",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "changelog-placeholder",
+          "coverage": "full"
+        },
+        {
+          "kind": "rx",
+          "check": "changelog-order",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "changelog-bullets",
+      "title": "Changelog bullets are tweet-length and ordered by user benefit",
+      "anchor": "../reference/house-style.md#changelog-bullets",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "changelog-bullets",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "manifest-title-case",
+      "title": "Title Case for extension, command and preference titles",
+      "anchor": "../reference/greptile-rules.md#manifest-title-case",
+      "tag": "both",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "title-case",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "no-agent-scaffolding",
+      "title": "No agent or planning files that this PR adds or changes",
+      "anchor": "../reference/greptile-rules.md#no-agent-scaffolding",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "agent-scaffolding",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "no-dev-material",
+      "title": "No repo-only files (LICENSE, contributor docs, top-level docs/) that this PR adds",
+      "anchor": "../reference/greptile-rules.md#no-dev-material",
+      "tag": "both",
+      "applies": true,
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "dev-material",
+          "coverage": "partial"
+        }
+      ]
+    },
+    {
+      "id": "no-generated-files",
+      "title": "No build output or stray .DS_Store ships",
+      "anchor": "../reference/greptile-rules.md#no-generated-files",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "generated-files",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
+      "id": "agents-md-claims",
+      "title": "AGENTS.md / CONCEPTS.md claims hold: named paths exist, npm scripts exist, no home-directory path, named symbols exist in src/",
+      "anchor": "../reference/greptile-rules.md#no-agent-scaffolding",
+      "tag": "verify",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "agents-md-paths",
+          "coverage": "full"
+        },
+        {
+          "kind": "rx",
+          "check": "agents-md-scripts",
+          "coverage": "full"
+        },
+        {
+          "kind": "rx",
+          "check": "agents-md-no-home-paths",
+          "coverage": "full"
+        },
+        {
+          "kind": "rx",
+          "check": "agents-md-symbols",
+          "coverage": "full"
+        },
+        {
+          "kind": "judgment",
+          "check": "agents-md-claims",
+          "coverage": "partial"
+        }
+      ]
+    }
+  ],
+  "judgments": [
+    {
+      "id": "prettierrc",
+      "question": "Does the extension satisfy `prettierrc` (`.prettierrc` is this exact file, in every self-authored extension)?"
+    },
+    {
+      "id": "no-any",
+      "question": "Does the extension satisfy `no-any` (No `any` type casting)?"
+    },
+    {
+      "id": "catch-unwrap",
+      "question": "Does the extension satisfy `catch-unwrap` (Unwrap unknown catch values with the `instanceof Error` ternary)?"
+    },
+    {
+      "id": "react-hooks-lint",
+      "question": "Does the extension satisfy `react-hooks-lint` (`eslint-plugin-react-hooks` with `rules-of-hooks: error` is present)?"
+    },
+    {
+      "id": "madge-cycles",
+      "question": "Does the extension satisfy `madge-cycles` (`madge --circular` runs as a `pretest` gate)?"
+    },
+    {
+      "id": "impeccable-off",
+      "question": "Does the extension satisfy `impeccable-off` (Disable the Impeccable design hook — it is irrelevant to Raycast extensions)?"
+    },
+    {
+      "id": "monotonic-elapsed",
+      "question": "Does the extension satisfy `monotonic-elapsed` (An elapsed-time check uses `performance.now()`, never `Date.now()`)?"
+    },
+    {
+      "id": "readiness-gate",
+      "question": "Does the extension satisfy `readiness-gate` (A readiness gate tracks *did prep finish* and *which items succeeded* separately)?"
+    },
+    {
+      "id": "cache-version-derived",
+      "question": "Does the extension satisfy `cache-version-derived` (A cache version is DERIVED from the cached shape, never hand-maintained)?"
+    },
+    {
+      "id": "interval-launchtype",
+      "question": "Does the extension satisfy `interval-launchtype` (Interval-driven commands must branch on `environment.launchType`)?"
+    },
+    {
+      "id": "ai-access",
+      "question": "Does the extension satisfy `ai-access` (Handle no-AI-access on every Raycast-AI call)?"
+    },
+    {
+      "id": "supportpath-internal",
+      "question": "Does the extension satisfy `supportpath-internal` (`environment.supportPath` is for INTERNAL state only — user files go to a preference dir)?"
+    },
+    {
+      "id": "selection-api",
+      "question": "Does the extension satisfy `selection-api` (Read the active selection via the platform API, never a shell-out)?"
+    },
+    {
+      "id": "launch-command-caught",
+      "question": "Does the extension satisfy `launch-command-caught` (`launchCommand` is awaited inside a try/catch with a failure toast)?"
+    },
+    {
+      "id": "copy-error",
+      "question": "Does the extension satisfy `copy-error` (Every failure toast carries a \"Copy Error\" action)?"
+    },
+    {
+      "id": "no-hud-before-actions",
+      "question": "Does the extension satisfy `no-hud-before-actions` (In a `no-view` command, never `showHUD` before a toast that carries actions)?"
+    },
+    {
+      "id": "animated-means-work",
+      "question": "Does the extension satisfy `animated-means-work` (`Toast.Style.Animated` is a promise that work is in flight — never spin for a synchronous write)?"
+    },
+    {
+      "id": "toast-no-id",
+      "question": "Does the extension satisfy `toast-no-id` (A toast has no id — `hide()` and mutation act on whatever is on screen NOW)?"
+    },
+    {
+      "id": "toast-window-copy",
+      "question": "Does the extension satisfy `toast-window-copy` (Toast copy never says \"this window\" — a toast is a detached HUD)?"
+    },
+    {
+      "id": "kit",
+      "question": "Does the extension satisfy `kit` (Prefer `@chrismessina/raycast-kit` for failure toasts and count copy)?"
+    },
+    {
+      "id": "show-in-finder",
+      "question": "Does the extension satisfy `show-in-finder` (Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, \"Finder\")`)?"
+    },
+    {
+      "id": "export-actions",
+      "question": "Does the extension satisfy `export-actions` (A completed file export offers Show in Finder AND Copy Path, both with shortcuts)?"
+    },
+    {
+      "id": "csv-formula-guard",
+      "question": "Does the extension satisfy `csv-formula-guard` (A CSV export neutralizes spreadsheet formulas, not just quotes)?"
+    },
+    {
+      "id": "first-action",
+      "question": "Does the extension satisfy `first-action` (Audit the FIRST action of every ActionPanel state, not just the primary one)?"
+    },
+    {
+      "id": "toggle-sidebar",
+      "question": "Does the extension satisfy `toggle-sidebar` (Every `isShowingDetail` list carries a \"Show Sidebar\" / \"Hide Sidebar\" action)?"
+    },
+    {
+      "id": "detail-code-lang",
+      "question": "Does the extension satisfy `detail-code-lang` (A fenced code block in `Detail` markdown carries a language tag)?"
+    },
+    {
+      "id": "empty-state-assets",
+      "question": "Does the extension satisfy `empty-state-assets` (Empty-state assets are themed or vector)?"
+    },
+    {
+      "id": "monochrome-icon",
+      "question": "Does the extension satisfy `monochrome-icon` (A monochrome bundled icon needs a theme-aware treatment — a bare filename is invisible in one theme)?"
+    },
+    {
+      "id": "no-tool-tags",
+      "question": "Does the extension satisfy `no-tool-tags` (No agent-tool tags in shipped comments)?"
+    },
+    {
+      "id": "us-english",
+      "question": "Does the extension satisfy `us-english` (US English everywhere — UI copy, comments, docs, identifiers)?"
+    },
+    {
+      "id": "empty-state-copy",
+      "question": "Does the extension satisfy `empty-state-copy` (Empty/error state copy: short title, one-line description, steps in the actions)?"
+    },
+    {
+      "id": "plural-copy",
+      "question": "Does the extension satisfy `plural-copy` (Count-bearing copy uses correct singular/plural agreement — never `item(s)`)?"
+    },
+    {
+      "id": "readme-preamble",
+      "question": "Does the extension satisfy `readme-preamble` (Original extensions ship the social-badge preamble and `FUNDING.yml`)?"
+    },
+    {
+      "id": "agents-md-claims",
+      "question": "Does the extension satisfy `agents-md-claims` (AGENTS.md / CONCEPTS.md claims hold: named paths exist, npm scripts exist, no home-directory path, named symbols exist in src/)?"
+    }
+  ],
+  "dependencies": {
+    "api": {
+      "existing-1x": {
+        "floor": "1.104.25"
+      },
+      "2x": {
+        "floor": "2.1.0"
+      },
+      "new": "2x"
+    }
+  },
+  "holdout": {
+    "localOnly": [
+      ".env",
+      ".claude",
+      ".superpowers",
+      ".impeccable",
+      "AGENTS.md",
+      "CONCEPTS.md",
+      "CLAUDE.md",
+      "HANDOFF.md"
+    ]
+  },
+  "ship": {
+    "keep": [
+      {
+        "path": "TODO.md",
+        "extensions": [
+          "brew",
+          "dev-null"
+        ],
+        "reason": "Public backlogs by Chris's decision (2026-09-30 brew, 2026-10-22 dev-null); everywhere else TODO.md is a leak."
+      }
+    ]
+  }
+}

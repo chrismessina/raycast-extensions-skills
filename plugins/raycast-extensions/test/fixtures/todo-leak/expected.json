@@ -1,0 +1,13 @@
+{
+  "why": "The same TODO.md in an extension ship.keep does not name is reported by agent-scaffolding (WARN without --published).",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 0,
+      "checks": {
+        "agent-scaffolding": "WARN"
+      }
+    }
+  ]
+}

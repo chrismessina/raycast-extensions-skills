@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Get an existing Raycast extension into raycast/extensions and clean up — runs the pre-flight (dep hygiene + house-style AUDIT + weeding), fetches Store-compliance docs, submits the PR via `ray publish`/`npm run publish`, preps the PR title/body, drives the review-feedback cycle, and sweeps merged branches. Fires on "submit / publish / ship to the Store", "npm run publish", or "address review feedback (metadata/screenshots)." Does NOT change code behavior — if feedback needs code, hands BACK to `develop`.
+description: Get an existing Raycast extension into raycast/extensions and clean up — runs the pre-flight through `rx` (examples gate, staleness, preflight, API floor, build/tsc/lint) and records the house-style and Greptile judgment audit, submits with `npm run publish`, posts the PR body onto the draft, hands the review rounds to `raycast-pr-loop`, and sweeps after merge. Fires on "submit / publish / ship to the Store", "npm run publish", "run preflight", "check this extension", "is this ready to ship" (those three run the pre-flight and stop), or "address review feedback (metadata/screenshots)." Does NOT change code behavior — if feedback needs code, hands BACK to `develop`.
 metadata:
   stage: "2a + 3 + 5 + 6 + 7 — pre-flight, compliance, PR, review, cleanup"
 ---
@@ -10,1270 +10,322 @@ metadata:
 ## The seam: `ship` never changes code behavior
 
 > **Reviewing someone else's PR is not this skill.** `ship` submits *your* extension and drives
-> feedback *on* it. A PR authored by a contributor against an extension you help maintain is
-> the inbound direction — [`review-pr`](../review-pr/SKILL.md).
+> feedback *on* it; a contributor's PR against an extension you maintain is [`review-pr`](../review-pr/SKILL.md).
+> **Once the PR is open and Greptile posts, the round-by-round loop is [`raycast-pr-loop`](../raycast-pr-loop/SKILL.md).**
 
-`ship` runs *non-breaking* dep hygiene, the *read-only* house-style audit, weeds metadata, gates compliance, submits, and cleans up. The moment a code change is needed (a failing house-style audit, or Store review feedback that needs code), it **hands back to `develop`** with context, then receives the change forward again. The arrow is two-way.
+`ship` runs non-breaking dep hygiene, the read-only house-style audit, weeding, compliance, the
+submission and the cleanup. The moment a code change is needed it **hands back to `develop`** with
+context and receives the change forward again; doc-only edits stay here.
+
+**Every mechanical check is an `rx` command, called through the plugin runner:**
+
+```bash
+node "<plugin>/scripts/rx.mjs" stale --json   # one example; any command: <command> [subcommand] [--flags]. <plugin> = two levels above this skill's base directory
+```
+
+A command prints `VERDICT  check-id  message` lines and exits 0 (PASS/WARN/N/A only), 1 (a FAIL)
+or 2 (an ERROR); `--json` prints one envelope. **Branch on the exit code and quote the FAIL/ERROR
+lines in the report; never re-implement a check in prose or shell.** The runner injects the preset
+(`<plugin>/presets/chrismessina.json`): never pass `--preset`, never write a bare `rx …` command,
+never call the retired `preflight.mjs`, `greptile-drift.mjs` or `pr-body.py`. Contracts and check
+ids: [`reference/rx.md`](../../reference/rx.md); rule policy by ID: [`reference/house-style.md`](../../reference/house-style.md);
+Greptile coverage and what stays judgment: [`reference/greptile-rules.md`](../../reference/greptile-rules.md).
 
 ## Documented learnings — read before the review cycle, not after it
 
-`learnings/` in this plugin holds write-ups of defects and decisions from previous runs of these skills, each with the trigger that makes it relevant. **Read the row that matches what you are about to do — before doing it.** A learning is only useful at the moment it applies; rediscovering one after the review costs a round.
+`learnings/` holds write-ups of defects and decisions from previous runs, each with the trigger that makes it relevant. **Read the matching row before doing the thing**; rediscovering it after the review costs a round.
 
+<!-- learnings:start -->
 | When you are about to… | Read |
 |---|---|
-| a Store PR shows far more changed files than the branch touched | [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md) |
-| an automated reviewer is holding the PR with a rating that will not clear | [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md) |
-| complying with a correct finding whose fix is only implied | [`verify-the-remedy-not-just-the-finding`](../../learnings/workflow-issues/verify-the-remedy-not-just-the-finding.md) |
-| a reviewer reports a collision or value you cannot reproduce | [`wrong-vendor-docs-manufacture-review-findings`](../../learnings/workflow-issues/wrong-vendor-docs-manufacture-review-findings.md) |
-| a third review pass is still finding defects in the previous pass's fixes | [`count-the-review-layers-not-the-findings`](../../learnings/workflow-issues/count-the-review-layers-not-the-findings.md) |
-| introducing a helper that encodes a rule an audit already greps for | [`audit-coupled-to-the-hand-written-form-of-a-rule`](../../learnings/workflow-issues/audit-coupled-to-the-hand-written-form-of-a-rule.md) |
+| act on the Greptile rule changes that `rx gates` (its `greptile-rules` step) or `rx greptile outdated` lists during a pre-flight | [`read-every-drifted-greptile-rule-before-the-first-publish`](../../learnings/workflow-issues/read-every-drifted-greptile-rule-before-the-first-publish.md) |
+| add or edit a verboseLogging, strictRedaction, or any preference description or label | [`logger-preference-copy-and-length-measurements`](../../learnings/tooling-decisions/logger-preference-copy-and-length-measurements.md) |
+| adopt @chrismessina/raycast-kit or import one of its subpaths | [`raycast-kit-adoption-and-subpath-resolution`](../../learnings/tooling-decisions/raycast-kit-adoption-and-subpath-resolution.md) |
+| bump, floor, or migrate @raycast/api and want to know why the policy says what it says | [`raycast-api-policy-history`](../../learnings/tooling-decisions/raycast-api-policy-history.md) |
+| comply with a review finding, answer a rating that will not clear, or act on a collision or value you cannot reproduce | [`verify-the-remedy-not-just-the-finding`](../../learnings/workflow-issues/verify-the-remedy-not-just-the-finding.md) |
+| edit templates/sync-from-upstream.yml or diagnose a failed mirror sync run | [`upstream-sync-workflow-incident-history`](../../learnings/workflow-issues/upstream-sync-workflow-incident-history.md) |
+| introduce a helper that encodes a rule an audit already greps for | [`audit-coupled-to-the-hand-written-form-of-a-rule`](../../learnings/workflow-issues/audit-coupled-to-the-hand-written-form-of-a-rule.md) |
+| run npm or ray from anywhere but a resolved extension root | [`extension-root-npm-walks-up-and-runs-the-parent`](../../learnings/workflow-issues/extension-root-npm-walks-up-and-runs-the-parent.md) |
+| start a third review pass that is finding defects in the previous pass's fixes | [`count-the-review-layers-not-the-findings`](../../learnings/workflow-issues/count-the-review-layers-not-the-findings.md) |
+| triage a png, a readme, an agents.md or a contribution conflict and want the incident behind the rule | [`ship-submission-incident-history`](../../learnings/workflow-issues/ship-submission-incident-history.md) |
+| verify a Store PR after publishing, or explain why it shows far more changed files than the branch touched | [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md) |
+<!-- learnings:end -->
 
+## The evidence contract — what authorizes a submission
 
-> **On a blocking finding from an automated reviewer:** a finding being correct does not make the remedy it implies correct, and a rating that will not clear creates pressure to ship *any* responsive change. Build the implied remedy, measure it against what you have, and report the number — including when it loses. See [`answer-a-blocking-review-with-a-measurement`](../../learnings/workflow-issues/answer-a-blocking-review-with-a-measurement.md).
+The plugin's `rx guard` hook allows `npm run publish` only when **both** of these exist for the
+exact tree being published, and it checks them on every attempt:
 
-> **Once the PR is open and Greptile posts its review, the round-by-round loop is its own skill:** [`raycast-pr-loop`](../raycast-pr-loop/SKILL.md) — triage per finding, re-publish with the secret holdout, and wait for the next round without resident background pollers (repeatedly killed under memory pressure on 2026-09-10; see its §4 for the bounded waiting mechanics).
+1. **A current, successful `rx gates` receipt** (`.git/rx/receipt.json`): `stale` → `scan` →
+   `preflight` → `api-floor` → `build` → `tsc` → `lint`, in that order, every step present, no
+   FAIL or ERROR, fingerprinted over the whole payload (ignored and untracked files included),
+   HEAD, the publish range, the preset and the forbidden list. **Any change to the tree after
+   `rx gates` stales the receipt** (a dep bump, a merge, a CHANGELOG edit, a holdout): re-run gates, then the audit.
+2. **A valid `rx audit record`** (`.git/rx/audit.json`) tied to that receipt's fingerprint: the
+   judgment evidence the receipt cannot hold. Its entries file is one JSON array carrying:
+   - one **rule entry** per applicable preset rule (every non-build rule whose *Applies* holds;
+     `unknown` applicability still needs one), `result` `pass` / `fail` / `n-a` with evidence.
+     Severity comes from the preset: a `block` rule's `fail` blocks, a `report` rule's `fail` is
+     recorded and does not, so the bar is zero *blocking* failures, not "zero violations";
+   - one rule entry per **Greptile judgment rule**, id `greptile/<rule id>` (`changelog-entries`, `no-silent-failure`, …;
+     take the ids from the current list, `GREPTILE_JUDGMENT_RULES` in `$RX/src/audit/greptile.mjs`, never from a count;
+     `rx audit record` reports it in `data.applicable`, and `audit-coverage` FAILs naming each id missing), each read against
+     the **branch diff**; all blocking, since a Greptile finding at any severity holds a Store PR
+     *(brew #31820, 2026-10-01: a hardcoded `toLocaleString("en-US")` passed the green script and was
+     caught only when Chris asked whether the Greptile rules had run)*;
+   - a **disposition** for every `stale-check` / `stale-new` / `stale-remove` row in the receipt and every
+     png `OLDER-SHOT` in this run, keyed exactly on `{ path, localHash, baseline }` as `rx stale` and
+     `rx png` report them (a disposition matching nothing is itself a failure; `stale-remove` takes
+     `remove-published` with `localHash` `"absent"`, and nothing else does);
+   - a **verification** per external effect the preset's applicability detects in `src/`
+     (`writes-files`, `web-requests`, `calls-ai`): the **runtime and destination evidence**. `ship`
+     does not run the extension, so this is a hand-back: if the diff touches a clipboard write, a
+     saved file, a Finder reveal or an `open` handoff and nobody confirmed the payload *where it
+     lands*, STOP and send it to `develop`'s walk-the-states step (2026-07-26: every gate passed a
+     build whose "Copy Icon" pasted a file path instead of an image).
+   `record` also runs `rx shortcuts check` and `rx png` in-process and embeds them; a shortcut ERROR/FAIL or a png FAIL/ERROR blocks.
 
-## Pre-flight checklist (the "cake")
+```json
+[
+  { "id": "copy-error", "scope": "src/**", "result": "pass", "evidence": "4 failure toasts, each paired with a Copy Error action: src/a.tsx:41, …" },
+  { "id": "kit", "scope": "src/**", "result": "n-a", "evidence": "report-only; no toast or count copy changed in this branch" },
+  { "id": "greptile/no-silent-failure", "scope": "branch diff", "result": "pass", "evidence": "every catch surfaces a toast or an empty state; none swallows" },
+  { "path": "CHANGELOG.md", "localHash": "<git blob id: stale's .data.files[].localHash>", "baseline": "<upstream SHA: stale's .data.baseline>", "disposition": "keep-local", "reason": "published == my commit abc1234; every hunk since is this release" },
+  { "path": "metadata/x-1.png", "localHash": "sha256:<png's .data.files[].localHash>", "baseline": "<provenance commit in YOUR history: png's .data.files[].baseline, not the upstream SHA>", "disposition": "keep-local", "reason": "the published shot is the one I submitted in #N; local is the retake Chris approved" },
+  { "verification": "writes-files", "result": "pass", "evidence": "exported CSV opened in Numbers from ~/Downloads; 12 rows, formulas neutralized" }
+]
+```
 
-Run before PR. Each layer is gardening, not engineering:
+**The publish sequence, in this order, from the extension root.** Each step is its **own Bash tool
+invocation**: the guard reads the whole tool command, so a multi-line or compound command is `unknown`
+and denied, and step 5 is the bare line `npm run publish`. (`rx holdout out` goes first: holding out changes the tree, which the receipt fingerprints.)
 
-−2. **USER-SUPPLIED EXAMPLES GATE — ask before any of them goes public.** *(Stated by Chris,
-   2026-10-27.)* When Chris hands over a real example to reproduce a bug (a URL, a username,
-   a handle, an email, a post or video ID, a file path with a name in it), it is often
-   personal, chosen because it's where *he* hit the bug. It is not a fixture. **Before
-   anything leaves the machine for GitHub, list every such value and everything derived from
-   it, and get his explicit OK for each one.** That means every public write: `npm run
-   publish` and every re-publish in `raycast-pr-loop`, a direct push or `gh pr create`, a PR
-   title or body (initial or splice), a PR comment or a reply to a review bot, a mirror push,
-   and a commit made by API. Derived values include a post's shortcode, the media IDs or
-   usernames an API returned for it, and filenames built from it; list encoded or split forms
-   too if the code stores them that way. A value without his OK goes on the **forbidden
-   list** and is replaced with an obviously fake one (`AbCdEfGhIjK`, `example_user`) in code,
-   tests, comments, the CHANGELOG, commit messages, and the PR text. Approved values stay off
-   the list. This overrides the rule against touching dated CHANGELOG entries: a forbidden
-   value in an old entry gets replaced, and the entry keeps its date.
+1. `node "<plugin>/scripts/rx.mjs" holdout out` — untracked local-only files → `.git/rx/holdout/`, with an inventory.
+2. `node "<plugin>/scripts/rx.mjs" gates --forbidden "$SCRATCHPAD/forbidden.txt"`
+3. `node "<plugin>/scripts/rx.mjs" shortcuts runtime` — once per installed Raycast version.
+4. `WORK="$(mktemp -d "${TMPDIR:-/tmp}/rx-audit.XXXXXX")"`, write `$WORK/entries.json` (OUTSIDE the
+   extension root), then `node "<plugin>/scripts/rx.mjs" audit record --entries "$WORK/entries.json"`.
+5. `npm run publish`
+6. `node "<plugin>/scripts/rx.mjs" publication record raycast/extensions "$PR" "$REMOTE_HEAD_SHA"`, with the PR number and the head SHA of the fork branch it was opened from
+7. `node "<plugin>/scripts/rx.mjs" holdout in` — restores from the inventory and verifies every entry.
 
-   **Scan the payload itself, not a diff of it.** `ray publish` copies the whole extension
-   root, untracked and gitignored files included, minus a fixed skip list (`.git`, `.github`,
-   `.direnv`, `.swiftpm`, `.raycast-swift-build`, `compiled_raycast_rust`,
-   `compiled_raycast_swift`, `node_modules`, `raycast-env.d.ts`; see *What ships* under
-   Submission). So scan those files' contents **and their names**, not the changes. Commit
-   subjects become ray's commit message. PR text gets scanned as the exact file you are about
-   to send. Literal matching from a file means no regex escaping:
+Guard constraints: the publish is **exactly** `npm run publish` as the whole command (optionally
+after one `cd <absolute or ./… or ../… dir> &&`; plain output redirections allowed); **any other
+Bash command containing the whole word "publish" is blocked** (a commit message, an `echo`,
+`npm publish`), as is any command mentioning marking a PR ready; **never write under `.git/rx/`** or
+hand-edit `receipt.json`, `audit.json`, `publication.json`; an entries file inside the extension
+root (including `.git/`) is `ERROR input`, since it would enter the payload and ship.
 
-   ```bash
-   # One forbidden value per line, written OUTSIDE the extension root. Run from the extension root.
-   FORBID="$SCRATCHPAD/forbidden.txt"; touch "$FORBID"
-   [ -s "$FORBID" ] || echo "forbidden list is empty: every example was approved, say so in the receipt"
-   SKIP=(--exclude-dir={.git,.github,.direnv,.swiftpm,.raycast-swift-build,compiled_raycast_rust,compiled_raycast_swift,node_modules} --exclude=raycast-env.d.ts)
-   GATE=PASS
-   scan() {  # grep: 0 = match, 1 = clean, 2 = error. Only 1 passes. Never aborts under `set -e`,
-     local rc=0; grep -rnIF -f "$FORBID" "$@" || rc=$?   # so every scan runs and reports.
-     case $rc in 1) echo "CLEAN: $*" ;; 0) echo "LEAK: $*"; GATE=FAIL ;; *) echo "SCAN FAILED: $*"; GATE=FAIL ;; esac; }
-   scan "${SKIP[@]}" .                                   # file contents, as ray copies them
-   if find . \( -name .git -o -name .github -o -name .direnv -o -name .swiftpm -o -name .raycast-swift-build \
-     -o -name compiled_raycast_rust -o -name compiled_raycast_swift -o -name node_modules \) -prune \
-     -o ! -name raycast-env.d.ts -print > "$SCRATCHPAD/paths.txt"
-   then scan "$SCRATCHPAD/paths.txt"; else echo "SCAN FAILED: path inventory"; GATE=FAIL; fi  # file NAMES
-   TAG="__raycast_latest_publish_ext/$(jq -r .name package.json)__"
-   # Same range ray uses (`HEAD...<tag>`, or all history with no tag), not limited to a path.
-   RANGE=(); git rev-parse -q --verify "$TAG" >/dev/null && RANGE=("HEAD...$TAG")
-   if git log --format=%B ${RANGE[@]+"${RANGE[@]}"} > "$SCRATCHPAD/msgs.txt"; then scan "$SCRATCHPAD/msgs.txt"
-   else echo "SCAN FAILED: git log"; GATE=FAIL; fi      # ray's commit message is built from these
-   scan "$SCRATCHPAD/pr-body.md"                         # each PR body, comment or reply, before sending
-   echo "GATE: $GATE"
-   ```
+## Pre-flight (the "cake") — each layer is gardening, not engineering
 
-   Binary files (screenshots, icons) are skipped by `-I`. If one could show a forbidden value,
-   look at it. The receipt is the `CLEAN:` lines plus `GATE: PASS`. **`GATE: FAIL` blocks**: it
-   means some line said `LEAK:` or `SCAN FAILED:` (including the path inventory or `git log`).
+−2. **USER-SUPPLIED EXAMPLES GATE — ask before any of them goes public** *(Chris, 2026-10-27)*.
+   A real example Chris handed over to reproduce a bug (a URL, handle, email, post or video ID, a
+   path with a name in it) is often personal and is not a fixture. **Before anything leaves the
+   machine for GitHub, list every such value and everything derived from it** (shortcodes, the IDs
+   or usernames an API returned for it, filenames built from it, encoded or split forms) **and get
+   his explicit OK for each.** A value without his OK goes on the forbidden list, one literal per
+   line, kept in the session scratchpad as `$SCRATCHPAD/forbidden.txt` (outside the extension root;
+   the guard re-hashes it at publish time, so it must still exist then), and is replaced with an
+   obviously fake one (`AbCdEfGhIjK`, `example_user`) everywhere, dated CHANGELOG entries included
+   (the entry keeps its date; record it for `rx changelog` in a `--redactions` file). `rx scan`
+   (inside `rx gates`) scans **the payload itself, not a diff of it**: file **contents and names**
+   of everything `ray publish` copies (untracked and gitignored included), the **commit messages**
+   in the range ray logs (`HEAD...<publish tag>`, else all history), and every `--pr-text <file>` you
+   pass (each PR body, comment and bot reply, as the exact file you are about to send).
+   `scan-binary` WARN lists screenshots and icons for a human look; an empty list is `N/A every
+   example approved`, never PASS, so say so. Once on GitHub it cannot be fully taken back (a
+   force-push leaves the commit reachable by SHA; a body keeps every revision) *(instagram-media-downloader
+   #32858, 2026-10-27: a reproduction post's shortcode and its four media IDs shipped in tests, the CHANGELOG and the PR body)*.
 
-   **Why this is a gate and not a review note:** once it's on GitHub, it can't be fully taken
-   back. A force-push leaves the old commit reachable by SHA, the PR description's edit
-   history keeps every revision, and a full purge needs a GitHub Support request.
-   *(instagram-media-downloader #32858, 2026-10-27: a reproduction post's shortcode and its
-   four media IDs shipped in tests, the CHANGELOG, and the PR body. Chris removed it from
-   the body by hand. The rest stayed in the commit.)*
-
-−1. **STALENESS GATE — is the local tree behind the PUBLISHED extension?** This runs
-   *before* the typecheck because a green build on a stale baseline is the dangerous
-   case: publishing it **deletes whatever upstream has that you lack.**
-
-   **Diff the actual publishable file set — names are not enough.** An upstream *edit* to
-   a file you also have (a bugfix in an existing `src/*.tsx`, a changed asset, a lockfile
-   bump) is invisible to a name-only comparison and is exactly what a re-publish
-   overwrites. Compare content, and **fail closed** — a fetch that errors must stop the
-   run, never fall through to "no differences found."
-
-   ```bash
-   set -euo pipefail
-   EXT="$(jq -r .name package.json)"
-
-   # Per-run temp dir. Shared /tmp paths collide between concurrent runs and leave a
-   # previous run's file to be read as if it were this one's.
-   WORK="$(mktemp -d "${TMPDIR:-/tmp}/staleness-$EXT.XXXXXX")"
-   # No EXIT trap: later steps read the baseline from separate shells, so deleting it
-   # on exit leaves them nothing. macOS prunes old files in $TMPDIR on its own.
-   PUB_DIR=""
-
-   # Is it published at all? Distinguish a REAL 404 from a failed request — a rate
-   # limit or network error must ABORT, never silently mean "not published."
-   HTTP="$(gh api "repos/raycast/extensions/contents/extensions/$EXT" \
-            --silent --include 2>/dev/null | head -1 | grep -oE '[0-9]{3}' | head -1)" || true
-   # `|| true` is load-bearing: gh exits 1 on a 404, which under `set -euo pipefail` would
-   # kill the script on the assignment, before the case below can say "not published".
-   case "$HTTP" in
-     200) PUBLISHED=yes ;;
-     404) PUBLISHED=no  ;;
-     *)   echo "ABORT: baseline lookup returned '${HTTP:-no response}' (not 200/404)."
-          echo "Rate limit, auth, or network — cannot prove freshness. Do NOT publish."
-          exit 1 ;;
-   esac
-
-   if [ "$PUBLISHED" = no ]; then
-     echo "NOT PUBLISHED — no baseline; skip this gate"
-   else
-     # Sparse, blobless checkout of just this extension — never the full monorepo.
-     git -C "$WORK" init -q
-     git -C "$WORK" remote add origin https://github.com/raycast/extensions.git
-     git -C "$WORK" config core.sparseCheckout true
-     git -C "$WORK" sparse-checkout init --cone
-     git -C "$WORK" sparse-checkout set "extensions/$EXT"
-     git -C "$WORK" fetch -q --depth 1 --filter=tree:0 origin main
-     git -C "$WORK" checkout -q FETCH_HEAD
-
-     PUB_DIR="$WORK/extensions/$EXT"
-
-     # FAIL-CLOSED ASSERTION — do not delete this, and do not rely on `set -e` alone.
-     # `set -e` does NOT fire when a command's status is swallowed by a pipeline
-     # (`git fetch … | tail`), so a failed fetch can fall through to `diff`. If
-     # PUB_DIR is then missing-or-empty, `diff -r -q` outputs nothing and the `&&`
-     # branch prints "IN SYNC" — a false pass on the exact case this gate exists to
-     # catch. Verified 2026-07-28: piping the fetch made `set -e` silently ineffective.
-     [ -d "$PUB_DIR" ] && [ -n "$(ls -A "$PUB_DIR")" ] || {
-       echo "ABORT: baseline fetch failed or is empty — cannot prove freshness. Do NOT publish."
-       exit 1
-     }
-
-     # Content diff across everything that actually ships.
-     #
-     # The -x list is load-bearing and every entry earns its place — a gate that
-     # reports noise on every run is a gate you learn to skim.
-     #   node_modules/.git/dist/.DS_Store — never published
-     #   raycast-env.d.ts                 — generated by `ray develop`, gitignored
-     #   .prettierrc / .eslintrc*         — inherited from the monorepo root upstream,
-     #                                      so they appear as "Only in PUB" forever
-     # Capture the status: a bare `diff` returning 1 would trip `set -e` and exit
-     # before the case below classifies it.
-     rc=0
-     diff -r -q \
-       -x node_modules -x .git -x dist -x .DS_Store \
-       -x raycast-env.d.ts -x '.prettierrc*' -x '.eslintrc*' \
-       "$PUB_DIR" . || rc=$?
-     case $rc in
-       0) echo "IN SYNC — no content differences" ;;
-       1) echo "DIFFERENCES — classify each line below before proceeding" ;;
-       *) echo "ABORT: diff failed (exit 2 = operational error, not a difference)."
-          echo "Cannot prove freshness. Do NOT publish."
-          exit 1 ;;
-     esac
-   fi
-   echo "PUB_DIR=$PUB_DIR"   # empty = not published. Set this at the top of every later step that reads it.
-   ```
-
-   > ⚠️ **`diff` exit 2 means the comparison FAILED; exit 1 means it found differences.**
-   > `diff … && echo "IN SYNC" || echo "review"` collapses both into the same message —
-   > verified 2026-07-29: a missing operand exits 2 and prints the review text, reading as
-   > an ordinary difference. Branch on the status explicitly; never use `&&/||` here.
-
-   **`Files … differ` is ambiguous on its own — and this is the step people skip.** It
-   fires identically whether *upstream* changed the file or *you* did. Shipping an update
-   necessarily changes files, so treating every `differ` as staleness blocks every normal
-   update, and waving them all through defeats the gate. **You must classify each one.**
-
-   Ask git, not your memory: which of your commits, if any, held the published blob?
-
-   ```bash
-   # Same shell as the step above (PUB_DIR, WORK, EXT set); run from the extension root.
-   if [ -z "$PUB_DIR" ]; then
-     echo "NOT PUBLISHED — nothing to classify"
-   else
-     rc=0
-     diff -r -q \
-       -x node_modules -x .git -x dist -x .DS_Store \
-       -x raycast-env.d.ts -x '.prettierrc*' -x '.eslintrc*' \
-       "$PUB_DIR" . > "$WORK/staleness.txt" || rc=$?
-     [ "$rc" -le 1 ] || { echo "ABORT: diff failed (exit $rc). Do NOT publish."; exit 1; }
-     # `diff` follows symlinks and ignores modes, so a changed link target or executable
-     # bit compares equal. Extensions almost never have either; flag them for a hand check.
-     find "$PUB_DIR" . \( -name node_modules -o -name .git -o -name dist \) -prune \
-       -o -type l -print | sed 's/^/UNHANDLED symlink /; s/$/ → STOP/'
-     git -C "$WORK" ls-tree -r HEAD "extensions/$EXT/" > "$WORK/modes-pub.txt"
-     git ls-tree -r HEAD . > "$WORK/modes-local.txt"   # paths relative to the extension root
-     awk -F '\t' -v pre="extensions/$EXT/" '
-       { split($1, a, " ") }
-       FNR == NR { m[substr($2, length(pre) + 1)] = a[1]; next }
-       ($2 in m) && m[$2] != a[1] { print "UNHANDLED mode " m[$2] " -> " a[1] " " $2 " → STOP" }
-     ' "$WORK/modes-pub.txt" "$WORK/modes-local.txt"
-     # `while read`, never `for f in $PATHS`: zsh does not word-split.
-     while IFS= read -r line; do
-       case $line in
-         "Files $PUB_DIR/"*" differ") ;;
-         "Only in $PUB_DIR"*) echo "ONLY-PUB  ${line#Only in } → STOP"; continue ;;
-         *": "*": "*) echo "UNHANDLED $line (': ' in a name; path is ambiguous) → STOP"; continue ;;
-         "Only in ."*)
-           s=${line#Only in }; d=${s%%: *}; d=${d#.}; d=${d#/}
-           echo "NEW?      ${d:+$d/}${s#*: } — not published: your new file, or deleted upstream"
-           continue ;;
-         *) echo "UNHANDLED $line → STOP"; continue ;;
-       esac
-       # The line is "Files PUB/f and ./f differ"; both halves are the same path, so cut by
-       # length rather than by the " and " separator, which a filename can contain.
-       s=${line#"Files $PUB_DIR/"}; s=${s%" differ"}
-       f=${s:0:$(( (${#s} - 7) / 2 ))}
-       # Compare git object ids on both sides, never `hash-object` of a checked-out file
-       # (filters and EOL rules can change the bytes). `HEAD:./$f` is relative to the
-       # extension root; `HEAD:$f` would resolve from the root of a monorepo checkout.
-       pub=$(git -C "$WORK" rev-parse -q --verify "HEAD:extensions/$EXT/$f" || true)
-       if [ -z "$pub" ]; then
-         echo "UNHANDLED $f — no published blob id → STOP"
-       elif [ "$pub" = "$(git rev-parse -q --verify "HEAD:./$f" || true)" ]; then
-         echo "MINE      $f — published == your HEAD; the delta is uncommitted"
-       elif git --literal-pathspecs log --full-history --diff-merges=separate \
-              --raw --no-abbrev --format= HEAD -- "$f" |
-            awk -v h="$pub" '$4 == h { m = 1 } END { exit !m }'; then
-         echo "CHECK     $f — published == an OLDER commit of yours → read the diff"
-       else
-         echo "UPSTREAM  $f — published blob not found in this path's history → STOP"
-       fi
-     done < "$WORK/staleness.txt"
-   fi
-   ```
-
-   | Classification | Meaning | Action |
-   | --- | --- | --- |
-   | `ONLY-PUB` | upstream has a file you do not | **STOP** — publishing deletes it |
-   | `UPSTREAM` | published content is not in this path's history (a rename you made also lands here) | **STOP** — publishing reverts their fix (a `metadata/*.png` goes to the pixel triage below first) |
-   | `UNHANDLED` | a symlink, a mode change, or a `diff` line the classifier does not parse | **STOP** — classify it by hand |
-   | `CHECK` | published matches an older commit of yours | **resolve before publishing** — see below |
-   | `NEW?` | you have a file the published tree does not | **resolve before publishing** — see below |
-   | `MINE` | published matches your `HEAD` | expected — the delta is your uncommitted change |
-
-   **`CHECK` is the normal result once you have committed your update, and it is also what
-   an upstream revert to an old version of yours looks like.** History alone cannot tell
-   them apart, so read it, with `P` set to the path from that `CHECK` line:
-   `git --literal-pathspecs log --oneline -- "$P"` and `diff "$PUB_DIR/$P" "$P"`. It is
-   yours only if the published version is the last one before your unpublished commits and
-   every hunk is one of those commits. Anything else is upstream → **STOP**.
-
-   **`NEW?` is usually your new file, and it is also what a file upstream deleted looks
-   like**: publishing would bring it back. Set `P` to the path from that `NEW?` line and run
-   `git --literal-pathspecs log --oneline --diff-filter=A -- "$P"`. It is yours if it is
-   untracked or was added in your unpublished commits. If it predates your last merged
-   submission, upstream removed it → **STOP**. On a standalone mirror, `.github/` (the sync
-   workflow) and a gitignored `.claude/` print as `NEW?` on every run: they are yours, and
-   whether they ship is the weeding step's call, not this gate's.
-
-   **When in doubt, diff the content and read it** (`diff "$PUB_DIR/<f>" <f>`). A file you
-   cannot confidently classify is an upstream change until proven otherwise — fail closed.
-
-   > **`Files … differ` on `metadata/*.png` or `media/*.png` is usually real, not noise.**
-   > Raycast CI **recompresses screenshots on merge**, so the published copy is smaller
-   > than what you submitted and your local copy never learns about it. Verified 2026-07-28 on
-   > `get-app-icon`: upstream `metadata/get-app-icon-1.png` is 1,021,474 bytes against
-   > 1,619,195 locally — same image, CI-optimized. A name-only gate could never see this:
-   > the filenames match perfectly. **The re-encode is lossless, but the BYTES still differ**,
-   > so a plain file hash cannot tell it apart from a replaced screenshot — only a
-   > decoded-pixel comparison can. See the callout under the triage table below.
-   >
-   > **The mechanism, from `.github/workflows/pull_request_merge.yml` (read 2026-10-18).**
-   > Before squash-merging, Raycast's merge job pushes a maintenance commit to *your fork
-   > branch* whenever it changed something. The message names what it did ("Update
-   > CHANGELOG.md", …), with "Automated maintenance updates" only as the fallback. It
-   > replaces `{PR_MERGE_DATE}`, runs `oxipng -o 6 --strip safe` / `jpegoptim --max=85
-   > --strip-all` on the existing `.png`/`.jpg`/`.jpeg` files the PR touched (lowercase
-   > suffixes only), and **adds `"platforms": ["macOS"]` to `package.json` when the key is
-   > missing or falsy**. A `package.json` that differs from upstream only by that key is
-   > almost certainly this commit: adopt it, or declare `platforms` yourself so the diff
-   > never appears. Screenshots still go through the pixel triage below.
-
-   **PNG triage — never blanket-adopt, and never blanket-keep.** "Adopt the upstream
-   copies" is right for a recompression and **destroys a screenshot the user just
-   replaced.** Both cases look identical to `diff`: same name, same dimensions, upstream
-   smaller. Size is *not* the discriminator — a new screenshot of a similar-looking
-   screen is also ~1.6 MB against a ~1.0 MB published copy.
-
-   **The discriminator is the pixels — but `HEAD` is NOT a safe baseline.** `HEAD` only
-   means "unchanged" while the new assets are still *uncommitted*. The moment they are
-   committed — which is the normal state when `ship` runs, and the whole point of
-   committing before submitting — `local == HEAD` is trivially true for a brand-new image,
-   and it misreports as `RECOMPRESS`. Acting on that **reverts the user's new artwork**.
-
-   **Compare the three copies directly and fail closed.** The only safe automatic action
-   is adopting upstream when the pixels are *provably identical*; anything else keeps
-   local and is reported for a human decision.
-
-   ```bash
-   norm() { sips -s format png --out "$2" "$1" >/dev/null 2>&1 && shasum -a256 < "$2" | cut -c1-16; }
-   for f in $(git ls-files 'metadata/*.png' 'media/*.png' 'assets/*.png'); do
-     # `${PUB_DIR:-}`: a never-published extension has no baseline, so every PNG is new.
-     [ -n "${PUB_DIR:-}" ] && [ -f "$PUB_DIR/$f" ] || { echo "LOCAL-ONLY $f — new file; KEEP LOCAL"; continue; }
-     # `|| ph=`: a failed sips must reach the UNREADABLE branch, not trip `set -e`.
-     ph=$(norm "$PUB_DIR/$f" /tmp/p.png) || ph=; lh=$(norm "$f" /tmp/l.png) || lh=
-     # A failed normalization must never look like a match.
-     [ -n "$ph" ] && [ -n "$lh" ] || { echo "UNREADABLE $f — KEEP LOCAL (cannot compare)"; continue; }
-     if [ "$ph" = "$lh" ]; then
-       # Identical pixels. Adopt upstream ONLY if that actually saves bytes.
-       if [ "$(stat -f%z "$PUB_DIR/$f")" -lt "$(stat -f%z "$f")" ]; then
-         echo "RECOMPRESS $f — same pixels, upstream smaller; safe to adopt"
-       else
-         echo "IDENTICAL  $f"
-       fi
-     else
-       echo "DIFFERENT  $f — run the decode and provenance check below"
-     fi
-   done
-   ```
-
-   | Verdict | Meaning | Action |
-   | --- | --- | --- |
-   | `DIFFERENT` | the normalized hashes differ (true for a CI re-encode too) | never auto-adopt — the decode and provenance check below decides |
-   | `RECOMPRESS` | pixels byte-identical after normalization, upstream smaller | safe to adopt (`cp "$PUB_DIR/$f" "$f"`) — saves churn |
-   | `LOCAL-ONLY` / `UNREADABLE` | no baseline, or normalization failed | **keep local** |
-   | `IDENTICAL` | same pixels, no size win | nothing to do |
-
-   **`DIFFERENT` is not a prompt to adopt, and not proof the user replaced the shot.** A
-   contributor who replaced a screenshot upstream produces the same verdict, and keeping
-   local then reverts *their* image. Settle it with the decode and provenance check in the
-   callout below.
-
-   > 🚨 **`norm()` above uses `sips`, which CANNOT decide this. Compare decoded pixels.**
-   > Raycast CI's re-encode is **lossless** — it strips a fully-opaque alpha channel and
-   > recompresses. Measured on `claude-artifacts` for both releases that changed a
-   > screenshot (#30529 and #30626): `RGBA -> RGB`, the submitted alpha plane holds the
-   > single value `255`, neither copy is palettized, and **all 7,500,000 RGB bytes are
-   > identical**. Not one pixel changes; the 36–37% saving is the dropped channel plus
-   > better zlib.
-   >
-   > **`sips -s format png` preserves channel count**, so it re-encodes RGBA as RGBA and RGB
-   > as RGB and their hashes differ no matter what the pixels hold. It is not a pixel
-   > comparison. Reading it as one is what previously made this callout claim the
-   > optimization was "lossy / palette-reduced" and that the two cases were inseparable —
-   > wrong on both counts, corrected 2026-08-29.
-   >
-   > **Decode instead, and the verdict is decidable.** Compare size and RGBA: an opaque
-   > image decodes with a `255` alpha plane, so the CI's dropped plane still matches, while
-   > a real transparency change does not. Two things RGBA cannot see send the file to a
-   > human instead: a 16-bit PNG (decoding to 8 bits merges distinct values) and differing
-   > color metadata (`gAMA`, `iCCP`, `sRGB`, `cHRM`), which renders the same bytes
-   > differently. When the pixels differ, the published image is either an older shot of
-   > yours or someone else's, and history can only narrow that down.
-   >
-   > ```bash
-   > # Exit 0: same size, RGBA pixels and color metadata. 1: different. 2: cannot tell.
-   > same_px() { python3 -c "
-   > from PIL import Image; import sys
-   > if any(open(p, 'rb').read(25)[24] > 8 for p in sys.argv[1:3]): sys.exit(2)  # IHDR bit depth
-   > a, b = Image.open(sys.argv[1]), Image.open(sys.argv[2])
-   > meta = lambda im: [im.info.get(k) for k in ('gamma', 'icc_profile', 'srgb', 'chromaticity')]
-   > sys.exit(0 if a.size == b.size and meta(a) == meta(b) and
-   >          a.convert('RGBA').tobytes() == b.convert('RGBA').tobytes() else 1)" "$1" "$2"; }
-   >
-   > # Call once per DIFFERENT path: png_triage metadata/<name>-1.png
-   > png_triage() {
-   >   local f=$1 r=0 prior tmp
-   >   same_px "$PUB_DIR/$f" "$f" || r=$?
-   >   case $r in
-   >     0) echo "SAME-PIXELS $f"; return ;;
-   >     2) echo "UNDECIDED   $f — 16-bit PNG → look at both by eye"; return ;;
-   >   esac
-   >   tmp=$(mktemp)
-   >   # `|| true`: `break` closes the pipe, and git's SIGPIPE must not trip pipefail.
-   >   prior=$(git --literal-pathspecs log --full-history --diff-filter=d --format=%H HEAD -- "$f" |
-   >     while IFS= read -r c; do
-   >       git show "$c:./$f" > "$tmp" 2>/dev/null || continue
-   >       same_px "$PUB_DIR/$f" "$tmp" && { echo "$c"; break; }
-   >     done || true)
-   >   rm -f "$tmp"
-   >   if [ -n "$prior" ]; then
-   >     echo "OLDER-SHOT  $f — published == the version in ${prior:0:7} → resolve like CHECK"
-   >   else
-   >     echo "NOT-YOURS   $f — published matches no version in your history → STOP"
-   >   fi
-   > }
-   > ```
-   >
-   > | Result | Case | Action |
-   > | --- | --- | --- |
-   > | `SAME-PIXELS` | CI re-encoded the shot you have | **adopt upstream** — it is what ships |
-   > | `OLDER-SHOT` | published is a version in your history; local is a different shot | **resolve before publishing**: keep local only if that commit is the shot you last submitted and the local one is your newer replacement. A contributor's shot pulled in by a sync, or an old shot upstream restored, also lands here → **STOP** |
-   > | `NOT-YOURS` | in none of your commits: a contributor's shot, or one you never committed | **STOP** — look at both images and ask the user; keeping local reverts a contributor's shot |
-   > | `UNDECIDED` | 16-bit PNG | **STOP** — compare by eye and ask the user |
-   >
-   > Confirm by eye on the way past — it costs one look — but the decode is the decider, not
-   > the eyeball. Adopt whenever pixels match, smaller or not: the published bytes are what
-   > users see, and keeping the local original leaves the file differing from upstream on
-   > every future run.
-
-   Then assert the kept files still meet spec (`2000 × 1250`) — a replaced screenshot is
-   the most likely thing in the tree to be the wrong size.
-
-   **Then run Raycast's own screenshot CI check on the set that will SHIP.** The
-   `metadata-images` job (`scripts/check_metadata_images.py`, which imports its sibling
-   `check_raycast_images.py`) compares every screenshot's background against the first one
-   (RMS limit 12.0) and requires one light/dark appearance across the set. Only the files
-   you change get pushed, so **replacing one screenshot tests it against the OLD published
-   captures**. A fresh shot beside old ones fails even though your local set is consistent.
-   Either retake the whole set or check against the published copies. Local run: put both
-   scripts under `<tmp>/mono/scripts/`, symlink the extension to
-   `<tmp>/mono/extensions/<name>`, then `python3 scripts/check_metadata_images.py
-   extensions/<name>` in a venv with `numpy pillow`.
-
-   The same job also fails, per screenshot (read from the scripts 2026-10-18):
-   - **your local dev icon visible in the bottom bar.** The checker's own fix: recapture
-     with Window Capture and *Save to Metadata*.
-   - **any screenshot with no detectable Window Capture frame.** When the extension has a
-     menu-bar command, the message calls it a menu bar screenshot, which `metadata/` does
-     not support at all.
-   - **more than 6 screenshots, or a `.jpg`/`.jpeg`/`.webp`/`.gif`/`.bmp` one.** Only
-     those suffixes and `.png` are collected, so an `.avif` is silently ignored.
-
-   The cross-screenshot background and appearance comparison runs only when `platforms`
-   lists exactly one platform. macOS and Windows captures may legitimately differ.
-
-   *(2026-09-24, brew #31534: one new `brew-4.png` scored 42.3 against the published
-   `brew-1.png`, and 0.1 against the local one it was captured alongside.)*
-
-   *(2026-07-30, `karakeep` 2.4.0: the previous `HEAD`-based script reported
-   `RECOMPRESS → ADOPT UPSTREAM` for **all six screenshots AND the extension icon** — every
-   one of which the user had just replaced that session. Because the assets were already
-   committed (as they should be before shipping), `local == HEAD` held trivially and the
-   "did the user change it?" test could never fire. Following the verdict would have
-   reverted the entire visual refresh. Caught only because the agent knew the images were
-   new and checked the pixels by hand: `published 4.0K / local 48K, normalized sha differs`.
-   Hence the rewrite above — compare published against local, never against `HEAD`, and
-   auto-adopt **only** on a proven pixel match.)*
-
-   *(2026-07-29, `get-app-icon`: five images differed. Three were pure recompression —
-   adopting them saved 1.9 MB of pointless churn, and they correctly showed **no diff** in
-   the resulting PR. Two were screenshots the user had just updated that morning; the
-   blanket "adopt upstream" this file previously prescribed would have silently reverted
-   them, and the PR would have shipped the old screens. The same two then reappeared as
-   merge conflicts during `pull-contributions` — see the CHANGELOG/PNG conflict protocol
-   in the `pull-contributions` section — where "take theirs" is wrong for the identical
-   reason.)*
-
-   **Either STOP condition → hand to `develop`'s staleness gate for reconciliation.** Do
-   not publish. Your local copy never learns about upstream changes on its own; other
-   people contribute to published extensions directly in `raycast/extensions`, and the
-   author may not know it happened.
-
-   *(2026-07-28, `raycast-store-updates`: the CHANGELOG diff in step 3's weeding check was
-   the only thing that caught a local copy missing an entire shipped menu-bar command and a
-   `githubToken` preference. It was found at the very end of a long session, after all the
-   work was done. Promoted here, and to `develop` step 0, so it is the first thing checked
-   rather than the last.)*
-
-   **Then, if the extension has a mirror, ask the sync workflow what it already knows.** A
-   mirror's `sync-from-upstream.yml` runs daily and compares upstream with the mirror, so when it
-   is failing it may have found the staleness this gate is looking for, possibly weeks earlier.
-   Read its state before anything else.
-
-   Pin the repo to `origin` (same parsing as `setup-mirror.sh`). Bare `gh` uses its configured
-   default repo, which can be a different mirror. **From a monorepo or fork checkout, `origin` is
-   not the mirror:** set `MIRROR=<owner>/raycast-<name>` first. The block checks for the workflow
-   on the mirror's default branch, not in your working tree, so a feature branch without the file
-   cannot skip it. Filter runs to the default branch, because a
-   manual dispatch on another branch can be newer than a failing default-branch run. Filter in `jq`, not
-   with `--branch`: on 2026-10-22 the same `--branch main` query returned 0, 1 and 1 runs in a row. Find sync PRs by
-   their `sync/upstream-<sha>` head branch, not with `--search`: the search index lags, and a
-   title search missed an hour-old sync PR on `threads` that the branch filter found. The block
-   runs in a subshell, so an `exit` aborts the check and leaves a pasted-into shell open.
-
-   ```bash
-   (
-     R=${MIRROR:-$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##; s#/$##')}
-     [[ $R =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "ABORT: not a GitHub repo: $R"; exit 1; }
-     B=$(gh repo view "$R" --json defaultBranchRef --jq .defaultBranchRef.name) || { echo "ABORT: cannot read $R"; exit 1; }
-     gh api "repos/$R/contents/.github/workflows/sync-from-upstream.yml?ref=$B" --silent 2>/dev/null \
-       || { echo "NO SYNC WORKFLOW on $R@$B (not a mirror, or set MIRROR)"; exit 0; }
-     RUN=$(gh run list -R "$R" --workflow sync-from-upstream.yml --limit 100 \
-       --json databaseId,headBranch,status,conclusion,createdAt \
-       --jq "map(select(.headBranch == \"$B\")) | .[0] // empty | \"\\(.status)/\\(.conclusion)  \\(.createdAt)  id=\\(.databaseId)\"") \
-       || { echo "ABORT: cannot read sync runs"; exit 1; }
-     echo "LATEST $B RUN: ${RUN:-NONE}"
-     gh issue list -R "$R" --label upstream-sync --state open --json number,title,createdAt \
-       --jq '.[] | "OPEN ISSUE #\(.number)  \(.createdAt)  \(.title)"' || { echo "ABORT: cannot read issues"; exit 1; }
-     gh api --paginate "repos/$R/pulls?state=open&per_page=100" \
-       --jq '.[] | select(.head.ref | startswith("sync/upstream-")) | "OPEN SYNC PR #\(.number)  \(.title)"' \
-       || { echo "ABORT: cannot read PRs"; exit 1; }
-   )
-   ```
+−1. **STALENESS GATE — is the local tree behind the PUBLISHED extension?** `rx stale`, the first
+   step of `rx gates`; `develop` runs the same command at its entry, so staleness is checked at
+   both checkpoints. It sparse-fetches the published copy into `~/.cache/raycast-harness/upstream/`,
+   compares **content** of everything the publisher copies (a name-only comparison cannot see the
+   upstream edit a re-publish overwrites), fails closed on any lookup error other than a real 404,
+   and classifies every differing path:
 
    | Result | Meaning | Action |
    | --- | --- | --- |
-   | open `upstream-sync` issue | a file changed on both sides since the baseline | **STOP**: the issue names the file; reconcile it, rerun the workflow, and once that run is `completed/success`, close the issue (the workflow never closes it). Then rerun this gate |
-   | latest run `completed/failure`, no issue | the job failed somewhere else: API or download errors, a lockfile regeneration, a rejected baseline push | **STOP**: read the failed step's log (`gh run view <id> -R "$R" --log-failed`). Reconcile content only if the log shows a content problem; otherwise fix or rerun the workflow |
-   | an open sync PR | upstream has changes the mirror has not adopted, or a PR left behind after you already adopted them | **STOP**: diff its head against the default branch (`$B`). If it brings real changes, merge it and pull; if it only moves the baseline timestamp, close it. Then rerun this gate |
-   | `NONE`, `in_progress`/`queued`, `cancelled`, `timed_out`, or any state other than `completed/success` | no completed verdict on the default branch | **STOP**: dispatch the workflow (`gh workflow run sync-from-upstream.yml -R "$R"`), wait for it, rerun this gate | <!-- us-english-ok: GitHub API enum -->
-
-   A green sync doesn't show that the mirror matches upstream. It reports one past run, and a run
-   with no recorded baseline keeps any local file that differs, logging it under "kept" instead of treating it as a conflict or failing the run. That is why
-   the content diff above still has to run. A red sync is a STOP even when the content diff looks
-   explainable.
-
-   *(2026-10-21, `threads`: the sync had been failing daily since 2026-10-14 with "Sync halted:
-   README.md", and issue #1 had been open the whole time. The content diff found the same
-   problem, a contributor's merged Analytics and Giveaway release, but only after the release
-   work was finished. The issue named it a week earlier.)*
-
-0. **Deterministic pre-flight — run the script before reading the extension's code** (after −2 and −1). Raycast's Store
-   reviewer applies about twenty rules that need no judgment: `$schema`, allowed categories,
-   `platforms`, preference types, CHANGELOG placeholder and date order, screenshots (plus the
-   Store's own 2000×1250 size), unused dependencies, `node-fetch`, ESLint and Prettier config, hand-typed
-   `Preferences`, shortcut platform-key case. Code checks them in 40 ms; reading for them burns
-   tokens and misses some. From the extension root, with `PUB_DIR` set to the line the staleness
-   gate printed. A never-published extension's `PUB_DIR` is empty, and the expansion below then
-   leaves `--published` off:
-
-   ```bash
-   node "<plugin>/scripts/preflight.mjs" ${PUB_DIR:+--published "$PUB_DIR"}   # <plugin> = two levels above this skill's base directory
-   ```
-
-   **Any FAIL blocks** — fix it (config and metadata here; code goes to `develop`) and re-run
-   until it exits 0. **WARN lines are judgment:** read each one and either fix it or say in the
-   report why it stands (a binary name like `ipatool` in a title, say). Which reviewer rule each
-   check comes from, and the rules that stay judgment: `reference/greptile-rules.md`.
-
-   **Typecheck gate — `npx tsc --noEmit`.** `ray build` (esbuild) and `ray lint`
-   strip/skip types; they pass on code that does NOT typecheck, and an external
-   reviewer running `tsc` will catch it. Run `tsc --noEmit` AND `npm run build` AND
-   `npm run lint` — a non-zero `tsc` is a failure even when build/lint are green.
-   A type error needing code → hand to `develop`. (See house-style.md `[both]` tsc rule.)
-1. **Dep hygiene** — non-breaking bumps only. Major migrations are NOT here — they're
-   `develop` (gated by `reference/dep-gates.md`).
-
-   > 🚨 **Never run bare `npm audit fix`, and never leave a dep change unverified.** The
-   > gates in step 0 prove the tree that existed *when they ran*. Any mutation to
-   > `package.json` or `package-lock.json` invalidates all three — and `npm audit fix`
-   > rewrites the lockfile transitively, so the artifact you ship is not the artifact you
-   > typechecked. A green step 0 followed by a dep mutation is a **false green**.
-
-   ```bash
-   npm outdated                      # review — do not blanket-upgrade
-   npm audit --json > /tmp/audit.json # inspect FIRST; decide per advisory
-   ```
-
-   Apply fixes **explicitly** (`npm install <pkg>@<version>`), one decision at a time.
-   `npm audit fix` may only be used with `--dry-run` to preview. Then:
-
-   ```bash
-   git diff --stat package.json package-lock.json   # review the actual dep delta
-   npx tsc --noEmit && npm run build && npm run lint  # RE-RUN all three — non-negotiable
-   ```
-
-   **The re-run is the gate, not a formality.** If any dep changed and you did not re-run
-   all three, step 0's result is stale and you cannot claim the build is green.
-
-   **`@raycast/api` must be at or above the FLOOR — this blocks submission. It must NOT be
-   bumped to npm's newest.** npm publishes `@raycast/api` days ahead of the Raycast release that
-   can run it, and the Store refuses an extension whose declared API is newer than the user's app.
-   Submitting npm's latest-in-major is how you ship a release nobody can install — see the callout
-   in `dep-gates.md`. **Crossing a major is a migration and belongs to `develop`**, never here.
-
-   > 🚨 **Submit the version the extension was last EXERCISED at.** A bump here lands after all
-   > hands-on testing, so nothing runs it. If this gate reports the version is behind npm, that is
-   > information — acting on it requires re-running the extension in Raycast at the new version
-   > first. If it will not be re-run, do not bump.
-
-   ```bash
-   # Locate the lockfile: the extension dir normally, a parent under workspaces.
-   LOCK="$(node -e 'const f=require("path");let d=process.cwd();for(;;){const p=f.join(d,"package-lock.json");if(require("fs").existsSync(p)){console.log(p);break}const u=f.dirname(d);if(u===d)process.exit(1);d=u}' 2>/dev/null)"
-   [ -n "$LOCK" ] || { echo "ABORT: no package-lock.json found — the Store requires one."; exit 1; }
-
-   # v2/v3 lockfiles use .packages; a v1 lockfile uses .dependencies. Try both.
-   INSTALLED="$(jq -r '
-     (.packages["node_modules/@raycast/api"].version)
-     // (.dependencies["@raycast/api"].version)
-     // empty' "$LOCK")"
-   [ -n "$INSTALLED" ] || { echo "ABORT: @raycast/api not resolvable in $LOCK (workspace hoisting?)."; exit 1; }
-
-   MAJOR="${INSTALLED%%.*}"
-   # The FLOOR from dep-gates.md — the only blocking bar. Keep in sync with that table.
-   # 1.104.25 is the floor for EXISTING extensions. New extensions go on 2.x by default
-   # (Chris, 2026-10-20) — never roll one back to 1.x here. Staying on 1.x is only a
-   # suggestion to raise for large, popular extensions (dep-gates.md).
-   FLOOR="1.104.25"
-   # npm's newest on this major: ADVISORY ONLY. Never the blocking target — it is routinely
-   # ahead of every shipped Raycast, and submitting it breaks installs for all existing users.
-   TARGET="$(npm view "@raycast/api@^$MAJOR" version 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d "'")"
-   NEWEST="$(npm view @raycast/api version 2>/dev/null)"
-
-   echo "lockfile=$INSTALLED  floor=$FLOOR  latest-in-major=${TARGET:-unreachable}  newest-overall=${NEWEST:-unreachable}  ($LOCK)"
-
-   # BLOCK only when genuinely stale — below the floor. sort -V avoids a semver dependency.
-   [ "$(printf '%s\n%s\n' "$INSTALLED" "$FLOOR" | sort -V | head -1)" = "$FLOOR" ] || {
-     echo "BLOCKED: @raycast/api $INSTALLED is below the $FLOOR floor."
-     echo "Bump to at least $FLOOR, RE-RUN the extension in Raycast at that version, then re-gate."
-     exit 1
-   }
-
-   # Behind npm is a NOTE, not a blocker. Acting on it requires re-running in Raycast first.
-   [ -z "$TARGET" ] || [ "$INSTALLED" = "$TARGET" ] || \
-     echo "NOTE: npm has $TARGET on the v$MAJOR line. Do NOT bump unless you will re-run the extension in Raycast at $TARGET — npm ships ahead of the app that can run it."
-
-   # A newer MAJOR is information, not a blocker. Do not bump it here.
-   [ "${NEWEST%%.*}" = "$MAJOR" ] || \
-     echo "NOTE: @raycast/api v${NEWEST%%.*} exists ($NEWEST). That is a migration → hand to \`develop\`, not a ship-time bump."
-   ```
-
-   > ⏱️ **Re-run this check immediately before `publish`, not only at the top of the pre-flight.**
-   > `@raycast/api` ships most days — 2.1.1 and 2.1.2 both landed within hours of each other on
-   > 2026-08-28 — so a currency check that passed when the pre-flight started can be false by the
-   > time the work is finished. It is one `npm view` call; run it again as the last gate.
-
-   **This is a hard compare that exits non-zero — not a printout to eyeball.** Every
-   failure path (npm unreachable, no lockfile, unresolvable version) aborts rather than
-   passing quietly: an unprovable claim about currency is not a pass. A manifest range
-   that merely *permits* the target is insufficient; **the lockfile is what ships.**
-
-   > 🚨 **Why this is scoped to the major, added 2026-08-20.** The earlier version compared
-   > against `npm view @raycast/api version` — bare `latest`. The day `2.0.3` took the
-   > `latest` tag, that gate began **blocking every extension in the fleet** (all on
-   > 1.104.x) and demanding an unreviewed major migration inside a submission run — which
-   > `dep-gates.md` explicitly assigns to `develop`. It also would have pushed you ahead of
-   > the entire ecosystem: on 2026-08-20 every extension in `raycast/extensions` was still
-   > on 1.x, and the 1.x line was still shipping (1.104.25). **A gate keyed on `latest`
-   > silently converts someone else's major release into your emergency.**
-
-2. **House-style audit** (read-only — the `npm audit` twin). Walk the **Audit matrix** at the
-   end of `reference/house-style.md`: for every row whose *Applies* condition holds, run that
-   rule's **Audit** and record `pass`, `fail`, or `n/a` with the reason — one line per ID, in
-   the pre-flight report. Every row gets a result; a row you skipped is a row you did not audit.
-   - **A `block` failure stops the submission** and goes to `develop`'s house-style audit fix.
-     A `report` failure goes in the report and does not stop it — never hand back to `develop`
-     or open a PR for a `report` item alone.
-   - **`copy-error` is the one most often gotten wrong:** it is a per-call-site pairing review.
-     A count of `"Copy Error"` strings proves nothing, and kit-using code has none at all.
-   - **`keyboard` follows `reference/keyboard-conventions.md`, never a green `ray lint`.**
-     `@raycast/eslint-plugin` disagrees with the runtime and the published docs on five
-     `Common` constants, and it never checks the conflict invariant. If `ray lint --fix`
-     touched a shortcut, re-derive every rewritten binding from the runtime before shipping.
-   - **`kit` (report only):** note the adoption opportunity in one line. The `^0.3.0` floor, the
-     `bytes` subpath, its `Node16` tsconfig requirement, and the base-1024 display change are
-     in `reference/dep-gates.md`.
-   - **Disable the Impeccable design hook first** if it is installed (`impeccable-off`), so a
-     design false positive cannot pass for a house-style finding.
-3. **Weeding** — screenshots current (did we add a command/view?), README current, CHANGELOG updated.
-   - 🚨 **FRESHEN `AGENTS.md` (and `CONCEPTS.md`) — every self-authored PR push, no
-     exceptions.** Not "if it looks stale": the doc is part of the deliverable, on the same
-     footing as the CHANGELOG entry. It ships to the monorepo, so a wrong claim is published
-     guidance a contributor will act on — and it drifts silently, because nothing compiles it,
-     no gate reads it, and the release that invalidates a line is exactly the release too busy
-     to notice. **Forks: skip entirely** — never add or edit your own `AGENTS.md` on an
-     extension you do not own.
-
-     **The procedure lives in the `verify-agents-md` skill** — the four assertions, the read
-     pass, and the failure modes. Load it rather than re-deriving them here; the summary below is
-     the ship-time contract, not the full method.
-
-     Run **both** passes. The first is cheap and mechanical; the second is the one that
-     actually finds things.
-
-     **Pass 1 — assertions. All four must come back clean:**
-
-     ```bash
-     # a) every repo path the doc names still exists
-     grep -ohE '`(src|assets|metadata|media)/[A-Za-z0-9_./-]+`' AGENTS.md CONCEPTS.md 2>/dev/null \
-       | tr -d '`' | sort -u | while read -r f; do [ -e "$f" ] || echo "MISSING PATH   $f"; done
-
-     # b) every npm script it names still exists
-     grep -ohE 'npm (run [a-z:-]+|test)' AGENTS.md CONCEPTS.md 2>/dev/null | sort -u \
-       | while read -r c; do s=${c#npm run }; s=${s#npm }
-           jq -e --arg s "$s" '.scripts[$s]' package.json >/dev/null 2>&1 || echo "MISSING SCRIPT $c"; done
-
-     # c) no ABSOLUTE machine paths — this file ships to a PUBLIC repo
-     grep -n '/Users/' AGENTS.md CONCEPTS.md 2>/dev/null && echo "^^ machine path would be PUBLISHED"
-
-     # d) every symbol it names in backticked call form still exists in src/
-     grep -ohE '`[a-z][A-Za-z0-9_]+\(\)`' AGENTS.md 2>/dev/null | tr -d '`()' | sort -u \
-       | while read -r sym; do rg -q "\b$sym\b" src || echo "MISSING SYMBOL $sym()"; done
-     ```
-
-     > **(c) is not a style rule.** These docs are cited by absolute path in Chris's *other*
-     > prose, because those files relocate — but an `AGENTS.md` bound for `raycast/extensions`
-     > sits **beside** the source it cites, so an absolute path there is both unnecessary and
-     > a leak. It publishes a machine path, which is the `HANDOFF.md` failure in miniature.
-     > Repo-relative throughout, and say so at the top of the file so the next editor knows why.
-
-     **Pass 2 — read the claims about what this branch changed, against the code you just
-     wrote.** No grep finds this: the doc still names real symbols while describing what they
-     used to do. **Verify a claim by printing the cited line back**, not by confirming the path
-     resolves — a citation can be in range, resolve clean, and point at unrelated code.
-
-     Four failure modes, all observed:
-     - **A named symbol moved or changed meaning** — a wrong pointer sends a contributor to
-       the wrong file.
-     - **A behavioral claim quietly became false** — the expensive one. Widening an accepted
-       set is the classic shape: `threads` documented "requires `image/*` or `video/*`" for a
-       release whose headline feature was audio.
-     - **A path to something the branch DELETED.** Tooling migrations do this every time —
-       `threads` pointed at a `tools/` directory the vitest migration had removed.
-     - **A blanket search-and-replace that made a true line false.** Renaming a script across
-       the doc with `sed` turned "runnable check … hits the live site" into "`npm test` … hits
-       the live site", which is the opposite of true. **Re-read every line a bulk edit
-       touched.**
-
-     **Never invent a claim to fill a gap.** If you cannot verify what the current behavior
-     is, delete the stale line and say so in the report.
-
-     > ⚠️ **`ce-compound-refresh` does NOT do this job — do not route here to it.** It audits
-     > the **learnings store** under `<root>/solutions/`, and touches `AGENTS.md` only to add a
-     > *discoverability pointer* to that store plus `CONCEPTS.md` vocabulary. It never checks
-     > whether `AGENTS.md`'s own claims are true. On an extension with no `docs/solutions/` —
-     > which is most of them — it finds an empty store and has nothing to refresh. Reach for it
-     > when the repo *has* a learnings store that needs auditing; reach for the two passes above
-     > when `AGENTS.md` needs to be true. (Corrected 2026-09-09: this section previously sent
-     > large drift to `ce-compound-refresh`, which would have refreshed the wrong file.)
-
-     A doc-only edit stays in `ship` — it needs no hand-back to `develop`. It does **not** skip
-     the adversarial review: a shipped `AGENTS.md` is inside the `codex-gate` (the docs-only
-     exemption was retired 2026-09-09), and a docs review is pointed at *truth, not style*.
-
-     *(2026-09-04, `digger`: writing `AGENTS.md` fresh took five adversarial passes, four of
-     which found a false claim — including two the author introduced while fixing the first
-     one, both copied from a code comment that was itself wrong. 2026-09-09, `threads`: the
-     diff-scoped version of this check passed — it caught one renamed script — while the file
-     still carried six false claims and an absolute machine path that had already shipped into
-     the open PR. Scoping to the diff is what let the rest through, which is why this step is
-     now unconditional.)*
-   - **README structure — self-authored extensions follow [`reference/readme-template.md`](../../reference/readme-template.md).**
-     Centered top-matter (H1, badge row, one-sentence tagline, nav), then Features /
-     Requirements / Quick Start / Usage / Development / Tech Stack. **Report gaps; do not
-     rewrite prose at ship time** — a thin README is a `develop` task, not a submission
-     blocker. Two things *are* assertable here and both are cheap:
-
-     ```bash
-     # a) every nav anchor resolves — lines printed on the LEFT are dead links
-     diff <(grep -oE '\(#[a-z-]+\)' README.md | tr -d '()' | sort -u) \
-          <(grep -E '^## ' README.md | sed 's/^## //' | tr 'A-Z' 'a-z' | tr ' ' '-' | sed 's/^/#/' | sort -u) \
-     | grep '^<' && echo "BROKEN nav links ^^"
-
-     # b) the badge row points at THIS extension, not a copy-paste of another
-     SLUG="$(jq -r .name package.json)"
-     grep -o 'img.shields.io/github/stars/chrismessina/[a-z0-9-]*' README.md
-     grep -o 'raycast.com/chrismessina/[a-z0-9-]*' README.md   # must end in $SLUG
-     ```
-
-     > ⚠️ **The dead-anchor check exists because the template's own source had the bug.**
-     > `nerd-font-picker` links `[Features](#-features)` against a plain `## Features`
-     > heading; all five of its nav links are dead (verified 2026-08-26). The leading dash
-     > is GitHub's slug for an *emoji-prefixed* heading. Copying that top-matter without
-     > copying emoji headings inherits five broken links.
-     >
-     > ⚠️ **Check (b) because the badge row is the most copy-pasted block in the fleet.**
-     > A stars badge still naming the extension you cloned from is wrong on a page users
-     > actually read, and nothing else in the pipeline looks at it.
-
-     **Forks: skip this entirely.** The follow/stars badges are personal identity; putting
-     them on someone else's extension is a defect, not a courtesy.
-   - **`.github/FUNDING.yml` — standalone-repo only, never a blocker.** It belongs in the
-     extension's own GitHub repo and is dropped on publish (a published extension directory
-     has no `.github/` at all). Note its absence in the report; never hold a submission for it.
-   - 🚨 **A `LICENSE` file is MANDATORY on every self-authored extension — MIT, and it must
-     exist as a file.** `package.json` `"license": "MIT"` is only a declaration; the README's
-     License badge is a **relative link to `LICENSE`**, so without the file it is a live 404
-     on both GitHub and the Store page. Nothing in `ray build` or `ray lint` checks this.
-     ```bash
-     [ -f LICENSE ] || echo "BLOCKED: no LICENSE file (MIT required on self-authored extensions)"
-     grep -q '](LICENSE)' README.md && [ ! -f LICENSE ] && echo "BLOCKED: License badge links to a file that does not exist"
-     ```
-     Add the standard MIT text with `Copyright (c) <year> Chris Messina`. It ships to the
-     monorepo (verified: `extensions/digger`, `extensions/reader-mode`), which is what makes
-     the badge resolve for Store visitors. **Fork caveat:** do not add or change a `LICENSE`
-     on an extension you don't own — that is the owner's call.
-     **Fleet debt (2026-08-29):** `raycast-ios-apps` and `raycast-get-app-icon` carry the
-     badge with no `LICENSE` file. Fix on next touch; never propagate.
-   - **Screenshot count ≤ 6.** The Store hard-caps `metadata/` screenshots at 6; `ray build`/`ray lint` do NOT flag an over-count, but a reviewer will bounce it. `ls metadata/*.png | wc -l` and trim to the 6 most distinct before submitting.
-   - **README images go in top-level `media/` — not `metadata/`, and not `assets/`.** Three folders,
-     three jobs; mixing them fails the checklist two different ways:
-
-     | Folder | Holds | Bundled into the built extension? |
-     | --- | --- | --- |
-     | `metadata/` | Store-listing screenshots **only** | no (listing only) |
-     | `assets/` | **runtime** files the extension loads (512×512 icon, images used in code) | **YES** |
-     | `media/` | README / docs images | no |
-
-     - Embedding `![...](metadata/…)` fails the submission checklist verbatim — *"assets used by the
-       README are placed outside of the `metadata` folder"* — and a reviewer will bounce it.
-     - Parking them in `assets/` clears *that* rule but creates a quieter one: `assets/` ships inside
-       the extension, so a 1.6 MB README screenshot is downloaded by **every user, forever**. The Store
-       docs also say to "remove unused icon assets." Don't trade a visible violation for a payload.
-     - **Assert BOTH — the `metadata/` grep alone is not sufficient:**
-       ```bash
-       # Match only markdown image/link TARGETS — all must be EMPTY.
-       grep -oE '!?\[[^]]*\]\((\./)?metadata/[^)]*\)' README.md
-       grep -oE '!?\[[^]]*\]\((\./)?assets/[^)]*\.(png|jpg|jpeg|gif)\)' README.md
-       # …and the HTML form, which the markdown patterns above cannot see.
-       grep -oE 'src="(\./)?(assets|metadata)/[^"]*"' README.md
-       ```
-       > ⚠️ **The third grep is not optional.** The current template's header is an
-       > `<img src="media/…">` tag, so the HTML form is now the *normal* way an image
-       > enters a README — and `src="./assets/icon.png"` (the shape used by upstream
-       > `filezilla`) is invisible to both markdown patterns. Checking only the markdown
-       > syntax passes a README that embeds straight out of the runtime folder.
-       > ⚠️ **Match the link syntax, not the bare word.** A loose `grep -o 'metadata/[^)]*'`
-       > also hits a `metadata/` line inside a *Project Structure* code block and reports a
-       > compliant README as failing — observed 2026-08-26 on `get-app-icon`, whose
-       > template-shaped README documents its own folders. The stricter form still catches
-       > the real thing (it flags all six embeds in `ios-apps`).
-
-       Fix by moving the files to `media/` and re-pointing the embeds, or drop the embeds.
-     - (Hit on reddit-search #29703, 2026-07-23 — caught only at PR time, forcing a re-publish. The
-       `assets/` half was added 2026-07-25: `get-app-icon`'s pre-flight moved README images out of
-       `metadata/` **into `assets/`**, satisfying the rule as written while silently adding 3.3 MB to
-       the bundle. The old wording — "move the image to a repo-root path" — permits exactly that
-       mistake, which is why the destination is now named explicitly.)
-     - **Known fleet debt (swept 2026-07-25, unfixed at time of writing).** Six extensions fail this,
-       so treat it as the default state of an older extension rather than a rare slip:
-       - embed `metadata/` images → `at-profile`, `craftdocs`, `ios-apps`, `screenocr`, `store-updates`
-       - embeds an `assets/` image (ships to users) → `tesla-energy`
-
-       Each will bounce, or quietly bloat, on its next submission. Re-run the sweep across the fleet
-       with:
-       ```bash
-       for d in raycast-*/; do r="${d}README.md"; [ -f "$r" ] || continue
-         m=$(grep -o 'metadata/[^)]*' "$r" | head -1)
-         a=$(grep -oE '\(assets/[^)]*\.(png|jpg|jpeg|gif)' "$r" | head -1)
-         [ -n "$m$a" ] && printf '%s  metadata:%s  assets:%s\n' "${d%/}" "${m:-—}" "${a:-—}"
-       done
-       ```
-   - **Screenshot + icon dimensions — assert, don't eyeball.** The Store requires screenshots at
-     **2000 × 1250 px (16:10), PNG**, and the extension icon at **512 × 512**. `ray build` and
-     `ray lint` check neither, so a wrong-size screenshot reaches the reviewer.
-     ```bash
-     for f in metadata/*.png; do sips -g pixelWidth -g pixelHeight "$f"; done  # want 2000 × 1250
-     sips -g pixelWidth -g pixelHeight assets/<icon>.png                       # want 512 × 512
-     ```
-   - **Relative doc links resolve — including past anything you EXCLUDE from the submission.**
-     Excluding a file silently breaks every link pointing *at* it, and nothing in `ray build`,
-     `ray lint`, or CI checks relative Markdown links, so a dead pointer merges clean and 404s
-     for every reader. `ray publish` drops files (`.github/`, untracked docs) just as any
-     hand-copied allow-list does. Assert both halves:
-     ```bash
-     # a) nothing shipping links AT an excluded file ($EXCLUDED = shelf.md, HANDOFF.md, CLAUDE.md, …)
-     for f in $EXCLUDED; do grep -rn "$(basename "$f")" README.md docs/ CHANGELOG.md 2>/dev/null; done
-     # b) every link that DOES ship resolves — from its own dir, not the repo root
-     grep -rn -oE '\]\((\.{1,2}/[A-Za-z0-9_./-]+\.(md|sh|ts|tsx|json|svg|png))\)' \
-       README.md docs/**/*.md CHANGELOG.md 2>/dev/null \
-     | sed -E 's/:[0-9]+:\]\(/\t/; s/\)$//' | sort -u \
-     | while IFS=$'\t' read -r src rel; do
-         [ -e "$(dirname "$src")/$rel" ] || echo "BROKEN  $rel  <- $src"; done
-     ```
-     Both must print nothing. Resolve each link from **its own directory** — a `../` link in
-     `docs/` resolves differently than the same string in `README.md`, so a repo-root check
-     passes files that are actually broken. Fix by rewriting the prose to stand alone, not by
-     deleting the sentence — the idea is usually still worth stating without the pointer.
-     (`claude-artifacts` v1.0 shipped a dead `docs/shelf.md` link, 2026-07-27 — the file was
-     deliberately excluded, the README kept pointing at it, and it was caught only after merge.
-     A merged README costs a patch PR.)
-   - **CHANGELOG: add a NEW top entry with `{PR_MERGE_DATE}` for THIS update. Never
-     touch entries that already carry a real date.** Raycast CI stamps the
-     placeholder on merge; reverting an already-dated older entry (e.g. Initial
-     Version) back to `{PR_MERGE_DATE}` makes it re-stamp with the new merge date,
-     so it looks like the whole history launched today. (Bookface #28961 review
-     flagged exactly this — it only came out right because CI/maintainer preserved
-     the old date. Don't rely on that.) Diff the CHANGELOG against the published one
-     and confirm only the new entry differs.
-
-     **Assert it — the placeholder count is the whole check.** Exactly one
-     `{PR_MERGE_DATE}` may exist, and it must be on the **top** entry. Every heading
-     below it must already carry a real date, byte-identical to the published copy:
-
-     ```bash
-     # 1. exactly one placeholder, and it is the FIRST heading
-     n=$(grep -c '{PR_MERGE_DATE}' CHANGELOG.md)
-     first=$(grep -nE '^## \[' CHANGELOG.md | head -1)
-     [ "$n" -eq 1 ] || echo "FAIL: $n placeholders (want exactly 1)"
-     echo "$first" | grep -q '{PR_MERGE_DATE}' || echo "FAIL: top entry is not the placeholder"
-
-     # 2. every OTHER heading matches the published file exactly (skip for a first submission)
-     if [ -z "${PUB_DIR:-}" ]; then echo "not published — no history to compare"
-     elif [ ! -f "$PUB_DIR/CHANGELOG.md" ]; then echo "FAIL: published CHANGELOG.md is missing — refetch the baseline"
-     else
-       diff <(grep -E '^## \[' "$PUB_DIR/CHANGELOG.md") \
-            <(grep -E '^## \[' CHANGELOG.md | grep -v '{PR_MERGE_DATE}') \
-         && echo "history intact" || echo "FAIL: an already-dated entry changed"
-     fi
-     ```
-
-     Both must pass. `2` placeholders means a shipped entry got reverted — the exact
-     defect this rule exists to prevent, and it is invisible on casual reading because
-     the two headings look alike.
-
-     **INVIOLABLE: the submission NEVER carries a hardcoded date on its new entry —
-     `{PR_MERGE_DATE}` goes up, machines stamp it.** Two distinct bots touch that
-     placeholder AFTER submission, and knowing which did what is the difference between
-     a receipt and a false confession:
-     - **raycastbot stamps the placeholder ON THE PR BRANCH seconds before merging**
-       (verified 2026-09-09, attio #30910: bot commit "Update CHANGELOG.md" at
-       04:10:54Z, merge at 04:11:29Z). A review bot (Greptile) that then re-reads the
-       branch flags "Merge Date Is Hardcoded" — it is critiquing raycastbot's own
-       stamp. Answer with the commit-author receipt
-       (`gh api repos/raycast/extensions/pulls/<N>/commits --jq '.[].commit.author.name'`);
-       do NOT "fix" it, and do not accept blame for it.
-     - **Hardcoding a date yourself is only ever the POST-MERGE reconciliation step**
-       (copying the CI-stamped date back into your local copy so history matches
-       published). If a real date is about to go UP in a submission on the new entry,
-       stop — that is the violation.
-
-     **The entries must describe what a USER notices, not how the code works.** A
-     changelog line explaining an internal mechanism is stale the moment that mechanism
-     is refactored, and nobody notices because the changelog isn't compiled. Rewrite each
-     entry to the observable effect and check it against the diff, not against memory of
-     what you built. *(2026-07-30, `get-app-icon`: three entries described timestamp
-     stamping and per-visit re-extraction — internals that a rewrite later in the same PR
-     deleted entirely. They would have shipped as a description of code that no longer
-     existed.)*
-
-   - **Comments in the diff must earn their keep.** Read every comment the branch adds or
-     touches and delete the ones that don't survive these questions:
-
-     | Ask | Delete if |
-     | --- | --- |
-     | Does it describe code that still exists? | it argues against an approach the branch replaced — "the previous design…", "this used to…" |
-     | Could a reader verify it from the file? | it cites a mechanism, file, or symbol that is gone |
-     | Is it true anywhere but this machine? | it hardcodes a local census — "150 of 327 apps here" |
-     | Does it say something the code doesn't? | it restates the next line in prose |
-
-     **Long is not the same as unnecessary.** A comment explaining why each element of a
-     list is required — where dropping one silently breaks something — earns its length.
-     A comment relitigating a design decision for reviewers does not: that belongs in the
-     commit message, which is where history is supposed to live.
-
-     Iterative review cycles are what generate this. Each round leaves behind an
-     explanation aimed at the last reviewer, and after several the file argues with
-     ghosts. Sweep before shipping:
-
-     ```bash
-     # comment-to-code ratio; investigate anything approaching parity
-     total=$(wc -l < src/<file>); cmt=$(rg -c '^\s*(\*|//|/\*)' src/<file>)
-     echo "total $total | comment $cmt | code $((total-cmt))"
-     # the usual archaeology
-     rg -n "previously|used to|the old |v1|earlier (design|version)|no longer" src/
-     ```
-
-     Verify the sweep touched nothing else — a comment-only change should produce a diff
-     with no code lines:
-
-     ```bash
-     git diff -U0 | rg "^[+-]" | rg -v "^(\+\+\+|---)" | rg -v "^[+-]\s*(//|\*|/\*)" | rg -v "^[+-]\s*$"
-     ```
-
-     *(2026-07-30, `get-app-icon`: after four review rounds the icon cache carried more
-     comment than code — 227 lines against 214 — most of it defending a rewrite against
-     the design it replaced. Two comments had also gone stale unnoticed: one documented a
-     TAB-delimited wire format that had become space-delimited base64, the other explained
-     a result-pairing contract the rewrite had deleted.)*
-
-## HARD GATE — no PR without a green pre-flight
-
-**The pre-flight above is a gate, not a suggestion. Do not open OR update a Store PR —
-`ray publish`, `gh pr create`, or a push to an existing PR branch — until steps −2 through 3 have
-actually been RUN and are green.**
-
-This exists because it was violated. On 2026-07-13 the house-style audit was skipped
-before publishing producthunt, and ⌘-only shortcuts (on a cross-platform extension) plus
-Copy-Error-less failure toasts shipped into an open PR. The linter and the human reviewer
-caught them *after* submission. The audit is worthless if it runs after the PR.
-
-Before any submission command, state explicitly which of these you ran and what they
-returned — paste the actual output, don't assert it:
-
-- [ ] **user-supplied examples gate** (step −2) → each `CLEAN:` line from the scan, or
-      "no user-supplied examples in this change", ending in `GATE: PASS`. `GATE: FAIL` blocks.
-- [ ] **staleness gate** (step −1) → `diff -r -q` against the sparse-fetched published tree
-      shows no `Only in <PUB_DIR>`, and the classifier prints no `UPSTREAM`, `ONLY-PUB` or
-      `UNHANDLED` line and no unresolved `CHECK` or `NEW?`. `MINE` lines are your update. Paste the
-      actual output. A stale
-      baseline publishes as a **deletion** of whatever upstream added — and a *content*
-      difference publishes as a **revert** of someone else's fix, which a name-only check
-      cannot see.
-- [ ] `npx tsc --noEmit` → exit 0
-- [ ] `npm run build` → exit 0
-- [ ] `npm run lint` → exit 0
-- [ ] **Greptile judgment rules** (`reference/greptile-rules.md`) → one line per rule marked
-      *judgment* or *WARN*, each `pass` / `n/a` with the reason, against the BRANCH DIFF. The
-      preflight script covers only the deterministic rules; a green script says nothing about
-      06 (localization), 15/26 (action order), 17, 20/34 or 21. *(2026-10-01, brew #31820: the
-      script was green and a hardcoded `toLocaleString("en-US")` beside the extension's
-      user-locale counts was caught only when Chris asked whether the Greptile rules had run.)*
-- [ ] **house-style audit** (step 2) → zero violations, having **read `package.json`
-      `platforms` first** (absent ⇒ macOS-only; see `reference/house-style.md`)
-- [ ] 🚨 **keyboard shortcut validation** (step 2) → state which runtime version you validated
-      against (`plutil -p /Applications/Raycast.app/Contents/Info.plist | grep CFBundleShortVersionString`),
-      paste the extracted `Common` table, and name every shortcut in the diff with the binding it
-      resolves to. **Say explicitly whether `ray lint --fix` touched any shortcut** — if it did,
-      each rewritten binding is re-derived from the runtime, not assumed. A green `ray lint` is
-      NOT evidence here; it does not check collisions and its `Common` values are stale on five
-      constants.
-- [ ] weeding (step 3) → CHANGELOG top entry is new + `{PR_MERGE_DATE}`, and no already-dated
-      entry was touched (diff against the published CHANGELOG). Entries describe what a user
-      notices, not internals a later refactor can silently invalidate.
-- [ ] **comments in the diff earn their keep** (step 3) → no comment argues against a design this
-      branch replaced, cites a symbol that no longer exists, or hardcodes a local census. Say what
-      you deleted; "none needed removing" is a valid answer only if you actually read them.
-- [ ] **README nav anchors** (self-authored only) → the anchor `diff` in step 3 prints nothing on
-      the left. A dead nav link ships to the Store page and stays there until the next PR.
-- [ ] **README badge row** (self-authored only) → the stars/Store badges name THIS extension's
-      slug, not the one it was copy-pasted from.
-- [ ] **README asset folders** → ALL THREE greps empty. `assets/` is not an acceptable home for
-      README images — it ships to every user. The third catches the HTML form the markdown
-      patterns cannot see, which the current template makes the normal case:
-      ```bash
-      grep -oE '!?\[[^]]*\]\((\./)?metadata/[^)]*\)' README.md
-      grep -oE '!?\[[^]]*\]\((\./)?assets/[^)]*\.(png|jpg|jpeg|gif)\)' README.md
-      grep -oE 'src="(\./)?(assets|metadata)/[^"]*"' README.md
-      ```
-- [ ] **`LICENSE` file exists** (self-authored only — never add one to a fork). MIT. Required
-      whether or not the README carries the License badge; if it does, the badge is a relative
-      link and 404s without the file:
-      ```bash
-      [ -f LICENSE ] || echo "BLOCKED: no LICENSE file"
-      ```
-- [ ] **dimensions** → `metadata/*.png` are 2000 × 1250; the icon is 512 × 512 (`sips -g pixelWidth
-      -g pixelHeight`). Neither `ray build` nor `ray lint` checks this.
-- [ ] **no local-only working artifacts in the monorepo copy — and none already published.**
-      `.private/`, `docs/`, `TODO.md`, `WARP.md`, `.claude/`, `.windsurf/` belong in your own
-      working repo, never in `extensions/<name>/`. A dot-prefix is not privacy: everything under that path
-      in `raycast/extensions` is world-readable. **Check the PUBLISHED directory too, not just what
-      you are about to copy** — an allow-list copy silently preserves an earlier leak, because
-      published and local agree and every staleness check passes clean:
-
-      > ✅ **`AGENTS.md` and `CONCEPTS.md` are NOT leaks on a self-authored extension — they SHIP.**
-      > They are repo documentation for whoever works on the extension next, which is exactly who
-      > reads `extensions/<name>/` in the monorepo. Chris confirmed this 2026-09-09 while shipping
-      > `threads`: *"because this is MY extension, I will ship AGENTS.md, and the tests."*
-      >
-      > This list previously named `AGENTS.md` as something that must never appear there, which
-      > **contradicted the very next checklist item** — the one requiring `AGENTS.md`/`CONCEPTS.md`
-      > to stay accurate *because* "they ship to the monorepo, so a stale claim in them is published
-      > guidance that a contributor will act on." Both cannot be true. The `LEAKS` regex below never
-      > listed `AGENTS.md` either, so the executable check already permitted what the prose forbade;
-      > only the prose was wrong.
-      >
-      > **`WARP.md` stays on the leak list, and the distinction is not the file extension.** A
-      > document describing the extension's architecture and conventions is for contributors and
-      > belongs upstream. A *working* note — branch state, next steps, machine paths, one agent's
-      > scratch — is private and does not, whatever it is called. `WARP.md` in practice is the
-      > latter, and `threads` had one published from an earlier release; that PR removed it.
-      >
-      > **Forks are the exception:** never add your own `AGENTS.md` to an extension you do not own.
-      >
-      > **`brew` ships `TODO.md` on purpose — do not flag or remove it there.** Chris, 2026-09-30:
-      > *"TODO.md CAN ship with Brew; this is deliberate and generally an exception because this is
-      > a big extension with many users, so I want others to know what I'll be working on."* It is a
-      > public backlog, written for users.
-      >
-      > **`dev-null` ships `TODO.md` on purpose too.** Chris, 2026-10-22: it is *"for a developer
-      > extension and it'd be nice if others helped,"* and with so much activity on /dev/null, a
-      > public tracker *"will give other people ideas for where I will take this extension."* The
-      > exceptions are `brew` and `dev-null` only, each by name; everywhere else `TODO.md` is still a
-      > leak, and a new exception needs his say-so. The check below skips it for those two.
-      ```bash
-      LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|TODO\.md|CLAUDE\.md|WARP\.md)$'
-      # brew's and dev-null's TODO.md are public backlogs, by Chris's decision.
-      case "$EXT" in brew|dev-null) LEAKS='^(\.private|\.claude|\.windsurf|\.cursor|CLAUDE\.md|WARP\.md)$' ;; esac
-      gh api "repos/raycast/extensions/contents/extensions/$EXT" --jq '.[].name' | grep -E "$LEAKS" \
-        && echo "^^ public right now — git rm -r these in THIS PR"
-      ```
-      *(2026-09-02, `digger`: `.private/docs/` — 4 internal notes — had been public since an earlier
-      release and no gate saw it. The same session's first push would separately have added
-      `extensions/threads/TODO.md` and an eslint upgrade guide to the monorepo.)*
-- [ ] **`AGENTS.md` / `CONCEPTS.md` FRESHENED** (self-authored only; skip on forks). Both
-      passes of the freshening step ran: the four assertions came back clean — named paths,
-      named scripts, named symbols, and **no `/Users/` machine path**, which would be published
-      — and the behavioral claims about the area this branch changed were re-read against the
-      code, with cited lines printed back. Say what you changed in the doc; "no changes needed"
-      is a valid answer only if both passes actually ran. **Not** a job for
-      `/compound-engineering:ce-compound-refresh` — that audits the learnings store, not this
-      file.
-- [ ] screenshot count ≤ 6 (`ls metadata/*.png | wc -l`)
-- [ ] **external effects were verified at their destination** — for any action in the diff whose
-      result leaves the extension (clipboard/paste, a written file, a Finder reveal, an `open`
-      handoff), someone confirmed the payload **where it lands**, not just that a success toast
-      appeared. `ship` does not run the extension, so this is a *hand-back*, not a check you
-      perform: if the diff touches such an action and no destination evidence exists, STOP and
-      send it to `develop`'s walk-the-states step. A green pre-flight is not evidence here —
-      on 2026-07-26 this exact pre-flight passed a build whose "Copy Icon" pasted a file path
-      instead of an image, because every gate it runs was genuinely green.
-
-**Any violation that needs code → STOP and hand to `develop`.** Do not fix it here and do
-not ship around it. `ship` never changes code behavior.
+   | `stale-only-pub` FAIL | upstream has a file you do not | **STOP**: publishing deletes it. A file the preset's `holdout.localOnly` lists (`AGENTS.md`, …) is `stale-remove` WARN instead: disposition `remove-published` (step 3) |
+   | `stale-upstream` FAIL | published content is not in this path's history (a rename of yours lands here too) | **STOP**: publishing reverts their fix |
+   | `stale-unhandled` FAIL | a symlink, a mode change, an undecidable line | **STOP**: classify by hand |
+   | `stale-check` WARN | published == an **older** commit of yours | **disposition required**: read `git --literal-pathspecs log --oneline -- <path>` and the diff against the published copy. Yours only if the published version is the last one before your unpublished commits and every hunk is one of them; anything else is upstream → STOP |
+   | `stale-new` WARN | you have a file the published tree lacks | **disposition required**: yours if untracked or added in unpublished commits (`git log --diff-filter=A`); if it predates your last merged submission, upstream deleted it → STOP. On a mirror, `.github/` and a gitignored `.claude/` are yours; whether they ship is step 3's call |
+   | `stale-mine` PASS | published == your HEAD | your uncommitted update |
+
+   **Either STOP → hand to `develop`'s staleness gate for reconciliation; do not publish.** Others
+   contribute to published extensions directly in `raycast/extensions`, and the author may not know
+   *(store-updates 2026-07-28: a local copy missing a shipped menu-bar command and a preference, found last; hence this check runs first)*.
+
+   Set the published directory once for the later commands: run `node "<plugin>/scripts/rx.mjs" stale --json` and set `PUB_DIR` to its `.data.publishedDir`; it is the
+   literal `null` for an unpublished extension, and then every `--published` flag below is omitted.
+
+   **Screenshots: `node "<plugin>/scripts/rx.mjs" png --published "$PUB_DIR"`** (read-only; also
+   embedded in `rx audit record`; without `--published` every file is `LOCAL-ONLY`). Raycast CI
+   recompresses PNGs on merge (`oxipng -o 6 --strip safe`, `pull_request_merge.yml`, read 2026-10-18),
+   so a published screenshot's bytes always differ from yours and a plain hash cannot separate "CI
+   re-encoded my shot" from "someone replaced it". `rx png` decodes both copies, compares size, RGBA
+   pixels and color metadata, then provenance:
+
+   | Outcome | Case | Action |
+   | --- | --- | --- |
+   | `SAME-PIXELS` PASS | CI re-encoded the shot you have | **adopt the published copy** (`cp` it over yours); it is what ships, and keeping yours differs on every future run |
+   | `OLDER-SHOT` WARN | the published image equals an older commit of yours; local is a different shot | **disposition required**: `keep-local` only if that commit is the shot you last submitted and local is your newer replacement. A contributor's shot pulled in by a sync, or an old shot restored upstream, lands here too → STOP |
+   | `NOT-YOURS` FAIL | in none of your commits: a contributor's shot or one you never committed | **STOP**: look at both and ask Chris; keeping local reverts a contributor's shot |
+   | `UNDECIDED` FAIL | 16-bit PNG (decoding to 8 bits merges distinct values) or differing `gAMA`/`iCCP`/`sRGB`/`cHRM` (same bytes render differently) | **STOP**: compare by eye and ask |
+   | `LOCAL-ONLY` N/A | no published copy | keep local |
+
+   Never blanket-adopt and never blanket-keep; `HEAD` is not a safe baseline, because committed
+   new assets equal `HEAD` trivially *(karakeep 2.4.0, 2026-07-30: a `HEAD`-based script said
+   "adopt upstream" for all six just-replaced screenshots and the icon; get-app-icon 2026-07-29:
+   three recompressions adopted, two fresh shots kept; full accounts of these and every other
+   ship-time incident: [`ship-submission-incident-history`](../../learnings/workflow-issues/ship-submission-incident-history.md))*. The same merge job adds
+   `"platforms": ["macOS"]` to a `package.json` missing it: adopt that diff or declare `platforms`
+   yourself. Raycast's `metadata-images` CI compares every screenshot's background with the first
+   (RMS limit 12.0, single-platform only) and fails a dev icon in the bottom bar or a shot with no
+   Window Capture frame; **only the files you change get pushed, so one retaken screenshot is tested
+   against the old published set** *(brew #31534, 2026-09-24: `brew-4.png` scored 42.3 against the
+   published `brew-1.png`)*: retake the whole set or check against the published copies.
+
+   **If the extension has a mirror, read its sync state first** (`raycast-mirror`'s `mirror` skill):
+   an open `upstream-sync` issue, a failed run or an open `sync/upstream-*` PR is a **STOP**; a green
+   run is one past run, not proof, so `rx stale` still runs *(threads 2026-10-21: the sync had failed daily for a week)*.
+
+0. **`rx gates` — the deterministic pre-flight, before reading the extension's code.** Raycast's
+   reviewer applies about twenty rules that need no judgment (`$schema`, categories, `platforms`,
+   preference types, CHANGELOG placeholder and order, screenshot count/format/size, icon size,
+   README asset folders and relative links, unused deps, `node-fetch`, ESLint and Prettier config,
+   hand-typed `Preferences`, shortcut platform-key case, the scaffolding/dev-material heuristics,
+   the `agents-md-*` assertions); `rx preflight` runs them, with `--published` when `rx stale` says
+   published. `rx gates` keeps the Greptile rules current, and its first step, `greptile-rules`, lists each change. Read every changed rule's text against
+   this branch, write one report line each, and map it in `reference/greptile-rules.md` as a separate plugin change. `rx guard` requires the receipt, the audit and the rules in use to agree.
+   **Any FAIL blocks** (config and metadata fixes here, code to `develop`); **WARN lines are judgment**: fix, or say why each stands.
+
+   **Build, tsc and lint are separate gates**, run by `rx gates` as the steps `build`, `tsc` and
+   `lint` in that order: `npm run build` first because it generates `raycast-env.d.ts`, then
+   `npx tsc --noEmit` (`ray lint` never typechecks and a plain `ray build` does not either; a non-zero
+   `tsc` fails even with build and lint green; house-style `tsc-gate`), then `npm run lint`.
+
+1. **Dep hygiene** — non-breaking bumps only; major migrations are `develop`'s, gated by
+   [`reference/dep-gates.md`](../../reference/dep-gates.md). **Never run bare `npm audit fix`**
+   (`--dry-run` to preview only): it rewrites the lockfile transitively, so the artifact you ship
+   is not the one you typechecked. `npm outdated` and `npm audit --json` to review; apply fixes
+   explicitly (`npm install <pkg>@<version>`), one decision at a time; review the lockfile diff.
+   **Re-run `rx gates` after any dependency change**: a green run followed by a dep mutation is a false green (the guard refuses the stale receipt anyway).
+
+   **`@raycast/api`: `rx api-floor`** (inside `rx gates`) reads the policy from the preset.
+   `api-floor-lockfile` FAIL below the floor (1.x: `1.104.25`; 2.x: `2.1.0`) blocks;
+   `api-floor-new` FAIL means a never-published extension resolved to 1.x (new extensions start on
+   2.x; never roll one back); `api-currency` and `api-floor-manifest` WARNs are information.
+   **Submit the version the extension was last exercised in Raycast; npm's newest is advisory**:
+   npm publishes ahead of the app that can run it and the Store refuses a newer declared API, so a
+   ship-time bump needs a re-run in Raycast first. Crossing a major → `develop`. History:
+   [`raycast-api-policy-history`](../../learnings/tooling-decisions/raycast-api-policy-history.md).
+
+2. **House-style audit** (read-only) → the rule entries of the audit. Walk the generated matrix
+   at the end of `reference/house-style.md`: for every row whose *Applies* holds (read
+   `package.json` `platforms` first; absent ⇒ macOS-only; self-authored vs fork scope per row), run
+   that rule's **Audit** and write `pass` / `fail` / `n-a` with evidence. A `block` failure goes to
+   `develop`'s house-style audit fix; a `report` failure goes in the entry and never holds the PR alone.
+   - **`copy-error` is the one most often gotten wrong:** a per-call-site pairing review. A count of
+     `"Copy Error"` strings proves nothing; kit-using code has none at all.
+   - **`keyboard`**: `rx shortcuts runtime` extracts the installed app's `Keyboard.Shortcut.Common`
+     table; `rx shortcuts check`, embedded in `rx audit record`, resolves every panel and toast
+     against it (`shortcut-ambiguous`, `shortcut-reserved`); no table while shortcuts are declared is
+     `ERROR runtime evidence unavailable`. A green `ray lint` is not evidence (`@raycast/eslint-plugin`
+     disagrees with the runtime on five `Common` constants and never checks the conflict invariant);
+     if `ray lint --fix` touched a shortcut, say so: the three `--fix` hazards in
+     `reference/keyboard-conventions.md` apply.
+   - **`kit` (report only):** one line on the adoption opportunity. **Disable the Impeccable design
+     hook first** if installed (`impeccable-off`), so a design false positive cannot pass for a finding.
+
+3. **Weeding** — screenshots, README and CHANGELOG current. Self-authored only unless noted; **forks
+   skip the identity items** (never add your own `AGENTS.md`, `LICENSE` or badges to an extension you do not own).
+   - 🚨 **`AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` never ship in a Store PR; FRESHEN
+     `AGENTS.md` / `CONCEPTS.md` in the mirror on every self-authored PR.** Greptile raised
+     `AGENTS.md` as a P1 on cosign #33077 and Chris ruled (2026-11-03): *"we DO need to remove
+     AGENTS.md after all."* All four stay in the mirror, listed in its **`.gitignore`**. Each part of the
+     ruling has its own mechanism ([file policy](../../reference/greptile-rules.md#file-policy)): `rx holdout
+     out` holds them out of the payload; `holdout-tracked` names a tracked one and its `git rm
+     --cached` fix; a published one is `stale-remove`, deleted through a **`remove-published`**
+     disposition; `rx pr files` accepts them only as `removed`. The freshening contract is **checked in
+     pre-flight, before the holdout**: `rx preflight`'s four `agents-md-*` checks (paths, `npm run`
+     scripts, no home-directory path, `symbol()`s in `src/`) plus the audit's `agents-md-claims`
+     entry. For that entry, **re-read the behavioral claims about the area this branch changed against the code and
+     print each cited line back**; "no changes needed" is valid only if both ran. Never invent a
+     claim to fill a gap: delete the stale line and say so. Failure modes, all observed: a symbol
+     moved or changed meaning; a claim quietly became false (threads: "requires `image/*` or
+     `video/*`" for a release whose headline feature was audio); a deleted path; a bulk `sed` that
+     made a true line false. A user-level `verify-agents-md` skill is a convenience, never the
+     contract. *(digger 2026-09-04: five adversarial passes, four found a false claim; threads 2026-09-09: six false claims and a machine path shipped.)*
+   - **What ships by policy and what stays out.** Contributor `docs/` (architecture, configuration,
+     known issues, `docs/solutions/`; not `docs/agents/` or `docs/planning/`) and an
+     already-published `LICENSE` ship; `TODO.md` ships on `brew` and `dev-null` only (the preset's
+     `ship.keep`). Every other path an `agent-scaffolding` / `dev-material` WARN names goes in the
+     extension's `.gitignore`. The `no-agent-scaffolding` entry is `pass` when, after `rx holdout
+     out`, the payload holds none of the four (evidence: holdout's inventory and `agent-scaffolding`) and each
+     published one has its `remove-published` disposition. A published path outside
+     `holdout.localOnly` stays `stale-only-pub` (FAIL): take it to Chris. Check the **published** directory too *(digger 2026-09-02: `.private/docs/` public since an earlier release)*. A dot-prefix is not privacy.
+   - **`LICENSE` (MIT) is mandatory in every self-authored MIRROR and stays out of the Store copy
+     unless already published** (`raycast/extensions`' own MIT covers every extension; Greptile's
+     `no-dev-material` flags a new one), so the README's License badge links the mirror's file by
+     absolute URL (`https://github.com/chrismessina/raycast-<name>/blob/main/LICENSE`); a relative
+     `](LICENSE)` 404s on the Store page. Fleet debt (2026-08-29): `ios-apps`, `get-app-icon`.
+   - **README** follows [`reference/readme-template.md`](../../reference/readme-template.md);
+     report gaps, do not rewrite prose at ship time. `rx preflight` asserts `readme-assets` (images
+     from `media/`, never `metadata/`, the checklist's own words, nor `assets/`, which ships to every
+     user forever) and `readme-links` (every relative link resolves from its own directory, including
+     past anything you exclude; claude-artifacts v1.0 shipped a dead `docs/shelf.md` link). Two
+     judgment items go in the `readme-preamble` entry: every nav anchor resolves to a heading
+     (nerd-font-picker's `#-features` against plain `## Features`, all five dead) and the badge row
+     names **this** extension's slug. `.github/FUNDING.yml` is mirror-only and never a blocker.
+   - **CHANGELOG: a NEW top entry carrying `{PR_MERGE_DATE}`; never touch an entry with a real
+     date.** Run `node "<plugin>/scripts/rx.mjs" changelog --published "$PUB_DIR"` (add
+     `--redactions <file>` when gate −2 redacted a dated entry; `rx gates` runs preflight, not this);
+     exit 1 blocks. `changelog-placeholder` (exactly one, on top; two means a shipped entry got
+     reverted and would re-stamp with today's date, Bookface #28961), `changelog-history` (dated
+     entries byte-equal to the published copy except the recorded redactions; `N/A` without
+     `--published`), `changelog-bullets` (≤ 280 chars, WARN). **The submission never carries a
+     hardcoded date on the new entry.** raycastbot stamps it on the PR branch seconds before merging
+     (attio #30910: bot commit 04:10:54Z, merge 04:11:29Z), so a review bot flagging "Merge Date Is
+     Hardcoded" is critiquing raycastbot: answer with the commit-author receipt
+     (`gh api repos/raycast/extensions/pulls/<N>/commits --jq '.[].commit.author.name'`), never
+     "fix" it; the post-merge stamp is the only hand-written real date. **Entries describe what a
+     user notices, not how the code works** (the `changelog-bullets` judgment entry; check them
+     against the diff: get-app-icon 2026-07-30 shipped three entries describing deleted internals).
+   - **Comments in the diff earn their keep.** Delete a comment the branch adds or touches that
+     describes code that no longer exists ("the previous design…"), cites a gone symbol, hardcodes
+     a local census ("150 of 327 apps here"), or restates the next line; one relitigating a design
+     decision for the last reviewer belongs in the commit message. Verify a comment-only sweep
+     changed no code (`git diff -U0`). *(get-app-icon 2026-07-30: after four review rounds, 227 comment lines against 214 of code, two stale.)*
+
+**Any violation that needs code → STOP and hand to `develop`; never ship around it.** Then record
+the audit (the evidence contract) and paste the `rx gates` and `rx audit record` output in the
+report; "I ran them" is not a receipt.
 
 ## Store compliance gate
 
-Fetch authoritative Store docs (absorbs the old `raycast-extension-review` skill).
-**Fetch — do not audit from memory.** Prefer context7 (`/llmstxt/developers_raycast_llms-full_txt`),
-falling back to WebFetch. Full procedure: `reference/store-guidelines.md`. Audit, don't guess.
+Fetch the authoritative Store docs (context7 `/llmstxt/developers_raycast_llms-full_txt`, else WebFetch); never audit from memory. Procedure and live-source precedence: [`reference/store-guidelines.md`](../../reference/store-guidelines.md).
 
-## PR prep
+## PR prep — the body goes onto the draft, and the PR stays a DRAFT
 
-Title convention: `Update <Title> extension` by default; `[Title] <fix>` when one change dominates. No Conventional Commits. See `reference/pr-and-cleanup.md`.
-
-### Draft the PR body and post it — the PR stays a DRAFT
-
-`ray publish` opens the PR as a **draft with an empty description**. Write the first
-draft of that body from the real diff and post it, so the user reviews prose instead of
-composing it.
-
-> 🚧 **Post the body. Do NOT mark the PR ready for review.** Marking it ready submits it
-> to Raycast's reviewers — an outward-facing action that is the user's call, and one they
-> make *after* reading the body. Posting a body onto a draft can be corrected with one more
-> PATCH, but GitHub keeps every revision in the body's edit history, so a forbidden value
-> (step −2) is public the moment it is posted. Publishing a submission cannot be undone. **Never run `gh pr ready`.**
-
-**1. Ground the body in what actually changed — never in session memory.** The point of
-the draft is to save the user writing, which it only does if the content is right.
-
-```bash
-PR=<N>                                     # from ray publish's output
-EXT="$(jq -r .name package.json)"
-awk '/^##/{n++} n==1' CHANGELOG.md         # the top (unreleased) entry = the change list
-git log --oneline "$(git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)"..HEAD
-gh pr diff "$PR" --repo raycast/extensions --name-only   # what the PR really contains
-```
-
-If the CHANGELOG's top entry and the diff disagree, **the diff wins** — and say so in
-the report, because a CHANGELOG that misdescribes the change is itself a review finding.
-
-**2. Write the body to a file.** Multi-line content with backticks and checklists gets
-mangled through inline flags. Keep it out of the extension directory — `.git/` is never
-published and never tracked:
-
-```bash
-# Resolve via git — `.git/` is a DIRECTORY only at the repo root. In a monorepo
-# extension dir (Route A's normal case) `.git` is a parent, so a literal
-# `.git/pr-body.md` fails with "no such file or directory". Verified 2026-07-29.
-BODY="$(git rev-parse --git-path pr-body.md)"   # never tracked, never published
-cat > "$BODY" <<'EOF'
-## Description
-
-<2–4 sentences: what changed and why, in the user's terms. Lead with the user-visible
-effect, not the implementation.>
-
-### Changes
-
-- <one bullet per CHANGELOG entry, rewritten for a reviewer who has never seen this code>
-
-## Checklist
-
-- [ ] I read the [extension guidelines](https://developers.raycast.com/basics/prepare-an-extension-for-store)
-- [ ] I read the [documentation about publishing](https://developers.raycast.com/basics/publish-an-extension)
-- [ ] I ran `npm run build` and tested this distribution build in Raycast
-- [ ] I ran `npm run lint` and `npx tsc --noEmit` — both clean
-- [ ] I checked that this change does not break existing commands or remove functionality
-- [ ] I updated `CHANGELOG.md` per the changelog conventions
-EOF
-```
-
-> **The template ships every box UNTICKED on purpose. Tick each one only after naming the
-> run that earned it.** An agent that copies a pre-ticked block makes public claims in the
-> user's name that nobody verified — and "I tested this build in Raycast" is a claim only
-> the *user* can truthfully make, since it requires launching the app. Leave that one for
-> them and say so in your report.
-
-> **Tick a box only if that command actually ran green in THIS session, and paste the
-> output in your report.** Pre-ticking a checklist you did not verify is a false claim
-> made in the user's name, in public, to a reviewer who is trusting it. If the pre-flight
-> gates ran green (step 0), the build/lint/tsc boxes are earned — say which run they came
-> from. Otherwise leave them unticked and flag it.
-
-**3. Verify the PR is the right one — BEFORE mutating it.**
-
-`$PR` is a number you copied by hand into a repo of ~1,000 extensions and thousands of
-open PRs. A typo targets a **stranger's** PR, and the body you post is public. Confirm
-it's yours, it's for this extension, and it's still a draft — then act on the result:
-
-```bash
-gh api "repos/raycast/extensions/pulls/$PR" \
-  --jq '{author:.user.login, head:.head.ref, draft:.draft, state:.state, files:.changed_files}'
-```
-
-**All four must hold, or STOP:** `author` is yours, `head` names this extension,
-`draft` is `true`, `state` is `open`. If `draft` is `false`, the PR is already submitted —
-do not post; tell the user and let them decide.
-
-**4. Post it onto the draft, and never overwrite a body the user has edited.**
-
-> 🚨 **Every PR-body write goes through `scripts/pr-body.py`. Never PATCH a whole body
-> from a local file.** Once the draft exists, Chris edits it by hand: he uploads a
-> screenshot and ticks the checklist boxes only he can truthfully tick. A later
-> whole-body PATCH from your local copy discards all of that without an error.
-> *(2026-09-24, brew #31534: two follow-up body updates overwrote his uploaded Adopt Apps
-> screenshot and all five ticked boxes. He re-applied them by hand.)*
-
-```bash
-S=/Users/messina/Developer/GitHub/chrismessina/raycast-extensions-skills/plugins/raycast-extensions/skills/ship/scripts/pr-body.py
-# First post: refuses unless the live body is still exactly the one the PR was
-# created with (no edit history, or equal to the oldest history entry).
-"$S" "$PR" --initial "$BODY"            # dry run: prints the diff
-"$S" "$PR" --initial "$BODY" --apply
-# EVERY later update, whether a new bullet, a corrected count, or a fix note:
-"$S" "$PR" --splice edits.json          # [{"find": "...", "replace": "..."}]
-"$S" "$PR" --splice edits.json --apply
-```
-
-Splice mode uses the **live** body as the base. Every `find` must be one or more
-**whole lines** occurring exactly once in it; a fragment is refused, because a fragment
-still matches inside a line he has extended. All anchors are located in the original
-live body and applied at once, so one edit cannot create or destroy another's anchor,
-and overlapping anchors abort. If an anchor is missing, he rewrote or deleted that line:
-the script writes nothing, and you show him the edit instead of forcing it. To add a new
-line, anchor on the line it goes after and replace it with that line plus the new one.
-
-It re-reads the body just before writing and aborts if it moved. **That leaves a gap of
-milliseconds between the re-read and the write**: GitHub's PR PATCH has no conditional
-write, so it cannot be closed. The script checks the edit history after writing, where
-each entry holds the whole body as of that edit, newest first. Once the newest entry is
-its own write, it compares the one before with what it read. If they differ, an edit
-landed in the gap: it prints the overwritten version and exits 2, and you splice that
-back in rather than moving on. If the history has not caught up after a few seconds, it
-says the gap could not be checked. Bodies are compared as exact strings, so CRLF line
-endings from web edits survive; a find ending in half of a CRLF is refused.
-
-> The PATCH sends **only** `body`, so it cannot flip draft state. Step 3's check is the
-> real guard. `gh` is a shell alias for `op plugin run -- gh` here, and aliases do not
-> exist in a subprocess, so reads try `op plugin run -- gh` first (skipped when
-> `GH_TOKEN` or `GITHUB_TOKEN` is set), then plain `gh`, and report each one's stderr if
-> both fail. **The write is sent exactly once, on the transport the reads proved.** A
-> transport can fail after GitHub accepted the PATCH, and re-sending could overwrite an
-> edit made in between, so a failed write is re-read and reported, never retried.
-
-**If step 3 found `draft: false`,** the PR was already out of draft: say so plainly
-rather than quietly updating a live submission.
-
-**If the script hangs (~2 min, auto-backgrounds):** that is the documented sandbox
-behavior for `gh` writes; see `reference/pr-and-cleanup.md`. **Do not retry it three
-times.** Check whether it landed by reading the live body for your replacement lines
-(`gh pr view "$PR" --repo raycast/extensions --json body --jq .body`). **Never re-run a
-splice without that check:** an insertion keeps its anchor line, so running it twice
-inserts the new line twice. If it did not land, hand
-the user the same `pr-body.py … --apply` command, with the same `edits.json` (or
-`$BODY` for a first post), to run in their own shell. Never hand over a raw whole-body
-PATCH. Their one paste beats your three timeouts.
-
-**4. Report, then stop.** Give the user the PR URL, the body as posted, and the explicit
-next step: *read it, then click "Ready for review" yourself.* Do not do it for them.
+Title and the whole body procedure (`rx pr verify` → `rx pr files` → `rx scan` with `--pr-text` →
+`rx pr body`): [`reference/pr-and-cleanup.md`](../../reference/pr-and-cleanup.md). Two rules live
+here. **PR-body edit preservation**: every body write goes through `rx pr body` (`--initial` only
+onto the untouched template body, `--splice` from the live body with whole-line anchors, re-read
+before the single write, history check after), never a whole-body PATCH, because Chris edits the
+draft by hand and a PATCH from your copy discards his screenshot and ticked boxes without an error
+(brew #31534, 2026-09-24). **Draft-state ownership**: marking the PR ready is Chris's click, made
+after reading the body; the guard blocks the command, and your report ends with the URL, the body
+as posted, and *read it, then click "Ready for review" yourself.*
 
 ### If the draft state changed, ASK GITHUB WHO DID IT before saying anything
 
-Chris works solo. When a PR's `draft` flips between two of your reads, **he is the
-overwhelmingly likely actor** — the two of you get ahead of each other, and he marks his
-own submission ready without narrating it. Treat a flip as *the two of us out of sync*
-until GitHub says otherwise, not as something that happened *to* the PR.
-
-**The timeline names the actor. It costs one call, so make it before reporting:**
+Chris works solo. When a PR's `draft` flips between two of your reads, **he is the overwhelmingly
+likely actor**: the two of you get ahead of each other, and he marks his own submission ready
+without narrating it. The race model is **human speed**: a change nobody in this session triggered
+is him, until GitHub says otherwise; the exception is a change *your own actions* could have
+caused, and then the timeline is the arbiter, not timing. It costs one call:
 
 ```bash
 gh api "repos/raycast/extensions/issues/$PR/timeline?per_page=100" \
@@ -1282,323 +334,117 @@ gh api "repos/raycast/extensions/issues/$PR/timeline?per_page=100" \
         | {event, actor:.actor.login, at:.created_at}'
 ```
 
-- **Actor is Chris** → say nothing alarming. One line at most, and only if it changes what
-  he should do next ("PR is ready-for-review as of 00:51, so this push updates a live PR").
-- **Actor is someone else, or the timeline is empty and you cannot attribute it** → *then*
-  raise it, and say plainly that you could not attribute it.
+- **Actor is Chris** → say nothing alarming; one line at most, only if it changes his next step
+  ("PR is ready-for-review as of 00:51, so this push updates a live PR").
+- **Someone else, or the timeline is empty and you cannot attribute it** → raise it, and say
+  plainly that you could not attribute it.
 
-**Do not infer the actor from timing.** Verified 2026-08-27 on brew #30598: an agent
-observed `draft: false` immediately after its own `npm run publish`, concluded `ray publish`
-had flipped it, and opened its report with a STOP. The timeline showed all three flips were
-Chris's, one of them six minutes *before* the publish. `ray publish` prints "It will be
-reviewed by the Raycast team shortly" on every update regardless of draft state, which is
-what made the wrong inference feel confirmed. It cost a turn and, in Chris's words, was a
-"freak-out" that "isn't warranted when it's just the two of us."
-
-**The `ship` rule that stands is narrower than it looks:** *you* never run `gh pr ready`.
-That is about your own actions. It is not a license to police his.
+**Do not infer the actor from timing.** brew #30598, 2026-08-27: an agent saw `draft: false` right
+after its own `npm run publish`, concluded `ray publish` had flipped it, and opened its report with
+a STOP; the timeline showed all three flips were Chris's, one six minutes *before* the publish.
+`ray publish` prints "It will be reviewed by the Raycast team shortly" on every update whatever the
+draft state, which made the wrong inference feel confirmed. The rule that stands is about *your*
+actions (you never mark it ready); it is not a license to police his.
 
 ## Submission — `ray publish`
 
-**`ray publish` covers every submission** — a first submission or an update, your extension
-or one you contribute to. It needs no standalone repo, no git remote, and no published
-baseline. (Earlier versions of this skill routed some updates through a hand-synced
-standalone repo instead; that flow is outside this plugin. If you run one, it is yours.)
+`npm run publish` (`ray publish`) **is the whole submission flow**, first submission or update,
+your extension or a fork: it syncs your `<you>/extensions` fork, prepares a clone, pushes
+`ext/<name>` and opens a **draft** PR against `raycast/extensions`; there is no destination to
+choose. Run it only as the publish sequence above orders, with the change committed and signed. On
+success relay the draft PR URL, **read the PR's file list** (`rx pr files`, the only record of what went up), and draft the body.
 
-**Do NOT ask the user a repo/PR-destination decision tree.** `ray publish` always targets
-`raycast/extensions`; there is no destination to choose.
+> 🚨 **What ships is decided in TWO steps (copy, then stage), and only the extension's own
+> `.gitignore` filters both.** Read from `@raycast/api` 2.2.1: **(1) Copy** — `copyDir`
+> (`dist/utils/publish/copy-dir.js`) copies the extension root into a checkout of your fork,
+> skipping only `.git`, `.github`, `.direnv`, `.swiftpm`, `.raycast-swift-build`,
+> `compiled_raycast_rust`, `compiled_raycast_swift`, `node_modules`, `raycast-env.d.ts`; it reads no
+> ignore file, so gitignored files land in the fork checkout, and the extension's `.gitignore` is
+> copied in with them. **(2) Stage** — the checkout is committed with a plain, non-forced
+> `git add "<path>"` (`publish-to-public-repo.js`), which honors every `.gitignore` *inside the fork
+> checkout*. So a file listed in the extension's `.gitignore` stays out of the PR unless the fork
+> already tracks it (published → staged whatever `.gitignore` says); a file hidden only by
+> `.git/info/exclude` (never copied) or by nothing at all ships. Publishing refuses a dirty tree, so
+> an ordinary untracked file blocks rather than ships; **`rx holdout out`** moves untracked
+> local-only entries (`.env`, `.claude`, `AGENTS.md`, …, per the preset) under `.git/rx/holdout/`
+> with an inventory (source, destination, type, hash), never a tracked or `ship.keep` file, and
+> **`rx holdout in` restores every entry and verifies it**, refusing to overwrite a changed
+> destination; an empty inventory while a listed path exists is an ERROR, not "nothing to hold out"
+> (#32975, 2026-10-30: an `ls` alias hid `.claude`). Keep the holdout out until `publish` and any
+> `pull-contributions` merge are finished *(otty #32699, 2026-10-23: a gitignored `CLAUDE.md` and
+> `TODO.md` vanished across a failed publish; recovered from file history; cause unknown)*. Verified
+> 2026-10-04 on fathom (`.claude/` gitignored, absent from #31218 and #31922); karakeep 2026-08-28: a doc hidden via `.git/info/exclude` shipped, was deleted from the fork branch by API, and that
+> deletion then blocked the next publish as "edits were made on your PR".
 
-### Route A — `ray publish` (the only route this skill runs)
+> **Deletions reach the PR on every publish except a brand-new extension's first push.** The
+> "preparing extension" step `rmSync`s the extension directory in the fork clone when it already
+> holds the extension, then copies your root back in (bundled CLI, same in 1.103.10 and 2.4.1;
+> store-updates #31447, 2026-09-23: a locally deleted `eslint.config.mjs` arrived as `removed`). So a
+> committed deletion always lands, **anything upstream has that you lack is deleted by your publish**
+> (why `stale-only-pub` is a STOP), and a file leaves an open PR by deleting it on disk, committing and re-running the sequence; the fork-branch API delete is the fallback.
 
-`ray publish` (`npm run publish`) IS the whole submission flow. It syncs your
-`<you>/extensions` fork, clones/prepares the extension, pushes the branch, and
-opens a **draft** PR to `raycast/extensions` — no standalone repo, no git remote on
-the working repo, and no hand-rolled `gh pr create` needed. A missing/absent local
-git remote is NOT a blocker here; `ray publish` does not use it.
+**Known failure — stale fork** (`error - getting fork … Sync fork dropdown … Update branch`, often
+`HTTP error: 500`): routine; needs Chris's browser (fork → **Sync fork** → **Update branch**), then
+re-run the sequence. The `422 … without 'workflow' scope` variant is Raycast's OAuth app being refused
+when upstream's pending commits touch `.github/workflows/*`; `gh auth refresh -s workflow` and `gh repo sync`
+hit the same wall, only the browser button works (it acts as Chris), and the durable fix is a scheduled `gh repo sync` workflow inside the fork. Never sync the fork with a git push: fork `main` is diverged (18 ahead, 95 behind on 2026-09-20), so that is an unasked public merge.
 
-1. Ensure the pre-flight above is green and the change is committed (signed).
-2. Run `npm run publish`. It runs its own validate/lint/Prettier gates, then
-   `getting fork → preparing clone → pushing extension → opening PR`.
-3. On success it prints the draft PR URL (`raycast/extensions/pull/<N>`). Relay it.
-   The PR opens as a **draft with an empty description**.
-4. **Draft and post the PR body** — see *PR prep → Draft the PR body and post it*. Do
-   this by default; the user reviews prose rather than writing it. **The PR stays a
-   draft:** clicking "Ready for review" is the user's step, never yours.
+**Known failure — `checking for new contributions`.** Two messages, two causes. *"some
+contributions are available"* means fork `main` moved (usually unrelated extensions). *"some edits
+were made on your PR"* means the `ext/<name>` branch changed: your own API edit coming back, or
+raycastbot's merge-time date stamp on a branch whose PR already **merged** (`rx contributions` reports
+that lone stamp as `contribution-branch` WARN); `pull-contributions` then says `no new contributions` and starts no merge, which is success: re-run the sequence. **A gitignored local folder can cause it on its own.** `ray` compares against the `__raycast_latest_publish_ext/<name>__` tag, so the `.gitignore` in force is the one at that commit, and a folder only a newer `.gitignore` lists shows as untracked. Tell: upstream's copy is byte-identical to the tag's tree, and `git status --ignored --porcelain` lists the folder. `rx holdout out` moves it when the preset lists it (`.claude` is listed); otherwise hold it out of the root by hand, re-run the sequence, restore it and verify it. Do not run `pull-contributions` *(day-one #33409, 2026-11-11: `.claude/settings.local.json`, added to `.gitignore` in the same release)*. When a merge does start:
 
-> 🚨 **What ships is decided in TWO steps, and only the extension's own `.gitignore` filters
-> both.** Read from `@raycast/api` 2.2.1:
->
-> 1. **Copy.** `copyDir` (`dist/utils/publish/copy-dir.js`) copies the extension root into a
->    checkout of your fork, skipping only `.git`, `.github`, `.direnv`, `.swiftpm`,
->    `.raycast-swift-build`, `compiled_raycast_rust`, `compiled_raycast_swift`, `node_modules`,
->    `raycast-env.d.ts`. It never reads an ignore file, so gitignored files land in the fork
->    checkout too. **The extension's `.gitignore` is itself copied in.**
-> 2. **Stage.** The fork checkout is then committed with a plain, non-forced
->    `git add "<path>"` (`dist/utils/publish/publish-to-public-repo.js`). That respects every `.gitignore` *inside
->    the fork checkout*: the monorepo root's and the copied extension `.gitignore`.
->
-> So a file listed in the **extension's own `.gitignore`** does not reach the PR. Anything hidden
-> only by **your working repo's `.git/info/exclude`** (never copied) or by nothing at all does.
-> Verified 2026-10-04 on `fathom`: `.claude/` and `.compound-engineering/` sit in the extension
-> root, are listed in its `.gitignore`, and are absent from both #31218 and #31922.
->
-> **Rule:** to hold a file back, list it in the extension's `.gitignore` or move it outside the
-> extension root. Never rely on `.git/info/exclude`. Either way, **read the PR's file list after
-> publishing** (below), because it is the only record of what actually went up.
-> *(2026-08-28, karakeep: a learning doc deliberately held back was excluded via
-> `.git/info/exclude` to get past the dirty-tree check. It shipped into the PR, had to be deleted
-> from the fork branch by API, and that deletion then blocked the next publish as "edits were made
-> on your PR". This rule previously generalized that to "anything gitignored ships", which the
-> stage step above contradicts.)*
+1. Commit first (`pull-contributions` merges in your working tree); `rx holdout out` stays in effect.
+2. `npx @raycast/api@latest pull-contributions --non-interactive` (there is no `--dry-run`).
+3. With `MERGE_HEAD` present, from the extension root:
+   ```bash
+   node "<plugin>/scripts/rx.mjs" contributions --published "$PUB_DIR"
+   ```
+   One result per conflicted path: `OURS-SAFE` (incoming == published, or every incoming CHANGELOG
+   entry is already in ours byte for byte; containment decides `CHANGELOG.md` only) → take ours for
+   **that file**; `REAL-CONTRIBUTION` (incoming != published) → a contributor's change: code is read
+   and reconciled by hand (which side wins is judgment, recorded in the audit; a fix with no
+   CHANGELOG entry is still a contribution); for `metadata/*.png` the `rx png` outcome decides
+   (theirs on `SAME-PIXELS`, ours on a dispositioned `OLDER-SHOT`, ask otherwise). *(video-downloader
+   #32975, 2026-10-30: two merges, one from a merged PR's leftover branch and one byte-identical to
+   the published version, both lacking three shipped releases ours carried; get-app-icon #29845,
+   2026-07-29: `--ours` on the CHANGELOG would have re-dated the shipped July 27 entry, `--theirs`
+   on the PNGs would have reverted the new shots.)*
+4. **CHANGELOG: never `git checkout --ours` and never hand-edit the markers.** Ours holds
+   `{PR_MERGE_DATE}` on the new entry; theirs holds the real dates. `rx changelog` with `--merge`
+   rebuilds `CHANGELOG.md` from HEAD and MERGE_HEAD by heading structure (a stamped heading and its
+   placeholder form are the same entry); an ambiguous boundary is `ERROR changelog-merge` with both
+   headings and nothing written: resolve that by hand.
+5. `git merge --continue` (or `git commit --no-edit`), then **re-run `rx gates` and the audit**: the
+   tree changed, so the earlier receipt is stale, and the guard would refuse it anyway.
 
-**Known failure — stale fork (expected, not a bug).** `ray publish` may stop with:
+**Known failure — `git checkout .` / `pathspec '.' did not match`** during the contributions check:
+the first publish of an already-published extension from a monorepo clone with no local
+`__raycast_latest_publish_ext/<name>__` tag, so ray falls back to the repo's root commit (raycast's
+2021 initial commit, where the extension does not exist). The tag decides what ray treats as a
+contribution, so seed it **only after `rx stale` is clean**, on your branch's base commit, and only
+if `git diff --quiet <base> upstream/main -- ":(top)extensions/<name>"` exits 0:
+`git tag -a "__raycast_latest_publish_ext/<name>__" -m "baseline" <base>`. Ray moves it with
+`git tag -f` once the push succeeds (2.9.0; instagram-media-downloader #32858: fixed on the first retry).
 
-> `error - getting fork` … *"could not get the latest changes. Head to
-> https://github.com/<you>/extensions, select the Sync fork dropdown … click
-> Update branch. Once you've done that, try running this command again"* (often an
-> `HTTP error: 500`).
-
-This means the `<you>/extensions` fork has drifted behind upstream. It's
-routine and needs the user's browser session — you cannot fix it headlessly. Relay
-the three steps verbatim (open the fork → **Sync fork** dropdown → **Update
-branch**), then **re-run `npm run publish`** once they confirm. Nothing is wrong with
-the code; don't start debugging the extension.
-
-> 🚨 **The `422 … without `workflow` scope` variant is NOT fixable from the terminal, and
-> `gh auth refresh -s workflow` does NOT fix it.** When upstream's pending commits touch
-> `.github/workflows/*`, the fork sync is refused:
->
-> ```
-> Error: HTTP error: 422 - {"message":"refusing to allow an OAuth App to create or update
-> workflow `.github/workflows/npm_check.yml` without `workflow` scope"}
-> ```
->
-> Read *"an OAuth App"* literally: the refusal is aimed at **Raycast's** OAuth app making
-> the merge-upstream call, not at `gh`. Refreshing `gh`'s scopes changes a credential
-> `ray publish` never consults. `gh repo sync <you>/extensions` hits the same wall
-> from the other side and suggests the same dead-end remedy in its error text.
->
-> **The remedy is the browser Sync-fork button**, because that acts as you, not as an
-> OAuth app, and no scope applies. It is the same three steps the stale-fork message
-> above prescribes; this variant just cannot be worked around headlessly.
->
-> **The durable fix is a scheduled workflow in your fork** (`gh repo sync` on a cron
-> inside `<you>/extensions`, running with `secrets.GITHUB_TOKEN`). In Actions the token is repo-scoped and merges workflow files
-> without this refusal, so the fork never falls far enough behind to hit it mid-publish.
->
-> **Do not sync the fork with a git push instead.** Fork `main` is *diverged*, not merely
-> behind (measured 2026-09-20: 18 ahead, 95 behind), so it carries the fork.s own commits and
-> the sync is a merge, not a fast-forward. Pushing that merge over SSH would bypass the
-> scope check — and is an unrequested, visible mutation of a public repo. Ask.
-
-**Two different messages, two different causes — read which one you got.** *"some contributions
-are available"* means the fork's `main` moved (usually unrelated extensions; often pure noise).
-*"some edits were made on your PR"* means the **PR branch itself** changed — which, if you edited
-that branch by API, is your own commit coming back. In that second case `pull-contributions`
-correctly reports `no new contributions` and starts no merge, because the edit was a deletion of a
-file that does not exist locally either. **That is success, not a loop — re-run `publish`, do not
-run `pull-contributions` again.**
-
-**Known failure — `checking for new contributions` → `git checkout .` / `pathspec '.' did not
-match any file(s) known to git`. Seen once, caused by a missing baseline tag.** It can happen
-when the extension is already in the Store, its `ext/<name>` branch is not on your fork, and
-no `__raycast_latest_publish_ext/<name>__` tag exists locally. Typically that is the first
-publish of an existing extension from a monorepo clone (`extensions-sparse`). A brand-new
-extension skips this check. The check runs **in your local repo**: ray checks out that tag,
-copies in the extension as it is on **upstream** `main` (the clone resets to it), and checks
-for changes. With no tag, it falls back to the last root commit from `git rev-list
---max-parents=0 HEAD`. In the monorepo, that is raycast's 2021 initial commit, where the
-extension does not exist, so `git checkout .` matches nothing. Ray then attempts `git
-checkout -` back to your branch. Confirm with `git branch --show-current` and `git reflog -3`.
-
-**The tag decides what ray treats as a contribution, so creating one by hand switches that
-check off.** Make it only after the staleness gate (−1) is clean against current upstream,
-which is the real proof that no contributor's change is about to be overwritten. Put it on
-your branch's base commit, and only if that commit's copy of the extension equals upstream's.
-Then re-run `publish`:
-
-```bash
-# From any directory. Ray compares against UPSTREAM main, not your fork's main.
-# Each step stops on its own failure, with its own message; nothing falls through to the tag.
-BASE=<base>; P=":(top)extensions/${EXT}"; T="__raycast_latest_publish_ext/${EXT}__"
-seed_tag() {
-  git fetch -q upstream main                         || { echo "STOP: fetch failed"; return 1; }
-  [ -n "$(git ls-tree -d --name-only upstream/main -- "$P")" ] || { echo "STOP: not on upstream"; return 1; }
-  [ -n "$(git ls-tree -d --name-only "$BASE" -- "$P")" ]       || { echo "STOP: not in $BASE"; return 1; }
-  local rc=0; git diff --quiet "$BASE" upstream/main -- "$P" || rc=$?
-  case $rc in 0) ;; 1) echo "STOP: $BASE differs from upstream; reconcile first"; return 1 ;;
-              *) echo "STOP: diff failed (exit $rc)"; return 1 ;; esac
-  git rev-parse -q --verify "refs/tags/$T" >/dev/null && { echo "STOP: $T already exists"; return 1; }
-  git tag -a "$T" -m "baseline for first ray publish" "$BASE" || { echo "STOP: git tag failed"; return 1; }
-  echo "TAGGED $T -> $(git rev-parse --short "$BASE")"; }
-seed_tag
-```
-
-The tag stays local (ray pushes only the branch). Ray moves it with `git tag -f` once the
-branch push succeeds, even if opening the PR then fails. *(Read from `@raycast/api` 2.9.0 `publish-to-public-repo.js`; instagram-media-downloader
-#32858, 2026-10-27: this fixed it on the first retry.)*
-
-**Known failure — `checking for new contributions` → run `pull-contributions`, then resolve
-the SAME two conflicts every time.** `ray publish` stops with:
-
-> `error - checking for new contributions` … *"some contributions are available. Pull them
-> using `npx @raycast/api@latest pull-contributions`"*
-
-This is routine, not a problem with your code. **Before running it, prove your work is
-recoverable and find out whether there is a real contribution at all:**
-
-```bash
-# 1. Commit first. pull-contributions starts a MERGE in your working tree.
-git status --porcelain    # must be clean; commit before proceeding
-
-# 2. Is there actually an upstream change to THIS extension? Compare blob SHAs;
-#    a diverged fork `main` carrying unrelated commits is the usual cause and is harmless.
-ME=$(gh api user --jq .login)   # your GitHub login — the fork owner
-for f in $(git ls-files); do
-  fk=$(gh api "repos/$ME/extensions/contents/extensions/$EXT/$f?ref=main" --jq .sha 2>/dev/null)
-  up=$(gh api "repos/raycast/extensions/contents/extensions/$EXT/$f?ref=main"   --jq .sha 2>/dev/null)
-  [ -n "$fk" ] && [ "$fk" != "$up" ] && echo "REAL CONTRIBUTION: $f"
-done
-echo "(no output = fork and upstream agree; the merge will be pure noise)"
-```
-
-**3. Hold the gitignored local-only files out first, with the inventory from the
-`raycast-pr-loop` secret holdout (reuse it if a holdout is already in progress).** Keep them out
-until the merge is finished: conflicts resolved, gates green, and the merge committed or
-aborted. If `pull-contributions` reports `no new contributions`, restore right away. Then
-restore every inventory entry and verify each one; a later `publish` gets its own holdout
-cycle. *(Receipt, otty #32699, 2026-10-23: the extension's gitignored `CLAUDE.md` and
-`TODO.md` were gone after the first `publish` failed with "contributions are available" and
-`pull-contributions` then reported `no new contributions`. Both were recovered, from Claude
-Code's file history and the session transcript. A later successful `publish` left placeholder
-files with the same names in place. The disappearance was not reproduced, and its cause is
-unknown.)* Git cannot restore a file whose contents it never recorded.
-
-Then `npx @raycast/api@latest pull-contributions --non-interactive` (there is **no
-`--dry-run`**). When there is something to pull, it leaves a merge in progress. It can
-also print `no new contributions` and start no merge (otty #32699, 2026-10-23): then re-run
-`publish`, which went through on the retry there. **When it does merge, two conflict classes recur every single
-time, and the naive resolution is wrong for both:**
-
-| Conflicted file | ❌ Wrong | ✅ Right |
-| --- | --- | --- |
-| `CHANGELOG.md` | `--ours` | **theirs for the history, ours for the new entry** |
-| `metadata/*.png`, `media/*.png` | `--theirs` | Run the PNG triage above on the working file, then confirm the incoming side is the published one: `git show :3:./<f> > /tmp/theirs.png` and `same_px "$PUB_DIR/<f>" /tmp/theirs.png` must exit 0, or the triage verdict does not apply to it. Then **theirs** on `SAME-PIXELS`; **ours** on a resolved `OLDER-SHOT`; ask the user on `NOT-YOURS` or `UNDECIDED`. A file hash says "differs" for every case; only the decode separates them. |
-
-**CHANGELOG — never `git checkout --ours`.** Your side holds `{PR_MERGE_DATE}` on entries
-that *already shipped*; their side holds the real dates. Taking ours re-stamps shipped
-history with today's date. Don't hand-edit the conflict markers either — diff3 base
-markers (`||||| <sha>`) make a naive parse produce duplicate headings. **Rebuild from the
-two known-good sources instead:**
-
-```bash
-python3 - <<'PY'
-import io, subprocess
-head   = subprocess.run(["git","show","HEAD:CHANGELOG.md"],capture_output=True,text=True,check=True).stdout
-theirs = subprocess.run(["git","show","MERGE_HEAD:CHANGELOG.md"],capture_output=True,text=True,check=True).stdout
-# The first heading that exists on THEIR side is where your new entry stops.
-import re
-m = re.search(r'^## \[.*$', theirs, re.M)
-marker = m.group(0)
-io.open("CHANGELOG.md","w",encoding="utf-8").write(head[:head.index(marker)] + theirs[theirs.index(marker):])
-PY
-# Verify BOTH halves came from where you think they did:
-diff <(git show HEAD:CHANGELOG.md | sed -n "1,$(( $(grep -n '^## \[' CHANGELOG.md | sed -n 2p | cut -d: -f1) - 1 ))p") \
-     <(sed -n "1,$(( $(grep -n '^## \[' CHANGELOG.md | sed -n 2p | cut -d: -f1) - 1 ))p" CHANGELOG.md) \
-  && echo "new entry matches your commit"
-grep -c '{PR_MERGE_DATE}' CHANGELOG.md   # must be exactly 1
-```
-
-Then re-run the three gates (`tsc` / `build` / `lint`) **before** `git commit --no-edit` —
-the tree changed, so the earlier green is stale. Sealing a merge you have not re-verified
-is how a broken tree reaches the PR.
-
-*(2026-07-29, `get-app-icon` #29845: this blocked the publish, and all three conflicts were
-in this table — the CHANGELOG plus the two screenshots the user had replaced that morning.
-`--ours` on the CHANGELOG would have re-dated the shipped July 27 entry; `--theirs` on the
-PNGs would have reverted the new screenshots. Neither is detectable after merge without
-re-reading the published copy.)*
-
-**Known failure — wrong PR base / diverged fork main → huge diff (verify after every publish).** Full write-up: [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md).
-`ray publish` sometimes opens the PR against **`<you>:main` (the fork) instead of
-`raycast/extensions:main` (upstream)**. Worse, a fork `main` can periodically diverge
-from upstream via GitHub "Sync fork" **merge** commits (it merges rather than
-fast-forwards, and any commits made directly on fork `main` mean it can't fast-forward). When the base is the diverged fork main,
-GitHub diffs the branch against it and the PR balloons to **100s of files** — every
-unrelated extension change since the divergence — even though the branch itself only
-touches `extensions/<name>/`. A reviewer will (rightly) flag it. (Observed 2026-07-17 on
-cursors PR #29493: 143 files, base `chrismessina:main`.)
-
-- **Always verify the base after publish:** the PR must read
-  `raycast/extensions:main ← <you>:<branch>`, and Files-changed must be only your
-  extension's files. Check with:
-  `gh api repos/raycast/extensions/pulls/<N> --jq '{base_repo:.base.repo.full_name, base:.base.ref, changed_files}'`
-  (REST — works with a `repo`-scoped token; `gh pr edit`/GraphQL needs `read:org` and may fail).
-- **Fix — retarget the base, do NOT rebuild:** the branch is already correct; only the
-  base pointer is wrong. `gh api -X PATCH repos/raycast/extensions/pulls/<N> -f base=main`.
-  The diff collapses to just your extension instantly. No re-clone, no new commits.
-- **Do NOT "fix" this by resetting fork `main`** — it may carry commits of your own. Retargeting the PR base is the correct, non-destructive fix.
-  Fork-main divergence is then harmless.
-
-> **Deletions reach the PR on every publish except a brand-new extension's first push.**
-> `ray publish`'s "preparing extension" step checks out the submission branch in a local fork
-> clone, then — if that clone already holds the extension (`existsSync(<extension dir>/package.json)`)
-> — runs `rmSync` on the extension's directory before copying your extension root back in. The
-> directory is already there for an extension published upstream **and** for a re-publish to an
-> open first-submission PR, so both are wiped; only the very first push of a new extension skips
-> the wipe, and it has nothing to delete. Read from the bundled CLI
-> (`node_modules/@raycast/api/dist/commands/publish/index.js`, search `preparing extension`), same
-> flow in 1.103.10 and 2.4.1; confirmed 2026-09-23 on `raycast-store-updates` #31447, where a
-> locally deleted `eslint.config.mjs` arrived as `removed`.
->
-> What that means in practice:
-> - **A committed deletion always lands.** Delete the file, commit, publish — it is removed in
->   the PR. No manual cleanup of the fork branch is needed.
-> - **Anything upstream has that you lack is deleted by your publish.** This is why the staleness
->   gate's `Only in <PUB_DIR>` is a STOP, not noise.
-> - **What shows up uninvited is a file hidden only by `.git/info/exclude`.** Publishing refuses a
->   dirty tree (`please commit or discard your uncommited changes first`), so an ordinary
->   untracked file blocks rather than ships. A file excluded via `.git/info/exclude` passes that
->   check, is copied into the fork checkout, and is staged there, because that exclude file is
->   not copied. A file listed in the **extension's own `.gitignore`** is copied too, but the
->   fork-side `git add` skips it (see the two-step callout above). The 2026-07-14 case —
->   `.windsurf/` persisting in an open PR — fits the exclude path if the folder was hidden that
->   way; the record does not say, and the current code gives a tracked, committed deletion no
->   way to linger.
->
-> **Still read the PR's full file list after every publish**, unfiltered —
-> `gh api repos/raycast/extensions/pulls/<N>/files --paginate --jq '.[] | .status+" "+.filename'`
-> (or `curl` the same endpoint when `gh` is unavailable). It is the only view of what actually
-> shipped, including anything gitignored that rode along. To remove a file from an open PR after
-> the fact, delete it on disk and re-publish; the fork-branch API delete
-> (`gh api -X DELETE repos/<you>/extensions/contents/extensions/<name>/<path> -f sha=<blob> -f branch=ext/<name> -f message=…`)
-> is the fallback when a re-publish is not possible. Verify PR *content*, not just the file list,
-> by the same route — a staging race can push a commit whose message claims a fix its code lacks.
+After every publish: `rx pr verify` (author, head, draft, open, **base**: a `pr-base` FAIL is the
+diverged-fork-main case, [`raycast-store-pr-base-diverged-fork-main`](../../learnings/workflow-issues/raycast-store-pr-base-diverged-fork-main.md))
+and `rx pr files` (every path under `extensions/<name>/`), then the `rx publication record`
+line, which `raycast-pr-loop`'s `rx greptile can-reply` reads for a `--claims-fix` reply. Identity,
+base and files FAILs STOP. `pr-draft` must PASS on the PR's **first** publish; on a re-publish to a PR
+Chris already submitted it FAILs by design: run the timeline query above, continue if he flipped it,
+STOP only if you cannot attribute the flip. The Greptile rounds, the holdout on every re-publish, and
+the three-round and no-re-review bounds are that skill's.
 
 ## Post-merge cleanup
 
-Once the Store PR is **merged**, the same handful of steps run every time. They're written out here so the agent executes them directly instead of re-deriving the discovery each merge (which burns tokens on a solved problem). Run in order; each is skippable when it doesn't apply.
-
-1. **Stamp the CHANGELOG to the merge date — the one genuinely manual, recurring step.** Raycast CI replaces `{PR_MERGE_DATE}` with the merge date *in the merged monorepo copy*, but your **local copy still shows the placeholder**. Read the merged Store CHANGELOG (`curl -sL https://raw.githubusercontent.com/raycast/extensions/main/extensions/<ext-dir>/CHANGELOG.md | head`), copy the stamped date onto the matching entry in your local `CHANGELOG.md`, and commit. Do this so your copy matches what shipped. **Only stamp the entry that just merged** — never touch an entry that already carries a real date (see the weeding rule above).
-
-2. **Push it** if the extension has its own remote, so that repo matches what shipped too.
-
-3. **Sweep the merged branch.** Delete the merged feature branch. Squash-merge re-SHAs, so identify merged branches by PR state (`gh pr list --head`), not git ancestry.
-
-4. **Refresh any "open at time of writing" references.** If this session wrote docs or a ce-compound learning that described the PR as open/unmerged, update those merge-state phrasings to "shipped." (Narrow — only when such docs exist.)
-
-5. **First release of a NEW extension: set up its GitHub mirror with the script, never by hand.** Each mirror carries `.github/workflows/sync-from-upstream.yml`, which opens a PR when the Store copy changes a file you haven't also changed (the stamped date, recompressed PNGs, a contributor's merged fix). When both sides changed a file it opens an issue and syncs nothing; it never takes gitignored paths, and it regenerates `package-lock.json` rather than copying it. Before the script existed, every mirror was built by copying a sibling's workflow, so the same failures came back one at a time: a push rejected by GitHub's auto-created initial commit, the no-session-URL hook skipped because nothing was pushed yet, Actions not allowed to open PRs, and a first run that recorded no baseline. From the extension root, once the user has created the repo **empty** (no README, license or .gitignore) and added it as `origin`:
-
-   ```bash
-   bash "<plugin>/scripts/setup-mirror.sh"   # <plugin> = two levels above this skill's base directory
-   ```
-
-   It checks the upstream directory and the remote's history, renders `<plugin>/templates/sync-from-upstream.yml` with a cron minute staggered by name, allows Actions to open PRs, and installs the hook once `main` is pushed (a `WARN` line means it didn't; read why). It must run on `main`. It commits and pushes nothing; it prints those steps, which need the user's go-ahead as usual. Do them, and have the user start the first run if you can't. The run must end in one of three states: nothing to sync, and `origin/main`'s newest commit is `github-actions[bot]: chore: record upstream sync baseline …`; upstream differs, and a `sync/upstream-…` PR carries the state file, so the baseline lands when that PR merges; or a conflict issue. **A green run with none of the three is a failed setup.** `.github/` doesn't reach the Store: `ray publish` leaves it out.
-
-   **To fix the workflow, edit the template, not a mirror's copy,** then run the script with `--update` in each mirror; it keeps each one's cron minute and `UPSTREAM_EXT_DIR`. *(2026-09-27, osaurus: all four failures above hit one setup, and fixing the baseline bug meant hand-editing 16 copies.)*
-
-See `reference/pr-and-cleanup.md` for the branch-sweep mechanics.
+Stamp the CHANGELOG to the merge date (only the entry that merged), push the mirror, sweep the
+local branch (by PR state, never git ancestry: Raycast squash-merges), refresh "open" wording in
+docs this session wrote, and on a new extension's first release run `setup-mirror.sh`:
+[`reference/pr-and-cleanup.md`](../../reference/pr-and-cleanup.md) *Post-merge cleanup*.
 
 ## Throughline A (hard rail)
 
-**Never sync the full monorepo.** Sparse-checkout discipline — see `reference/sparse-checkout-discipline.md`.
+**Never sync the full monorepo.** `rx stale` fetches a sparse, blobless checkout of the one
+extension: [`reference/sparse-checkout-discipline.md`](../../reference/sparse-checkout-discipline.md).

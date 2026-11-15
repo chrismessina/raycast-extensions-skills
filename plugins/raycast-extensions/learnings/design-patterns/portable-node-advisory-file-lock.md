@@ -1,6 +1,8 @@
 ---
 title: "Advisory file locks on portable Node fs: the three guards and the residual you keep"
 date: 2026-08-17
+applies_to: ["develop", "review-pr", "scaffold"]
+trigger: "when you are about to share mutable state between commands, or between an AI tool and an open command"
 category: design-patterns
 module: extension-storage
 component: cross-process-locking
@@ -180,19 +182,23 @@ async function mutate(apply, afterCommit) {
 // src/lib/atomic-file.ts:185
 const [content, stats] = await Promise.all([readFile(lockPath, "utf8"), stat(lockPath)]);
 if (content !== staleToken || Date.now() - stats.mtimeMs <= LOCK_STALE_MS) {
-  return;   // a successor's lock is brand new, so its age fails this check
+  return;   // stops a reclaimer whose re-read happens AFTER a successor acquired; see the Correction below
 }
 await unlink(lockPath);
 ```
 
 **Correction (2026-10-28, Codex review of raycast-at-profile).** An earlier version of this doc
 said deleting a successor "requires stalling past `LOCK_STALE_MS` (10 s) between those two
-statements". That is false. The age re-check only stops a reclaimer whose read comes *after* the
+statements", and the ship-side account of the same PR (now Evidence B of
+[`verify-the-remedy-not-just-the-finding`](../workflow-issues/verify-the-remedy-not-just-the-finding.md))
+bounded the residual as "a crashed holder, two simultaneous reclaimers, a multi-second stall, at
+most one lost update". Both are false and are kept only as retracted history; this section is
+the operative statement. The age re-check only stops a reclaimer whose read comes *after* the
 successor's lock exists. The real interleaving: reclaimers B and C both re-read the stale lock and
 pass both checks, and B unlinks it. Any contender's next acquire then creates a fresh lock at the
 path, and C's unlink, already decided, removes it. In both implementations a reclaimer sleeps
 `LOCK_RETRY_MS` (20 ms) after reclaiming before it retries: `atomic-file.ts:108–109` here, and
-`/Users/messina/Developer/GitHub/chrismessina/raycast-at-profile/src/helpers/file-lock.ts:60–61`.
+`~/Developer/GitHub/chrismessina/raycast-at-profile/src/helpers/file-lock.ts:60–61`.
 So for B itself to be the victim, C's unlink has to still be pending across that sleep. A third
 waiter whose retry happens to fire in the gap can be the victim sooner. No 10 s stall is needed
 either way.

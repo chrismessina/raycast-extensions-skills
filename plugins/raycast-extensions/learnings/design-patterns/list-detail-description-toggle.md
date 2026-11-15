@@ -6,6 +6,8 @@ module: list-detail
 component: list-item-detail
 problem_type: design_pattern
 severity: low
+applies_to: ["develop"]
+trigger: "when you are about to render both `markdown` and `metadata` in a `List.Item.Detail`, or add a view toggle beside Show/Hide Sidebar"
 applies_when:
   - "A List with isShowingDetail renders both `markdown` and `metadata` in List.Item.Detail"
   - "The metadata table is tall enough to push the markdown body into a small scroll area"
@@ -15,7 +17,7 @@ applies_when:
 
 `List.Item.Detail` splits its pane between `markdown` (top) and `metadata` (bottom). When the
 metadata table has five or six rows, the markdown shrinks to a few lines and fades out under it.
-The fix is a persisted view toggle, next to Toggle Sidebar, that drops the metadata.
+The fix is a persisted view toggle, next to Show/Hide Sidebar, that drops the metadata.
 
 ## Pattern
 
@@ -31,7 +33,7 @@ const [descriptionOnly, setDescriptionOnly] = useCachedState("description-only",
 />
 
 <ActionPanel.Section title="View">
-  {/* Toggle Sidebar ⇧⌘D sits here too */}
+  {/* Show/Hide Sidebar ⇧⌘D sits here too */}
   <Action
     title={descriptionOnly ? "Hide Description" : "Show Description"}
     icon={Icon.AlignLeft}
@@ -48,16 +50,16 @@ const [descriptionOnly, setDescriptionOnly] = useCachedState("description-only",
 
 ## Group both toggles under a "View" section
 
-Put Toggle Sidebar (⇧⌘D) and Show/Hide Description (⇧⌘Y) together in one
-`<ActionPanel.Section title="View">`, as brew does. Detail views that have no sidebar toggle (always-on
-detail) still get the section, with only the description action. Share the state with one
+Put Show/Hide Sidebar (⇧⌘D, house-style `toggle-sidebar`) and Show/Hide Description (⇧⌘Y) together
+in one `<ActionPanel.Section title="View">`, as brew does. Detail views that have no sidebar toggle
+(always-on detail) still get the section, with only the description action. Share the state with one
 `useCachedState("description-only")` key so the choice applies to every list in the extension.
 
 ## Not the same polarity as brew
 
 Brew defaults `show-description` to `true` and the action hides the description. Here the default
 is the full detail (markdown plus metadata) and the action means "description only." Pick the polarity per
-extension, but keep the label honest about what the next press does.
+extension, but make the label name what the next press does.
 
 ## Gotcha
 

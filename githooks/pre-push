@@ -2,31 +2,86 @@
 # pre-push: run the same checks as CI on the commit being pushed, and refuse the push if any fail.
 #
 # Checks the pushed COMMIT, not the working tree: it exports each pushed sha to a temp dir and runs
-# there, so untracked or uncommitted files (another session's work in progress) can't fail — or
-# pass — a push they are not part of.
+# plugins/raycast-extensions/scripts/ci.mjs there, so untracked or uncommitted files (another
+# session's work in progress) can't fail — or pass — a push they are not part of. The export holds
+# only that commit's files, so nothing depends on a sibling checkout.
+#
+# How rx resolves: the plugin's runner (scripts/rx.mjs) decides. RX_DEV is unset here, because a
+# local rx checkout is not part of the commit. RX_TARBALL is honored when the pusher sets it; that
+# is a TEST-ONLY override for validating a candidate package before it is published. Otherwise
+# the runner uses its npx mode, the exact version pinned in rx-version.json.
+#
+# ci.mjs needs the repo's dev dependencies (rx-calls-check reads Markdown with a CommonMark parser),
+# so a commit with a package-lock.json gets `npm ci` in its export first; npm's cache serves it
+# offline once installed.
+#
+# A commit from before ci.mjs existed gets the checks CI ran then: check-references.sh and the
+# plugin's script tests.
+#
+# Prints only the failing lines: each FAIL/ERROR verdict with its indented details, and any
+# `rx runner:` / `ci:` error line.
 #
 # Install (once per clone):  ln -sf ../../githooks/pre-push .git/hooks/pre-push
-# Bypass in an emergency:    git push --no-verify   (CI still runs the same checks)
+# If it fails, fix what it reports.
 set -eu
+
+unset RX_DEV
+
+# The export directory is removed on every exit path: success, failure, `set -e` and signals.
+tmp=""
+cleanup() {
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  tmp=""
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 zero=0000000000000000000000000000000000000000
 status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue # deleting a remote ref: nothing to check
   tmp=$(mktemp -d)
-  git archive "$local_sha" | tar -x -C "$tmp"
+  # Export to a file first, so a failed export is seen (a pipe into tar would hide it).
+  if ! git archive -o "$tmp/.export.tar" "$local_sha"; then
+    echo "pre-push: cannot export $local_sha ($local_ref)"
+    status=1
+    cleanup
+    continue
+  fi
+  tar -x -f "$tmp/.export.tar" -C "$tmp"
+  rm -f "$tmp/.export.tar"
   echo "pre-push: checking $(git rev-parse --short "$local_sha") ($local_ref)"
-  if ! (cd "$tmp" && bash check-references.sh >"$tmp/.refs.log" 2>&1); then
-    grep -E 'MISSING|UNLISTED|MISMATCH|ORPHAN|BROKEN' "$tmp/.refs.log" || tail -5 "$tmp/.refs.log"
-    echo "pre-push: check-references.sh failed — fix it, or push with --no-verify to let CI report it"
+  if [ -f "$tmp/package-lock.json" ] && [ -f "$tmp/plugins/raycast-extensions/scripts/ci.mjs" ] &&
+    ! (cd "$tmp" && npm ci --include=dev --ignore-scripts --no-audit --no-fund --prefer-offline >"$tmp/.npm.log" 2>&1); then
+    tail -5 "$tmp/.npm.log"
+    echo "pre-push: npm ci failed in the export of $(git rev-parse --short "$local_sha")"
     status=1
+    cleanup
+    continue
   fi
-  if [ -f "$tmp/plugins/raycast-extensions/scripts/preflight.test.mjs" ] &&
-    ! (cd "$tmp" && node --test plugins/raycast-extensions/scripts/preflight.test.mjs >"$tmp/.test.log" 2>&1); then
-    grep -E '^not ok' "$tmp/.test.log" || tail -5 "$tmp/.test.log"
-    echo "pre-push: preflight tests failed"
-    status=1
+  if [ -f "$tmp/plugins/raycast-extensions/scripts/ci.mjs" ]; then
+    if ! (cd "$tmp" && node plugins/raycast-extensions/scripts/ci.mjs >"$tmp/.ci.log" 2>&1); then
+      awk '/^(FAIL|ERROR) /{show=1; print; next} /^       /{if (show) print; next} {show=0} /^(rx runner|ci):/{print}' "$tmp/.ci.log"
+      echo "pre-push: plugins/raycast-extensions/scripts/ci.mjs failed — fix what it reports"
+      status=1
+    fi
+  else
+    if ! (cd "$tmp" && bash check-references.sh >"$tmp/.refs.log" 2>&1); then
+      grep -E 'MISSING|UNLISTED|MISMATCH|ORPHAN|BROKEN' "$tmp/.refs.log" || tail -5 "$tmp/.refs.log"
+      echo "pre-push: check-references.sh failed — fix what it reports"
+      status=1
+    fi
+    # Whatever plugin script tests that commit has (the file set has changed over time).
+    set -- "$tmp"/plugins/raycast-extensions/scripts/*.test.mjs
+    if [ -f "$1" ] &&
+      ! (cd "$tmp" && node --test plugins/raycast-extensions/scripts/*.test.mjs >"$tmp/.test.log" 2>&1); then
+      grep -E '^not ok' "$tmp/.test.log" || tail -5 "$tmp/.test.log"
+      echo "pre-push: plugin script tests failed"
+      status=1
+    fi
   fi
-  rm -rf "$tmp"
+  cleanup
 done
 exit $status

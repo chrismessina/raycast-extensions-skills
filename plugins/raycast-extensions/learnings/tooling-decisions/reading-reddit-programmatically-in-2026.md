@@ -2,6 +2,8 @@
 title: "Reading Reddit programmatically in 2026: use the Atom (RSS) feed, not the JSON API or OAuth"
 date: 2026-07-23
 last_updated: 2026-07-23
+applies_to: ["develop"]
+trigger: "when you are about to read Reddit without a logged-in session"
 category: tooling-decisions
 module: RedditApi
 component: reddit-search

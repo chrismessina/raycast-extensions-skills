@@ -1,6 +1,8 @@
 ---
 title: Mocked AI evals prove only their assertions — a live Copy Eval is the ground truth
 date: 2026-09-26
+applies_to: ["develop", "review-pr"]
+trigger: "when you are about to add, change, or review an AI tool (`src/tools/`) or its `ai.yaml` evals, or offer a green `ray evals` run as evidence it works"
 category: workflow-issues
 module: development-workflow
 component: development_workflow
@@ -46,7 +48,7 @@ Over three review rounds, every real defect was found by running the tool live, 
 Run `npm run dev`, ask the question in a new AI Chat, then choose **Copy Eval** from the Actions panel. Its `mocks` block is what the tool actually returned, and its `expected` block is the arguments the model actually sent. Together they split a wrong answer into three possible causes: wrong arguments, wrong data, or the model misreading correct data.
 
 - **Start a new conversation.** Copy Eval supports only single-prompt conversations. Answers from a long chat also carry over earlier context: one "what's new?" answer came back filtered to installed extensions because an earlier turn had asked about them.
-- **Count the `callsTool` entries.** More than one means the model retried after an error. That is how the `since: ""` bug surfaced.
+- **Count the `callsTool` entries, then read them.** Several entries establish several calls, nothing more: one prompt asking for today's *and* this week's updates legitimately yields two successful calls with no error between them. Diagnose a *retry* from three things together — the preceding entry's result is an error, the next call follows it immediately, and its arguments differ in exactly the field the error named. That is how the `since: ""` bug surfaced: a call with `since: ""`, an error result, then a second call without the field.
 - **Paste the run back in as a regression eval**, trimmed to a few items. Keep counts like `totalMatches` so the "N more" arithmetic is still tested.
 
 ### 3. Models send `""` for optional string parameters

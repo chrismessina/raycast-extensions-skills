@@ -1,6 +1,8 @@
 ---
 title: Count the review layers, not the findings
 date: 2026-09-18
+applies_to: ["ship", "raycast-pr-loop"]
+trigger: "when you are about to start a third review pass that is finding defects in the previous pass's fixes"
 category: workflow-issues
 module: publishing
 component: development_workflow

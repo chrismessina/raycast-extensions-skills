@@ -1,6 +1,8 @@
 ---
 title: "A test that asserts against your own constant agrees with your own wrong unit"
 date: 2026-08-16
+applies_to: ["develop"]
+trigger: "when you are about to assert against a constant from the code under test, or one that mirrors a dependency's rule"
 problem_type: best_practice
 category: best-practices
 component: testing_framework
@@ -39,9 +41,7 @@ The derivation was right. The unit tests around it were green. Both facts were w
 
 Rewriting the assertion to exercise the SDK's real gate found a **second** gate the constant knew nothing about, and which rejected the extension's own clamp value on two live model ids.
 
-This is a fourth axis alongside three sibling docs from the same project. [bugs-concentrate-at-module-seams.md](../architecture-patterns/bugs-concentrate-at-module-seams.md) is about *where* a defect sits. [green-falsification-that-tested-nothing.md](green-falsification-that-tested-nothing.md) is about *whether the check ran at all*. [rendered-output-is-invisible-to-code-review.md](rendered-output-is-invisible-to-code-review.md) is about *whether the evidence exists in the artifact*.
-
-Here all three of those are satisfied and it still proves nothing. The distinction from the falsification sibling is the sharp one: **there, the probe never landed; here, it lands, executes real code, and returns a true result — to a question nobody needed answered.** A tautology is not a false negative. It is a correct answer with no information content, which is strictly harder to spot, because there is nothing broken to find.
+This is the **wrong oracle** case in the four-way selector at [`self-review-does-not-catch-diagnostic-errors` → Which evidence is missing?](self-review-does-not-catch-diagnostic-errors.md#which-evidence-is-missing): the probe lands, executes real code, and returns a true result — to a question nobody needed answered. A tautology is not a false negative. It is a correct answer with no information content, which is strictly harder to spot, because there is nothing broken to find.
 
 ## Guidance
 
@@ -61,29 +61,37 @@ expect(buildModelRequestParams(model, { streaming: false }).max_tokens)
 
 Green. Green if the constant were 21333, green if it were 999999, green if the SDK's rule had changed three releases ago. The oracle is the code's own input.
 
-The integration assertion instead asks the SDK, by constructing a client and catching the synchronous throw. No API key is needed and no request is made — both gates fire client-side before dispatch:
+The integration assertion instead asks the SDK. Both gates fire client-side, before a byte leaves the process — but a dummy API key does **not** disable transport: a pair the gates *accept* proceeds to dispatch, and `messages.create()` returns a promise whose later authentication or network rejection a bare synchronous `catch` never sees. The first version of this probe did exactly that (no fake transport, promise not awaited) and so could only tell the rejected pairs apart from "something happened". The probe has to own the transport and await the result:
 
 ```js
-const client = new Anthropic({ apiKey: "not-a-real-key" });
+// A transport that records dispatch and answers with a controlled response, so an accepted
+// pair can never reach the network and "accepted" is a fact about the SDK's gates alone.
+const dispatched = [];
+const fetch = async (url, init) => {
+  dispatched.push({ url: String(url), body: JSON.parse(init.body) });
+  return new Response(JSON.stringify({ id: "msg_stub", type: "message", role: "assistant", content: [], model: "stub", stop_reason: "end_turn", usage: { input_tokens: 0, output_tokens: 0 } }), { status: 200, headers: { "content-type": "application/json" } });
+};
+const client = new Anthropic({ apiKey: "not-a-real-key", fetch, maxRetries: 0 });
 for (const model of ids) {
   try {
-    client.messages.create({ model, max_tokens, messages: [{ role: "user", content: "hi" }] });
-    // reached => the SDK accepts this pair
+    await client.messages.create({ model, max_tokens, messages: [{ role: "user", content: "hi" }] });
+    // reached => the SDK's gates accepted this pair and dispatched it to OUR fetch (check `dispatched`)
   } catch (e) {
     // AnthropicError: "Streaming is required for operations that may take longer than 10 minutes"
+    // (thrown before dispatch: `dispatched` did not grow)
   }
 }
 ```
 
-Measured against `@anthropic-ai/sdk` 0.115.0 in `node_modules`:
+Three outcomes, kept distinct: **rejected before dispatch** (the throw, `dispatched` unchanged); **accepted and dispatched** (our fake transport recorded the request; nothing left the process); and, only if the fake is missing, **request actually sent** — the outcome the original probe could not rule out. Measured against `@anthropic-ai/sdk` 0.115.0 in `node_modules`, with the recording transport ("accepted" means accepted by the SDK's gates and dispatched to the fake, never to the network):
 
 | model id | `max_tokens=21333` | `max_tokens=8192` |
 |---|---|---|
-| `claude-opus-4-1-20250805` | **throws** | ok |
-| `claude-opus-4-20250514` | **throws** | ok |
-| `claude-sonnet-4-5-20250929` | ok | ok |
-| `claude-3-5-haiku-20241022` | ok | ok |
-| `claude-opus-4-5-20251101` | ok | ok |
+| `claude-opus-4-1-20250805` | **throws before dispatch** | accepted |
+| `claude-opus-4-20250514` | **throws before dispatch** | accepted |
+| `claude-sonnet-4-5-20250929` | accepted | accepted |
+| `claude-3-5-haiku-20241022` | accepted | accepted |
+| `claude-opus-4-5-20251101` | accepted | accepted |
 
 The extension's own clamp value was rejected on two of five ids. The unit test could not see this — the model id is not an input to a tautology.
 
@@ -153,7 +161,7 @@ Both are the same question wearing different clothes: *what is the oracle?* If t
 
 A tautological test is worse than no test, and the mechanism is specific. No test leaves a known gap. A green tautology fills the gap with a signal — it appears in the count, it appears in CI, it appears in the sentence "the clamp is covered." It converts an unknown into a wrong known, at exactly the moment the author decides to stop looking.
 
-It is also structurally invisible to review of the kind that catches the sibling docs' defects. There is no seam to widen scope across: the constant and its test are in the same file, both correct, mutually consistent. There is no probe that failed to land: the assertion executes real code and returns true. There is no missing pixel: everything under discussion is a number in the artifact. Every reviewer looking at that file sees a correct derivation, a correct constant, and a passing test — and the SDK, which was never consulted, rejects the value on two of five live models.
+It is also structurally invisible to the reviews that catch the other three cases in the selector: no seam to widen scope across, no probe that failed to land, no missing pixel. Every reviewer looking at that file sees a correct derivation, a correct constant, and a passing test — and the SDK, which was never consulted, rejects the value on two of five live models.
 
 Instance 2 shows the same failure with no code defect at all, which is why it is worth carrying: the damage from an unsound claim is deferred. Nothing breaks today. It breaks when a future caller reads "bound," treats the result as a guarantee, and removes the backstop that was doing the actual work.
 
@@ -164,7 +172,7 @@ Instance 2 shows the same failure with no code defect at all, which is why it is
 - **A bound is derived rather than measured.** A correct derivation proves the gate you modeled exists. It says nothing about a second gate you did not model — which is exactly what happened here, from a derivation that was and remains arithmetically right.
 - **A dependency's rule is behind a non-exported path.** Do not copy it. Copying converts an unreadable truth into a readable lie with a shelf life. React to the dependency's own rejection instead, and make the reaction message-matched and fail-safe: `isNonstreamingCeilingError` returns false on any wording change, so the error surfaces to the user rather than triggering a blind retry.
 - **A helper's docstring is about to use the words "guaranteed," "bound," "always," or "at most."** Name what would have to be true, then check whether the dependency actually promises it. Structural tokens, framing overhead, and server-side normalization are the usual things a first-principles argument omits.
-- **The dependency's validation is synchronous.** Then the integration assertion is cheap — no key, no network, no fixture. There is no excuse for the tautology when the real oracle costs one `try`/`catch`.
+- **The dependency's validation is synchronous.** Then the integration assertion is cheap — a dummy key, a recording transport injected through the client's `fetch` option, one awaited `try`/`catch`. A dummy key alone is not an offline guarantee: it stops a request from *succeeding*, not from being *sent*.
 
 ## Examples
 
@@ -178,8 +186,6 @@ Instance 2 shows the same failure with no code defect at all, which is why it is
 
 ## Related
 
-- [green-falsification-that-tested-nothing.md](green-falsification-that-tested-nothing.md) — the nearest sibling and the necessary contrast. Its remedy is *confirm the probe landed*; that remedy is fully satisfied here and does not help. There a green result meant the check never ran; here a green result means the check ran perfectly against the wrong oracle. Its Instance 1 (a regex matching code that had been refactored) and this doc's Instance 1 are the two halves of one question: did the check touch the code, and did it compare against anything external.
-- [rendered-output-is-invisible-to-code-review.md](rendered-output-is-invisible-to-code-review.md) — its rule "never write a test that appears to cover it" is the same instinct applied to a property no process can observe. This doc's case is the observable one: an external oracle *does* exist, is cheap to consult, and was simply not consulted.
-- [bugs-concentrate-at-module-seams.md](../architecture-patterns/bugs-concentrate-at-module-seams.md) — seam defects are recoverable by widening review scope. This class is not: the constant, its test, and the derivation all live in one file and agree with each other. The missing party is outside the repo.
+- [`self-review-does-not-catch-diagnostic-errors` → Which evidence is missing?](self-review-does-not-catch-diagnostic-errors.md#which-evidence-is-missing) — the selector that places this case (wrong oracle) beside its three siblings (seam, inert probe, unobserved pixels) and says which remedy each needs.
 - [raycast/extensions#30287](https://github.com/raycast/extensions/pull/30287) — the PR carrying both fixes; open, out of draft, unmerged at the time of writing. Its head ref on the fork is `ext/claude-api-compat`, which is the local branch `fix/api-compatibility` under a different name — the PR number is the reference that survives either.
 - [raycast/extensions#29798](https://github.com/raycast/extensions/pull/29798) — the sibling storage-refactor PR the three related docs came from; parked in draft.

@@ -1,6 +1,8 @@
 ---
 title: Building a Raycast extension that drives a third-party app's AppleScript dictionary via JXA
 date: 2026-08-19
+applies_to: ["develop", "scaffold"]
+trigger: "when you are about to drive a third-party Mac app through AppleScript or JXA"
 category: architecture-patterns
 problem_type: architecture_pattern
 component: airbuddy-jxa-transport

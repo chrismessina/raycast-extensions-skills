@@ -1,0 +1,14 @@
+{
+  "why": "The preset's ship.keep exception: TODO.md is kept for the extension named dev-null, so agent-scaffolding PASSes.",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 0,
+      "checks": {
+        "agent-scaffolding": "PASS",
+        "dev-material": "PASS"
+      }
+    }
+  ]
+}

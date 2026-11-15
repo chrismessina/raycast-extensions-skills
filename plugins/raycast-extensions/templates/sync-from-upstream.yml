@@ -10,18 +10,19 @@ name: Sync from upstream
 # the two things Raycast CI produces ONLY on merge (the stamped {PR_MERGE_DATE}
 # and recompressed screenshots) plus any changes a contributor merged upstream.
 #
-# ── THE RULE THIS WORKFLOW EXISTS TO ENFORCE ────────────────────────────────
+# ── THE GUARANTEE, STATED EXACTLY ───────────────────────────────────────────
 #
-#   It NEVER pushes to main, and it NEVER overwrites a file you changed
-#   locally. Every incoming change arrives as a pull request.
+#   Extension CONTENT reaches main only through a pull request you merge, and
+#   a file you changed locally is never overwritten. The ONE direct write to
+#   main is bookkeeping: .github/upstream-sync-state.json (the baseline this
+#   compare depends on), committed on the default branch when no PR will carry
+#   it — see "Record the new baseline". No extension source moves in that
+#   commit.
 #
-# The previous version did the opposite: it downloaded each upstream file and
-# committed it unconditionally. That silently reverted local-only work — on
-# 2026-08-01 it undid a README fix (a dead docs/shelf.md link) by restoring the
-# monorepo's older copy, and reported success. The bug was not the cron
-# schedule; it was overwriting without comparing. A merge-triggered sync running
-# that same code would lose the same edit, just less often — which is worse,
-# because rare corruption is the kind you stop watching for.
+# Every guard below has a dated incident behind it, kept out of this file so the
+# executable text stays readable:
+#   plugins/raycast-extensions/learnings/workflow-issues/upstream-sync-workflow-incident-history.md
+# Comments here say WHAT a guard holds; that learning says what broke without it.
 #
 # ── HOW IT DECIDES ──────────────────────────────────────────────────────────
 #
@@ -49,35 +50,21 @@ name: Sync from upstream
 #   DELETED upstream   no                  propagate the deletion
 #   DELETED upstream   yes                 KEEP YOURS (it becomes local-only)
 #
-# Row 3 is what used to lose. Row 4 is genuinely ambiguous and must never be
-# resolved by a script — and its two exceptions below the stamp row do not
-# resolve it, they show it was never ambiguous. "Upstream is behind" means
-# upstream serves a version this mirror held after the last baseline, so the
-# mirror has already moved past it. A clean merge combines both sides'
-# edits without choosing between them, and still reaches main only through a
-# PR you review. Overlapping hunks still halt.
+# Row 4 is genuinely ambiguous and is never resolved by a script; its three
+# exceptions do not resolve it, they show it was never ambiguous. "Upstream is
+# behind" means upstream serves a version this mirror held after the last
+# baseline. A clean merge combines both sides' edits without choosing between
+# them, and still reaches main only through a PR you review. Overlapping hunks
+# halt. The DELETED rows are computed from the baseline, not from the upstream
+# listing — the listing only says what exists now.
 #
-# Both exceptions exist because the halts they clear were the common case,
-# not the edge case. Verified 2026-10-01 against five mirrors halted the same
-# day: fathom shipped upstream from the mirror and kept editing (upstream
-# equaled the mirror's own 09-17 commits); at-profile's package.json and
-# history.ts took a Raycast dependency sweep on top of the fleet's import-sort
-# commit, edits that never touched the same lines. A halt also freezes the
-# baseline, so every halt left unreconciled compounds into the next one.
-#
-# The two DELETED rows are computed from the baseline, not from the upstream
-# listing — the listing only says what exists now, so a removed file is
-# invisible to it. See the deletion block in the compare step.
-#
-# STAGGER THE CRON MINUTE per repo (setup-mirror.sh derives it from the repo name). GitHub queues same-minute schedules across
-# all of Actions, and scheduled runs are already best-effort under load.
+# STAGGER THE CRON MINUTE per repo (setup-mirror.sh derives it from the repo
+# name): GitHub queues same-minute schedules across all of Actions.
 
 on:
-  # The cron is the SAFETY NET, not the primary path. A merge-triggered sync
-  # only fires for merges you know about — which excludes the case that matters
-  # most: someone else's PR to your extension merging upstream without you
-  # being the author. That is precisely when a mirror drifts unnoticed, so the
-  # unconditional daily check stays.
+  # The cron is the SAFETY NET, not the primary path: a merge-triggered sync
+  # only fires for merges you know about, and someone else's PR to your
+  # extension merging upstream is exactly when a mirror drifts unnoticed.
   schedule:
     - cron: "55 9 * * *"
   # Fired by `ship`'s post-merge step (or `gh workflow run`) for an immediate
@@ -132,12 +119,9 @@ jobs:
           EXT_NAME="${{ steps.meta.outputs.name }}"
           REPO="raycast/extensions"
 
-          # Resolve the extension's OWN subtree, then list it in one recursive
-          # call. Walking the contents API directory by directory issues a
-          # request per file — ~85 for a mid-size extension — which trips
-          # secondary rate limits against a repo the default GITHUB_TOKEN does
-          # not own. (Verified 2026-07-31: karakeep run 30660911758 failed
-          # partway through exactly that walk.)
+          # Resolve the extension's OWN subtree, then list it in ONE recursive
+          # call. A per-directory contents walk trips secondary rate limits
+          # against a repo the default GITHUB_TOKEN does not own (history: 2026-07-31).
           COMMIT=$(gh api "repos/${REPO}/commits?path=extensions/${EXT_NAME}&per_page=1" --jq '.[0].sha')
           [ -n "$COMMIT" ] || { echo "Could not resolve upstream commit"; exit 1; }
           ROOT_TREE=$(gh api "repos/${REPO}/commits/${COMMIT}" --jq '.commit.tree.sha')
@@ -149,16 +133,15 @@ jobs:
 
           # A truncated tree silently OMITS entries, which would read as
           # "upstream no longer serves this file" and become deletions. The
-          # whole-repo recursive call DOES truncate on this monorepo (verified
-          # 2026-07-31), which is why this is scoped to the extension subtree.
-          # Assert rather than assume; fail closed.
+          # whole-repo recursive call does truncate on this monorepo; the
+          # subtree call is asserted rather than assumed. Fail closed.
           [ "$(jq -r '.truncated' <<<"$TREE_JSON")" = "false" ] || {
             echo "ABORT: upstream tree response was truncated; refusing to sync a partial file list."
             exit 1
           }
 
-          # path -> upstream blob SHA. This is the whole basis of the compare:
-          # a git blob SHA is content-addressed, so "changed" is exact.
+          # path -> upstream blob SHA. A git blob SHA is content-addressed, so
+          # "changed" is exact.
           jq -r '.tree[] | select(.type=="blob") | "\(.path)\t\(.sha)"' <<<"$TREE_JSON" \
             | sort > "$RUNNER_TEMP/upstream.tsv"
 
@@ -186,19 +169,12 @@ jobs:
           : > "$RUNNER_TEMP/merged.txt"
 
           # True when upstream's bytes for path $1 (blob $2) are a version this
-          # mirror held SINCE the baseline was recorded: some commit after the
-          # state file's last change stored exactly that blob there. Upstream
-          # is then BEHIND, not diverged. The usual cause is shipping from the
-          # mirror and continuing to edit before the next sync records the
-          # merge. Needs full history (fetch-depth: 0).
+          # mirror held SINCE the baseline was recorded. Upstream is then BEHIND,
+          # not diverged. Needs full history (fetch-depth: 0).
           #
-          # Bounded to post-baseline commits on purpose. Searching all history
-          # would read an upstream REVERT, such as Raycast backing out a release,
-          # as "behind", because the reverted-to bytes sit in an older mirror
-          # commit, and the revert would be kept out silently. Bounded, that
-          # revert lands on a pre-baseline blob and halts as a conflict. The
-          # residual misread is a revert to a version first written after the
-          # baseline, which still keeps the mirror's newer copy.
+          # Bounded to post-baseline commits on purpose: searching all history
+          # would read an upstream REVERT as "behind" and keep it out silently.
+          # Bounded, a revert lands on a pre-baseline blob and halts as a conflict.
           BASELINE_COMMIT=$(git log -1 --format=%H -- "$STATE_FILE" 2>/dev/null || true)
           upstream_is_behind() {
             local c
@@ -210,17 +186,16 @@ jobs:
           }
 
           # 3-way merge of path $1: ours = the mirror's copy, base = baseline
-          # blob $2, theirs = upstream blob $3. It succeeds only with zero
+          # blob $2, theirs = upstream blob $3. Succeeds only with zero
           # overlapping hunks, and for JSON only when the result still parses.
-          # The result is staged under $RUNNER_TEMP/merged/ and written into
-          # the tree by the download step, so it reaches main only through the
-          # sync PR. Any fetch or hash failure returns 1, which means CONFLICT.
-          # A network blip therefore halts the run instead of guessing.
+          # The result is staged under $RUNNER_TEMP/merged/ and written into the
+          # tree by the download step, so it reaches main only through the sync
+          # PR. Any fetch or hash failure returns 1 (CONFLICT): a network blip
+          # halts the run instead of guessing. Both sides are fetched by blob
+          # SHA, not by path — a raw URL breaks on a path with a space.
           try_merge() {
             local path=$1 base_sha=$2 up_sha=$3 d="$RUNNER_TEMP/merge"
             mkdir -p "$d"
-            # Both sides by blob SHA, not by path: a raw URL breaks on a path
-            # with a space and would misreport that as a conflict.
             gh api "repos/${REPO}/git/blobs/${base_sha}" --jq .content | base64 -d > "$d/base" || return 1
             [ "$(git hash-object "$d/base")" = "$base_sha" ] || return 1
             gh api "repos/${REPO}/git/blobs/${up_sha}" --jq .content | base64 -d > "$d/up" || return 1
@@ -233,52 +208,26 @@ jobs:
           }
 
           while IFS=$'\t' read -r path up_sha; do
-            # SKIP paths this mirror deliberately gitignores.
+            # SKIP paths this mirror deliberately gitignores. `git add` refuses
+            # an ignored path and exits non-zero, which would fail the whole run.
             #
-            # Upstream can serve files the mirror excludes on purpose — the
-            # digger extension publishes a `.private/` directory that its mirror
-            # ignores. Downloading one is harmless; STAGING it is not: `git add`
-            # refuses an ignored path and exits non-zero, which `xargs` reports
-            # as 123 and the whole run fails. Verified on raycast-digger run
-            # 30744504919 (2026-08-02) — and every scheduled run before it, which
-            # is why the failure mails arrived daily.
-            #
-            # `--no-index` is REQUIRED and is the whole reason this guard works.
-            # By default `git check-ignore` consults the index and reports a
-            # TRACKED file as not-ignored, even when a .gitignore rule matches
-            # it. digger's mirror force-added four files under `.private/`, so
-            # the bare form returns false for exactly the paths this guard
-            # exists to catch — the guard never fires and `git add` still dies.
-            # `--no-index` asks the question we actually mean: does a rule match
-            # this path? That is correct whether or not the file is tracked.
-            #
-            # Skipping is the correct resolution, not `git add -f`: the mirror's
-            # .gitignore is a deliberate statement that this path does not belong
-            # in this repo, and forcing it would commit exactly what was excluded.
+            # `--no-index` is REQUIRED: by default `git check-ignore` consults
+            # the index and reports a TRACKED file as not-ignored even when a
+            # .gitignore rule matches it (a force-added file is exactly the case
+            # this guard exists for). `--no-index` asks "does a rule match this
+            # path?", which is the question meant. Skipping is the resolution,
+            # not `git add -f`: the .gitignore is a deliberate exclusion.
             if git check-ignore -q --no-index -- "$path" 2>/dev/null; then
               printf '%s\n' "$path" >> "$RUNNER_TEMP/ignored.txt"
               continue
             fi
 
-            # SKIP package-lock.json — it is DERIVED, not authored.
-            #
-            # A blob-SHA compare is the wrong instrument for a generated file.
-            # A standalone mirror legitimately carries devDependencies the
-            # monorepo copy does not (the fleet-wide
-            # @ianvs/prettier-plugin-sort-imports, added 2026-07), so its lock
-            # can NEVER equal upstream's — while upstream's lock keeps moving
-            # under Raycast's dependency bots. Both sides therefore differ from
-            # the baseline on every run, which the table above classifies as a
-            # conflict, and the sync halts forever. Verified 2026-09-17: four
-            # mirrors (bookface, tesla-energy, trimmy, wrap-unwrap) had been
-            # failing daily since 2026-09-15 on exactly this, and no amount of
-            # hand-reconciling would have cleared it — the next bot bump
-            # recreates it.
-            #
-            # Taking upstream's lock is also wrong: it would drop the mirror's
-            # own devDependencies and break `npm ci` here. The lock is a
-            # function of package.json, so it is regenerated from package.json
-            # instead — see the "Regenerate package-lock.json" step below.
+            # SKIP package-lock.json — DERIVED, not authored. A standalone mirror
+            # carries devDependencies the monorepo copy does not, so its lock can
+            # never equal upstream's while upstream's keeps moving under
+            # dependency bots: a blob compare halts on it forever. Taking
+            # upstream's lock would drop the mirror's devDependencies and break
+            # `npm ci`. It is regenerated from package.json instead (relock step).
             if [ "$path" = "package-lock.json" ]; then
               printf '%s\n' "$path" >> "$RUNNER_TEMP/derived.txt"
               continue
@@ -310,31 +259,18 @@ jobs:
               fi
             elif [ "$upstream_moved" = true ] && [ "$mirror_moved" = true ]; then
               # AUTO-RESOLVE the {PR_MERGE_DATE} stamp before calling it a
-              # conflict. Delivering that stamp is half of why this workflow
-              # exists (see the header), yet it presents as a both-sides change:
-              # we wrote the literal placeholder, Raycast CI substituted the
-              # merge date. Upstream's copy is then OUR text with the date
-              # filled in — nobody's work is at risk, and halting on it makes
-              # the sync fail on exactly the event it was built to handle.
-              # Verified 2026-09-17 on raycast-secret-browser-commands, halted
-              # since 2026-09-15 on a CHANGELOG whose only difference was
-              # `{PR_MERGE_DATE}` vs `2026-09-15`.
+              # conflict: we wrote the placeholder, Raycast CI substituted the
+              # date, so upstream's copy is OUR text with the date filled in.
               #
-              # The test is line-wise and EXACT, not a date mask. An earlier
-              # draft masked every ISO date in both files and compared the
-              # results, which was far too loose: two sides editing the same
-              # OLD release date differently also compare equal under that
-              # mask, and upstream would silently win. Here a line may differ
-              # only if OUR line carries the placeholder and upstream's line is
-              # that same line with a date where the placeholder is. Every
-              # other line must match byte for byte, and the files must have
-              # the same number of lines.
+              # The test is line-wise and EXACT, not a date mask (a mask lets two
+              # sides editing the same OLD release date compare equal). A line may
+              # differ only if OUR line carries the placeholder and upstream's is
+              # that same line with a date in its place; every other line must
+              # match byte for byte, and the line counts must agree.
               if [ "$path" = "CHANGELOG.md" ] && grep -q '{PR_MERGE_DATE}' "$path"; then
-                # Split out of the `if` chain on purpose. Inside it, a failed
-                # curl is indistinguishable from "not a stamp", and the run
-                # files a manual-reconcile issue for what was really a network
-                # blip. Falling through to CONFLICT is still the right, safe
-                # outcome — but it has to SAY that is what happened.
+                # The fetch is split out of the `if` chain so a failed download
+                # is reported as such, not mistaken for "not a stamp". Falling
+                # through to CONFLICT is still the safe outcome.
                 if curl -fsSL --retry 3 --retry-delay 2 \
                      "https://raw.githubusercontent.com/${REPO}/${COMMIT}/extensions/${EXT_NAME}/${path}" \
                      -o "$RUNNER_TEMP/upstream-changelog"; then
@@ -377,23 +313,11 @@ jobs:
 
           # -- UPSTREAM DELETIONS ------------------------------------------
           #
-          # The loop above only visits paths upstream serves NOW, so a file
-          # upstream removed is never seen by it and would live in the mirror
-          # forever. The blind workflow this one replaced did propagate
-          # deletions, by diffing `git ls-files` against its download manifest;
-          # dropping that was a silent capability regression carried since
-          # 2026-08-03.
-          #
-          # The baseline makes this strictly better informed than that manifest
-          # diff was. A path in the baseline and absent from upstream.tsv is an
-          # unambiguous upstream deletion — no guessing from a file count. It
-          # also needs none of the blind version's subdirectory scoping: the
-          # baseline only ever contains paths upstream served, so a local-only
-          # file (AGENTS.md, CLAUDE.md, .github/) is structurally incapable of
-          # becoming a deletion candidate. That scoping existed to patch a
-          # `git ls-files` scan that had no such guarantee, after karakeep run
-          # 30651601868 (2026-07-31) removed package.json, tsconfig.json and
-          # the workflow itself while reporting success.
+          # The loop above only visits paths upstream serves NOW. A path in the
+          # baseline and absent from upstream.tsv is an unambiguous upstream
+          # deletion; the baseline only ever holds paths upstream served, so a
+          # local-only file (AGENTS.md, CLAUDE.md, .github/) can never become a
+          # deletion candidate.
           : > "$RUNNER_TEMP/to-delete.txt"
           : > "$RUNNER_TEMP/deleted-upstream-kept.txt"
 
@@ -401,11 +325,7 @@ jobs:
             [ -n "$path" ] || continue
             # Still served upstream? Then it was not deleted.
             awk -F'\t' -v p="$path" '$1==p{f=1} END{exit !f}' "$RUNNER_TEMP/upstream.tsv" && continue
-            # Derived, never compared — and so never deleted either. Without
-            # this the baseline (rebuilt verbatim from upstream.tsv, lock
-            # included) would let an upstream lockfile removal `git rm` the
-            # mirror's own regenerated lock, which the compare step is
-            # explicitly not allowed to touch.
+            # Derived, never compared — and so never deleted either.
             [ "$path" = "package-lock.json" ] && continue
             # Gitignored here, already gone, or never tracked: nothing to do.
             git check-ignore -q --no-index -- "$path" 2>/dev/null && continue
@@ -415,18 +335,14 @@ jobs:
             if [ "$(git hash-object "$path")" = "$base_sha" ]; then
               printf '%s\n' "$path" >> "$RUNNER_TEMP/to-delete.txt"
             else
-              # Upstream dropped it AND we changed it. Ambiguous, and the
-              # fail-safe direction is the same as row 3 of the table above:
-              # keep ours. It leaves the next baseline (which records what
-              # upstream serves) and simply becomes a local-only file.
+              # Upstream dropped it AND we changed it. Ambiguous; the fail-safe
+              # direction is row 3: keep ours. It becomes a local-only file.
               printf '%s\n' "$path" >> "$RUNNER_TEMP/deleted-upstream-kept.txt"
             fi
           done < "$RUNNER_TEMP/baseline.tsv"
 
-          # Refuse a mass deletion unattended. A legitimate upstream
-          # restructure and a resolution bug that pointed at the wrong subtree
-          # look identical here, and only one of them is recoverable from a
-          # review. Fail closed and let a human look.
+          # Refuse a mass deletion unattended: a legitimate upstream restructure
+          # and a resolution bug pointing at the wrong subtree look identical here.
           DEL=$(wc -l < "$RUNNER_TEMP/to-delete.txt" | tr -d ' ')
           BASE_N=$(wc -l < "$RUNNER_TEMP/baseline.tsv" | tr -d ' ')
           if [ "$DEL" -gt 0 ] && [ "$BASE_N" -gt 0 ] && [ $((DEL * 2)) -gt "$BASE_N" ]; then
@@ -519,15 +435,11 @@ jobs:
             echo "  merged: $path"
           done < "$RUNNER_TEMP/merged.txt"
 
-      # The lock is excluded from the three-way compare (see the compare step),
-      # so it has to be brought back into agreement with package.json here — and
-      # ONLY when package.json actually moved. `npm install --package-lock-only`
-      # re-resolves from package.json without touching node_modules or running
-      # any package's install scripts, which is the whole job: it keeps this
-      # mirror's own devDependencies AND picks up whatever upstream bumped.
-      #
-      # Skipping this would leave `npm ci` broken in the mirror the moment
-      # upstream bumps @raycast/api, which is the common case.
+      # The lock is excluded from the three-way compare, so it is brought back
+      # into agreement with package.json here — and ONLY when package.json
+      # actually moved. `npm install --package-lock-only` re-resolves from
+      # package.json without touching node_modules or running install scripts:
+      # it keeps this mirror's own devDependencies AND picks up what upstream bumped.
       - name: Regenerate package-lock.json when package.json changed
         id: relock
         if: steps.compare.outputs.updated != '0'
@@ -539,11 +451,9 @@ jobs:
             echo "package.json unchanged; lock left alone."
             exit 0
           }
-          # Must be present AND tracked AND not gitignored. The PR step stages
-          # with a plain `git add`, which refuses an ignored path and exits
-          # non-zero — the same failure mode that wedged raycast-digger daily in
-          # 2026-08. A mirror that deliberately excludes its lock gets told, not
-          # broken.
+          # Must be present AND tracked AND not gitignored: the PR step stages
+          # with a plain `git add`, which refuses an ignored path. A mirror that
+          # deliberately excludes its lock gets told, not broken.
           if [ ! -f package-lock.json ]; then
             echo "No lock in this mirror; nothing to regenerate."; exit 0
           fi
@@ -557,11 +467,10 @@ jobs:
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           AFTER=$(jq -r '.lockfileVersion' package-lock.json)
 
-          # `ubuntu-latest` floats, so the npm that runs here floats with it.
-          # An image bump that changes the lockfile format would rewrite the
-          # whole file and present it inside a content PR as if upstream had
-          # done it. Refuse instead: a loud stop is recoverable, a silent
-          # whole-file rewrite reviewed as "sync from upstream" is not.
+          # `ubuntu-latest` floats, so the npm here floats with it. An image bump
+          # that changes the lockfile format would rewrite the whole file inside a
+          # content PR as if upstream had done it. Refuse: a loud stop is
+          # recoverable, a silent whole-file rewrite reviewed as a sync is not.
           if [ "$BEFORE" != "$AFTER" ]; then
             git checkout -- package-lock.json
             echo "::error::npm rewrote lockfileVersion $BEFORE -> $AFTER. Refusing to bury a format migration in a sync PR — regenerate it locally and commit it yourself."
@@ -572,22 +481,16 @@ jobs:
             echo "Lock already consistent with the new package.json."
             exit 0
           fi
-          # Deliberately NOT appended to to-update.txt. That file means "taken
-          # from upstream", it is what the PR body lists under that heading, and
-          # its count was already fixed by the compare step. This lock was
-          # GENERATED here; it gets staged and described separately.
+          # Deliberately NOT appended to to-update.txt: that file means "taken
+          # from upstream" and its count is already fixed. This lock was
+          # GENERATED here; it is staged and described separately.
           echo "regenerated=1" >> "$GITHUB_OUTPUT"
           echo "  regenerated: package-lock.json"
 
       # UNCONDITIONAL on purpose. Gating this on `updated != '0'` freezes the
-      # baseline, because the runs that copy nothing are the common case — every
-      # run after you adopt upstream's own bytes by hand short-circuits on
-      # byte-equality and copies nothing. The compare then keeps scoring against
-      # a snapshot that stopped tracking the mirror, and the next genuine
-      # upstream-only change reads as "both sides moved" and halts on a phantom
-      # conflict. Diagnosed on raycast-karakeep 2026-08-13 (0369178, ac103cf):
-      # baseline pinned at 2026-08-03, 77 files against upstream's 88, two green
-      # no-op runs, then three phantom conflicts.
+      # baseline — the runs that copy nothing are the common case — and the
+      # next genuine upstream-only change then reads as "both sides moved" and
+      # halts on a phantom conflict (history: 2026-08-13).
       - name: Record the new baseline
         shell: bash
         run: |
@@ -607,11 +510,9 @@ jobs:
                        | add // {})
             }' > "$RUNNER_TEMP/state.new"
 
-          # `synced_at` changes on EVERY run, so writing this file unconditionally
-          # would make it always differ from the committed copy — and, now that
-          # recording is unconditional, produce a junk commit on every scheduled
-          # run forever. Compare only the parts that carry meaning; when they
-          # match, keep the committed file so the tree stays clean.
+          # `synced_at` changes on EVERY run; compare only the parts that carry
+          # meaning, and keep the committed file when they match so an
+          # unconditional write does not become a junk commit per run.
           if git show "HEAD:$STATE_FILE" > "$RUNNER_TEMP/state.old" 2>/dev/null &&
              [ "$(jq -S '{upstream_commit, files}' "$RUNNER_TEMP/state.old")" = \
                "$(jq -S '{upstream_commit, files}' "$RUNNER_TEMP/state.new")" ]; then
@@ -622,13 +523,11 @@ jobs:
             echo "recorded $(jq '.files | length' "$STATE_FILE") files"
           fi
 
-      # When files WERE copied, the PR step below stages the baseline alongside
-      # them, so it only needs its own commit when there is no PR to ride on.
-      # Restricted to the default branch on purpose. workflow_dispatch can be
-      # fired against any ref — another branch, or a tag, where a push would
-      # either fail or land somewhere nobody expects. The baseline only ever
-      # describes the mirror's mainline, so a run from anywhere else computes it
-      # and stops.
+      # THE ONE DIRECT WRITE TO MAIN (see the header). When files WERE copied,
+      # the PR step stages the baseline alongside them, so this commit happens
+      # only when there is no PR to ride on. Restricted to the default branch:
+      # workflow_dispatch can be fired against any ref, and the baseline only
+      # ever describes the mirror's mainline.
       - name: Commit the refreshed baseline when no PR will carry it
         if: >-
           steps.compare.outputs.updated == '0' &&
@@ -646,13 +545,11 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Stage ONLY the bookkeeping file. No extension source moves here, so
-          # this does not weaken the rule that merging a PR is the only thing
-          # that writes upstream CONTENT to main.
+          # Stage ONLY the bookkeeping file. No extension source moves here.
           git add -- "$STATE_FILE"
           git commit -m "chore: record upstream sync baseline ${{ steps.compare.outputs.commit }}"
           # A rejected push (main moved mid-run) fails the job on purpose — the
-          # next scheduled run recomputes and retries. Swallowing it here would
+          # next scheduled run recomputes and retries. Swallowing it would
           # recreate the silent staleness this step exists to prevent.
           git push origin "HEAD:${{ github.event.repository.default_branch }}"
 
@@ -695,31 +592,71 @@ jobs:
           BRANCH="sync/upstream-${{ steps.compare.outputs.commit }}"
           BRANCH="${BRANCH:0:60}"
 
-          # An open PR for this exact upstream commit already covers this run.
-          if gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' | grep -q '[0-9]'; then
-            echo "PR already open for $BRANCH"
-            exit 0
+          # -- reuse-verification begin --
+          # Reuse an existing branch, or its open PR, ONLY when it holds exactly
+          # this run's result. The staged index IS this run's reconciliation;
+          # write it as a tree object and compare trees. A branch left by an
+          # earlier run (a refused `gh pr create`, say) may predate a local fix
+          # or a newer upstream commit, and a PR opened from it would discard the
+          # result just computed. Every lookup failure aborts: an API blip must
+          # never read as "no branch" or "no open PR". Never `--force`: a
+          # closed-but-undeleted PR or a manual fix-up commit on the branch
+          # would be overwritten. (history: 2026-08-27 and the 2026-10-30 audit)
+          set +e
+          REMOTE_REF=$(git ls-remote --heads origin "refs/heads/$BRANCH")
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Could not list origin's branches (git ls-remote exit $rc); refusing to guess whether $BRANCH exists."
+            exit 1
+          fi
+          REMOTE_SHA="${REMOTE_REF%%[[:space:]]*}"
+
+          set +e
+          OPEN_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Could not list open pull requests for $BRANCH (gh exit $rc); refusing to guess."
+            exit 1
           fi
 
-          # Reuse the branch if a previous run already pushed it. The failure this
-          # guards is real: on 2026-08-27 raycast-store-updates run 33111251375
-          # pushed this branch and THEN had `gh pr create` refused ("GitHub Actions
-          # is not permitted to create or approve pull requests"), leaving a branch
-          # with no PR. Every run after re-derived the same commit-keyed name, made
-          # a fresh commit, and died on non-fast-forward — wedged for six days.
-          #
-          # Not `--force`: the guard above only sees OPEN PRs, so a closed-but-
-          # undeleted PR, or a manual commit someone pushed onto this branch to fix
-          # it up, would be silently overwritten. And `set -e` does not cover that
-          # `gh | grep` guard — it is an `if` test, which bash exempts from errexit,
-          # so an API blip reads as "no open PR" exactly when force must not fire.
-          if [ -n "$(git ls-remote --heads origin "refs/heads/$BRANCH")" ]; then
-            echo "Branch $BRANCH already pushed; creating its missing PR."
+          if [ -n "$REMOTE_SHA" ]; then
+            git fetch --quiet origin "refs/heads/$BRANCH" || { echo "::error::Could not fetch origin/$BRANCH."; exit 1; }
+            # The baseline's `synced_at` is fresh on every run, so a retry would
+            # never match the branch byte for byte. When the branch's baseline
+            # agrees on everything that carries meaning ({upstream_commit, files}),
+            # take its bytes (timestamp included) so the tree compare below is
+            # exact; every other path is still compared exactly.
+            if git cat-file -e "$REMOTE_SHA:$STATE_FILE" 2>/dev/null; then
+              git show "$REMOTE_SHA:$STATE_FILE" > "$RUNNER_TEMP/state.branch"
+              if [ "$(jq -S '{upstream_commit, files}' "$RUNNER_TEMP/state.branch")" = \
+                   "$(jq -S '{upstream_commit, files}' "$STATE_FILE")" ]; then
+                cp "$RUNNER_TEMP/state.branch" "$STATE_FILE"
+                git add -- "$STATE_FILE"
+              fi
+            fi
+            COMPUTED_TREE=$(git write-tree)
+            REMOTE_TREE=$(git rev-parse --verify "$REMOTE_SHA^{tree}") || { echo "::error::Could not read the tree of origin/$BRANCH ($REMOTE_SHA)."; exit 1; }
+            if [ "$REMOTE_TREE" != "$COMPUTED_TREE" ]; then
+              echo "::error::Branch $BRANCH exists on origin (tree $REMOTE_TREE) but does not contain this run's reconciliation (tree $COMPUTED_TREE)${OPEN_PR:+; PR #$OPEN_PR is stale}. Not reusing it and not overwriting it: merge or delete the branch, then re-run."
+              exit 1
+            fi
+            if [ -n "$OPEN_PR" ]; then
+              echo "PR #$OPEN_PR is already open for $BRANCH and holds this run's result."
+              exit 0
+            fi
+            echo "Branch $BRANCH already pushed and current; creating its missing PR."
           else
+            if [ -n "$OPEN_PR" ]; then
+              echo "::error::PR #$OPEN_PR is open for $BRANCH but origin has no such branch; refusing to continue."
+              exit 1
+            fi
             git switch -c "$BRANCH"
             git commit -m "chore: sync from upstream raycast/extensions"
             git push -u origin "$BRANCH"
           fi
+          # -- reuse-verification end --
 
           KEPT_NOTE=""
           if [ "${{ steps.compare.outputs.kept }}" != "0" ]; then
@@ -763,7 +700,7 @@ jobs:
               "$(cut -f1 "$RUNNER_TEMP/to-update.txt" | sed 's/^/- `/; s/$/`/')")
           fi
 
-          BODY=$(printf 'Brings this mirror up to date with the merged monorepo state.\n\nUpstream commit: [`%s`](https://github.com/raycast/extensions/commit/%s)%s\n%s%s%s\n---\n\nOpened automatically. Merging this PR is the only thing that writes to `main` — review the diff and merge when it looks right. If it contains someone else'"'"'s contribution, credit them in `CHANGELOG.md` before merging.\n' \
+          BODY=$(printf 'Brings this mirror up to date with the merged monorepo state.\n\nUpstream commit: [`%s`](https://github.com/raycast/extensions/commit/%s)%s\n%s%s%s\n---\n\nOpened automatically. Merging this PR is the only way extension content reaches `main` (the workflow writes only its own baseline file, `.github/upstream-sync-state.json`, there directly) — review the diff and merge when it looks right. If it contains someone else'"'"'s contribution, credit them in `CHANGELOG.md` before merging.\n' \
             "${{ steps.compare.outputs.commit }}" \
             "${{ steps.compare.outputs.commit }}" \
             "$PR_REF" \

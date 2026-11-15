@@ -1,0 +1,30 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "dev-null",
+  "title": "Fixture Clean",
+  "description": "Copies a greeting to the clipboard.",
+  "author": "chrismessina",
+  "icon": "icon.png",
+  "license": "MIT",
+  "categories": [
+    "Productivity"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "index",
+      "title": "Copy Greeting",
+      "description": "Copy a greeting to the clipboard.",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.1.0"
+  },
+  "scripts": {
+    "build": "ray build",
+    "lint": "ray lint"
+  }
+}

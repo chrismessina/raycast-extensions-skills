@@ -21,6 +21,87 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.12.0 — 2026-11-12 · **one `AI.Model` deprecation; nothing else**
+
+Diffed against **2.11.1** (2026-11-04). Runtime claims were checked against **Raycast.app 2.12.0.0**.
+No files were added or removed. Only `types/index.d.ts` (+63 bytes), `package.json`,
+`dist/commands/version/index.js` and `oclif.manifest.json` changed. `package.json` differs only in
+`version`, `version/index.js` only in the version digits, and the manifest is equal apart from
+`.version` once keys are sorted recursively. Every `dist/` bundle and `dist/types/` is
+byte-identical to 2.11.1. Raycast's docs-site changelog had no entry newer than 2.10.0 when fetched
+on 2026-11-12.
+
+**Fleet impact:** nothing. No fleet extension references `Vercel_Inkling_Small`.
+
+### `AI.Model`: `Vercel_Inkling_Small` deprecated and repointed
+
+It moved from the active block to `@deprecated` (`Use AI.Model["Vercel_Inkling"] instead`) and now
+resolves to `gateway-thinkingmachines/inkling`, the same id as `Vercel_Inkling`. It was
+`gateway-thinkingmachines/inkling-small`. Still 182 members, none removed. The app 2.12.0.0 shim maps
+all 182 to the same ids as the 2.12.0 types.
+
+---
+
+## 2.11.1 — 2026-11-04 · **nothing new; see 2.11.0**
+
+A pure version bump against **2.11.0**. `version/index.js` and `package.json` each differ in one byte
+(`0` → `1`). `oclif.manifest.json` differs in 14,640 bytes at identical size; with keys sorted
+recursively it is equal apart from `.version`, so this is a reordering. No app build for 2.11.1 was
+checked.
+
+---
+
+## 2.11.0 — 2026-11-04 · **`ray migrate` works again; shared-dep `import()` rerouted**
+
+Diffed against **2.10.1** (2026-10-28). No app build for 2.11.0 was checked; the installed app is
+2.12.0.0. No files were added or removed, and `dist/types/` is byte-identical. `package.json` differs
+only in `version`, so no dependency or peer pin moved. `oclif.manifest.json` is equal apart from
+`.version` once keys are sorted recursively, so no command or flag changed. The `build`, `bundle`,
+`develop`, `publish` and `publish-to-store` bundles each shrank by 7 bytes. String mining (natural
+language and file-ish identifiers) found no new strings in any of them; the one logic change is
+below. The embedded CLI `package.json` in `version/index.js` moved the `@types/semver` and `semver`
+dev dependencies to `catalog:`, which is build-internal.
+
+**Fleet impact:** nothing required. No fleet extension dynamically imports a shared dependency, and
+none calls `ray migrate`. Two models were added to `AI.Model`: `OpenAI_GPT-6.1_Terra`
+(`openai-gpt-6.1-terra`) and `Vercel_Kimi_K3.1_Pro` (`gateway-moonshotai/kimi-k3.1-pro`), for 182
+members. The app 2.12.0.0 shim carries both with those ids.
+
+### `ray migrate` runs through `npx`
+
+2.10.1's `migrate` called its process runner (execa) as
+`wf("@raycast/migration@latest", [path], {stdio inherit})`, which spawns a program literally named
+`@raycast/migration@latest`, with no shell. 2.11.0 calls `wf("npx", ["@raycast/migration@latest", path], …)`.
+2.9.0 and 2.10.0 have the old form; earlier versions were not checked. Neither version was run, so
+"the old form failed" is read from the code, not observed: nothing on a normal `PATH` has that name,
+so the spawn should fail with ENOENT.
+
+### Shared dependencies: `import()` from CommonJS now goes through the wrapper
+
+The shared-dependency esbuild plugin (`dist/utils/shared-dependencies.js`, inlined into every
+building command) covers `@raycast/api`, `react`, `react-devtools-raycast` and
+`@parcel/source-map`. Its `onResolve` condition for routing an import into its namespace, which
+re-exports through `export * from …; export { default } from …`, changed:
+
+| Import | Importer is ESM | Importer is CommonJS |
+|---|---|---|
+| static `import` | wrapped, both versions | not wrapped, both versions |
+| `import()` | wrapped, both versions | **2.10.1: not wrapped · 2.11.0: wrapped** |
+
+"Importer is ESM" is the plugin's own test: `.mjs`/`.mts`, or the nearest `package.json` says
+`"type": "module"`. `.cjs`/`.cts` and most extension sources without `"type"` count as CommonJS. What
+the unwrapped path produced at runtime was not tested, so this entry does not say what bug it fixes.
+
+---
+
+## 2.10.1 — 2026-10-28 · **nothing new; see 2.10.0**
+
+A pure version bump against **2.10.0**. `version/index.js` and `package.json` each differ in one byte
+(`0` → `1`). `oclif.manifest.json` differs in 5,616 bytes at identical size; with keys sorted
+recursively it is equal apart from `.version`. No app build for 2.10.1 was checked.
+
+---
+
 ## 2.10.0 — 2026-10-28 · **bump `@types/react` with it**
 
 Diffed against **2.9.0** (2026-10-22). Runtime claims were checked against **Raycast.app 2.10.0.0**.

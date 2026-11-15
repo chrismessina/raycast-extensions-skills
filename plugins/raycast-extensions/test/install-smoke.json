@@ -1,0 +1,263 @@
+{
+  "why": "Phase 9.3 installation smoke test: every case runs `node scripts/rx.mjs <args>` against the PUBLISHED pin, with RX_DEV and RX_TARBALL unset and a fresh npm cache and XDG cache, so nothing comes from a local checkout or an earlier install. Only disposable fixture directories and a temporary sandbox are touched; nothing reaches GitHub. `cwd` is `sandbox` (an empty temporary directory), `fixture:<name>` (test/fixtures/<name> in place) or `repo:<name>` (a copy of that fixture in a fresh git repository of its own, so no rx state carries over). npm's global prefix is isolated too, and after the cases the smoke test requires the pinned package to be in the fresh npm cache, so a globally installed rx of the same version cannot stand in for the published one. `stdin: \"bash:<command>\"` sends a PreToolUse Bash hook payload for that command. `stdout`, when present, is a regular expression; `{pin}` is the version in rx-version.json. Every command `rx commands --json` lists must have a `<command> --help` case.",
+  "cases": [
+    {
+      "label": "runner pin",
+      "args": [
+        "--runner-version"
+      ],
+      "cwd": "sandbox",
+      "exit": 0,
+      "stdout": "^{pin}\\n$"
+    },
+    {
+      "label": "first call installs the pinned package",
+      "args": [
+        "--version"
+      ],
+      "cwd": "sandbox",
+      "exit": 0,
+      "stdout": "^{pin}\\n$"
+    },
+    {
+      "label": "command discovery",
+      "args": [
+        "commands",
+        "--json"
+      ],
+      "cwd": "sandbox",
+      "exit": 0,
+      "stdout": "\"version\":\\s*\"{pin}\""
+    },
+    {
+      "label": "api-diff --help",
+      "args": [
+        "api-diff",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "api-floor --help",
+      "args": [
+        "api-floor",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "audit --help",
+      "args": [
+        "audit",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "changelog --help",
+      "args": [
+        "changelog",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "commands --help",
+      "args": [
+        "commands",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "contributions --help",
+      "args": [
+        "contributions",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "doctor --help",
+      "args": [
+        "doctor",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "gates --help",
+      "args": [
+        "gates",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "greptile --help",
+      "args": [
+        "greptile",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "guard --help",
+      "args": [
+        "guard",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "holdout --help",
+      "args": [
+        "holdout",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "judge --help",
+      "args": [
+        "judge",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "png --help",
+      "args": [
+        "png",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "pr --help",
+      "args": [
+        "pr",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "preflight --help",
+      "args": [
+        "preflight",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "preset --help",
+      "args": [
+        "preset",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "publication --help",
+      "args": [
+        "publication",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "scan --help",
+      "args": [
+        "scan",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "shortcuts --help",
+      "args": [
+        "shortcuts",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "stale --help",
+      "args": [
+        "stale",
+        "--help"
+      ],
+      "cwd": "sandbox",
+      "exit": 0
+    },
+    {
+      "label": "preflight on a clean fixture",
+      "args": [
+        "preflight",
+        "--root",
+        "."
+      ],
+      "cwd": "fixture:clean",
+      "exit": 0
+    },
+    {
+      "label": "preflight on a fixture with a planted defect",
+      "args": [
+        "preflight",
+        "--root",
+        "."
+      ],
+      "cwd": "fixture:logger-missing",
+      "exit": 1
+    },
+    {
+      "label": "guard allows an unrelated command, silently",
+      "args": [
+        "guard"
+      ],
+      "cwd": "sandbox",
+      "stdin": "bash:ls",
+      "exit": 0,
+      "stdout": "^$"
+    },
+    {
+      "label": "guard denies marking a PR ready",
+      "args": [
+        "guard"
+      ],
+      "cwd": "sandbox",
+      "stdin": "bash:gh pr --repo o/r ready 1",
+      "exit": 0,
+      "stdout": "\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"marking a PR ready for review is Chris's click"
+    },
+    {
+      "label": "guard denies a publish with no receipt",
+      "args": [
+        "guard"
+      ],
+      "cwd": "repo:clean",
+      "stdin": "bash:npm run publish",
+      "exit": 0,
+      "stdout": "\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"publish of [^\"]* blocked: no gates receipt at "
+    }
+  ]
+}

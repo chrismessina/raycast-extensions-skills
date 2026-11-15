@@ -1,6 +1,8 @@
 ---
 title: "Rendered-output defects are invisible to code review in principle, not by carelessness"
 date: 2026-07-30
+applies_to: ["develop"]
+trigger: "when you are about to fix something whose correctness is on screen: a toast, an icon, a color"
 problem_type: developer_experience
 category: developer-experience
 component: development_workflow
@@ -39,9 +41,7 @@ Two defects on the storage/API-compat branch of this extension ([raycast/extensi
 
 Neither was missed through inattention. In both cases the evidence needed to spot the defect **was not present in the artifact under review.** The source read correctly; the pixels did not match the source.
 
-This is a third axis alongside two sibling docs from the same branch. [bugs-concentrate-at-module-seams.md](../architecture-patterns/bugs-concentrate-at-module-seams.md) is about *where* a defect sits — in the join between two locally-correct modules. [green-falsification-that-tested-nothing.md](green-falsification-that-tested-nothing.md) is about *whether the check ran* — a probe that reported clean while touching nothing. This doc is about neither: it is about whether the **evidence for correctness exists in the reviewed artifact at all.**
-
-The distinction from the falsification doc is the sharp one. There, a probe silently checked nothing, and the fix was to confirm the probe landed. Here, **a test could run perfectly, land exactly where intended, and still tell you nothing** — because the property under test is not a property of the code. No amount of confirming the probe fired helps when the thing being asserted is not observable from the process doing the asserting.
+This is the **unobserved pixels** case in the four-way selector at [`self-review-does-not-catch-diagnostic-errors` → Which evidence is missing?](self-review-does-not-catch-diagnostic-errors.md#which-evidence-is-missing): the evidence for correctness does not exist in the reviewed artifact at all. A test could run perfectly, land exactly where intended, and still tell you nothing, because the property under test is not a property of the code.
 
 ## Guidance
 
@@ -60,12 +60,9 @@ The title text updates. The animated spinner icon does not swap. The user sees "
 
 Reading that code shows a toast correctly reaching a success state. Every element of the success path is present and ordered correctly. The contradiction exists only in rendered output.
 
-**The root cause was never established, and the fix does not depend on knowing it.** `src/utils/toast.ts:3-18` is careful about this: hiding the animated toast and presenting a fresh one "sidesteps the issue unconditionally, regardless of root cause." That is the honest shape of a fix for a defect you can only observe on screen — do not upgrade it to a mechanism you did not verify. Two exported helpers, not one:
+> **Historical workaround — do not copy.** The branch fixed this with a hide-and-reshow helper, `resolveToast(toast, next)` (`src/utils/toast.ts:19`: `await toast.hide()` then `await showToast(next)`), applied unconditionally "regardless of root cause" (`:3-18`), plus `showResolvedToast(options)` (`:30`), which shows only the resolved state. The general diagnosis that motivated the first helper — *mutating a presented toast never swaps the icon* — was later shown false, and hide-and-reshow is unsafe as a blanket pattern: a toast has no identity, so `hide()` on a retained handle acts on whatever toast is on screen *now*, including a newer run's. The current rules are `animated-means-work` and `toast-no-id` in [`house-style.md`](../../reference/house-style.md): no `Animated` phase for an instant write (which was the real defect at 15 of the 17 sites here — the second helper's "no spinner" judgment is the part that survived), and for genuinely async work either terminal pattern is fine in a simple sequential flow, with ownership handled per `toast-no-id` once the handle crosses an await that can be superseded.
 
-- `resolveToast(toast, next)` (`src/utils/toast.ts:19`) — `await toast.hide()` then `await showToast(next)`. For operations with genuine latency that legitimately need an in-progress indicator.
-- `showResolvedToast(options)` (`src/utils/toast.ts:30`) — shows only the resolved state, no Animated phase. For operations with no observable latency, where a spinner is noise a user can catch mid-flicker.
-
-That second helper carries a design judgment worth naming: the durable fix for a stuck spinner on a `LocalStorage` write is not a better spinner, it is **no spinner**. `src/hooks/useModel.tsx:270-272` states this inline — an Animated toast for a sub-millisecond local write was the exact shape the user caught stuck.
+What this incident still establishes, independent of the workaround: the contradiction between the text and the spinner existed only in rendered output, and no reading of the source could have found it.
 
 **Measured at the current tree.** The figure of "17 sites across 9 files" carried in session recollection — and repeated in the helper's own docstring at `src/utils/toast.ts:9` — describes the *original bug's* footprint before the migration, not the current helper's call sites:
 
@@ -113,13 +110,13 @@ Reviewing harder does not fix this. The remedy is procedural:
 2. **Put it first in the hands-on list.** It is the only item that cannot be discharged any other way, so it should not be buried under items the reader could in principle check themselves.
 3. **Never write a test that appears to cover it.** A green assertion on a rendered-output property manufactures confidence at the moment you have decided to stop looking. An assertion that `toast.style === Toast.Style.Success` would have passed on the exact code that shipped the forever-spinner — because the bug is that the icon does not follow `style`. The assertion would have been true and useless.
 
-Point 3 is where this doc and the falsification doc converge on the same rule from opposite directions. That doc's remedy is *confirm the probe touched the code*; here the probe **does** touch the code, and the result is still uninformative. When a property is not in the artifact, verifying the check landed cannot rescue it. The only correct move is to not write the check.
+When a property is not in the artifact, verifying that the check landed cannot rescue it. The only correct move is to not write the check, and to say so.
 
 ## Why This Matters
 
 Code review — human or AI — reasons over an artifact. When correctness is a property of *rendered output*, the artifact does not contain the evidence. The reviewer is not being careless; they are being asked to answer a question the input cannot settle.
 
-That is why the toast defect survived so much review, and why the review count is the wrong lesson to draw. Adding another reviewer of the same kind adds nothing when the missing evidence is missing for all of them identically. This is the specific way this class differs from module-seam defects: a seam defect *is* present in the artifact — just split across two files nobody opened together, so a wider reviewer finds it. Widening scope does not help here. Only changing the observer does.
+That is why the toast defect survived so much review, and why the review count is the wrong lesson to draw. Adding another reviewer of the same kind adds nothing when the missing evidence is missing for all of them identically. Widening scope does not help here. Only changing the observer does.
 
 The failure mode this creates is precise: a review passes, a suite is green, and the reported state is "verified" — while a user opens the extension and sees a spinner contradicting the word next to it. The UI lies about its state, and every automated signal says it does not.
 
@@ -127,14 +124,14 @@ The failure mode this creates is precise: a review passes, a suite is green, and
 
 - **When a fix's success criterion is a glyph, animation, color, or layout** rather than a value. If you cannot state the assertion as a property of program state, no test will cover it.
 - **When picking an icon whose identifier implies a pair.** Identifier symmetry, string-value prefixes, and enum adjacency are all cheap coincidences of naming. Confirm the rendered glyphs, or use a pair a first-party surface already uses.
-- **When mutating an already-presented UI object** instead of replacing it. Mutation-after-present is the general shape: some properties re-render, some do not, and the split is undocumented. Hide-and-reshow is unconditional and does not require knowing which is which.
+- **When setting a toast's terminal state.** Follow `animated-means-work` (no spinner for an instant write) and `toast-no-id` (ownership before `hide()` or mutation on a handle held across an await) in `house-style.md`; the hide-and-reshow helper above is history, not a recipe.
 - **When an asset's appearance depends on theme or host rendering** — a bundled SVG, a tint, a color that resolves at runtime. The build cannot see the result.
 - **When writing the hands-on verification list** after any branch touching UI. Separate "I verified this" from "only you can verify this," and lead with the second.
 - **When tempted to add a test to close the loop on a visual fix.** That is the moment to write nothing and say so instead.
 
 ## Examples
 
-- `src/utils/toast.ts:19` — `resolveToast`, the hide-and-reshow helper; `:30` — `showResolvedToast`, the no-Animated-phase variant. The docstring at `:3-18` records the symptom and that root cause was never established.
+- `src/utils/toast.ts:19` — `resolveToast`, the hide-and-reshow helper (historical, see above); `:30` — `showResolvedToast`, the no-Animated-phase variant. The docstring at `:3-18` records the symptom and that root cause was never established.
 - `src/hooks/useModel.tsx:270-277` — the "Preset saved!" site the user caught spinning; now has no Animated phase at all.
 - `src/actions/index.tsx:15-26` — the icon-choice comment: why `Icon.Tack` / `Icon.TackDisabled` was adopted (`:15-17`, `:24-26`) and why `Icon.Pin` / `Icon.PinDisabled` / `Icon.Geopin` were rejected (`:19-22`); `:30` and `:59` — the adopted pair in use.
 - `src/ask.tsx:266`, `:271` — pin toasts via `showResolvedToast`, including a Failure branch whose comment names the principle directly: reporting success when the row is gone "would be the UI lying about its state."
@@ -146,6 +143,6 @@ The canonical symptom report, verbatim from the user, sent with a screenshot and
 
 ## Related
 
-- [green-falsification-that-tested-nothing.md](green-falsification-that-tested-nothing.md) — a verification step that reported clean while checking nothing. The inverse of this doc's problem: there the probe never landed; here it lands and still tells you nothing, because the property is not in the code. Its remedy (confirm the mutation landed) is necessary but insufficient for this class.
-- [bugs-concentrate-at-module-seams.md](../architecture-patterns/bugs-concentrate-at-module-seams.md) — *where* defects concentrate. Seam defects are recoverable by widening review scope; rendered-output defects are not recoverable by review at any scope.
+- [`self-review-does-not-catch-diagnostic-errors` → Which evidence is missing?](self-review-does-not-catch-diagnostic-errors.md#which-evidence-is-missing) — the selector that places this case (unobserved pixels) beside its three siblings and says which remedy each needs.
+- [`house-style.md`](../../reference/house-style.md) — `animated-means-work` and `toast-no-id`, the current toast rules, including the correction of this incident's first diagnosis.
 - [raycast/extensions#29798](https://github.com/raycast/extensions/pull/29798) — the branch carrying both fixes; open and unmerged at the time of writing.

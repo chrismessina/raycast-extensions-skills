@@ -1,0 +1,15 @@
+{
+  "why": "The same source under another author: the self-authored preset rules (logger, prettierrc with its exact values, agents-md-*) are N/A, so a non-canonical .prettierrc does not fail a fork.",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 0,
+      "checks": {
+        "logger": "N/A",
+        "prettierrc": "N/A",
+        "agents-md-paths": "N/A"
+      }
+    }
+  ]
+}

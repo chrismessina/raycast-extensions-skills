@@ -1,6 +1,8 @@
 ---
 module: shared-tooling
 date: 2026-07-26
+applies_to: ["develop", "review-pr", "scaffold"]
+trigger: "when you are about to show, copy, or log an error that may carry a server response or URL"
 problem_type: security_issue
 component: tooling
 severity: high
@@ -130,24 +132,46 @@ ordinary error text, file paths, and credential-free URLs pass through unchanged
 ## Prevention
 
 **Attack it; don't review it.** Keep a fixture list of real credential shapes and
-assert on it. Every leak here was found by running inputs, and the leaks that
-review missed were the ones whose *near-neighbor* case already passed:
+assert on it — **one forbidden fragment per fixture**, the piece of that fixture's
+secret that must not survive. Every leak here was found by running inputs, and the
+leaks that review missed were the ones whose *near-neighbor* case already passed:
 
 ```js
+// [name, input, the fragment of THIS secret that must be gone]
 const SHAPES = [
-  ["bearer",        'authorization: Bearer sk-ant-api03-REALKEY…'],
-  ["basic",         "Authorization: Basic dXNlcjpwYXNz"],
-  ["jwt",           "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.dBjftJeZ4CVP…"],
-  ["pem",           "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----"],
-  ["pgp",           "-----BEGIN PGP PRIVATE KEY BLOCK-----\nlQOY\n-----END PGP PRIVATE KEY BLOCK-----"],
-  ["aws-id",        "AKIAIOSFODNN7EXAMPLE"],
-  ["conn-string",   "postgres://admin:hunter2@db:5432/prod"],  // dotless host
-  ["escaped-quote", '{"api_key":"alpha\\"bravo"}'],
+  ["bearer",        'authorization: Bearer sk-ant-api03-REALKEY…',                                   /REALKEY/],
+  ["basic",         "Authorization: Basic dXNlcjpwYXNz",                                            /dXNlcjpwYXNz/],
+  ["jwt",           "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.dBjftJeZ4CVP…",                            /eyJzdWIiOiJ4In0/],
+  ["pem",           "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----",       /MIIEow/],
+  ["pgp",           "-----BEGIN PGP PRIVATE KEY BLOCK-----\nlQOY\n-----END PGP PRIVATE KEY BLOCK-----", /lQOY/],
+  ["aws-id",        "AKIAIOSFODNN7EXAMPLE",                                                         /AKIAIOSFODNN7EXAMPLE/],
+  ["conn-string",   "postgres://admin:hunter2@db:5432/prod",  /* dotless host */                    /hunter2/],
+  ["escaped-quote", '{"api_key":"alpha\\"bravo"}',                                                   /bravo/],
 ];
-for (const [name, input] of SHAPES) {
-  assert.doesNotMatch(redactSecrets(input), /REALKEY|dXNlcjpwYXNz|hunter2|bravo/, name);
+for (const [name, input, forbidden] of SHAPES) {
+  assert.doesNotMatch(redactSecrets(input), forbidden, name);
 }
 ```
+
+**Why per-fixture, and the defect this replaces.** The first version of this list
+asserted one shared regex, `/REALKEY|dXNlcjpwYXNz|hunter2|bravo/`, against all
+eight inputs. The JWT, PEM, PGP and AWS-ID fixtures contain none of those four
+strings, so a redactor that left all four unmasked — or one that removed only the
+four searched strings and nothing else — passed 8/8 (probed 2026-10-31 during the
+Phase 5 review). Four fixtures were inert, and the suite read as coverage of eight
+shapes. A fixture whose expected failure cannot occur is not a fixture.
+
+**Witness each rule's red before trusting the list.** Disable one redaction rule at
+a time (comment out the JWT rule; then the PEM/PGP block rule; then the AWS
+access-key rule; then the URL-credential rule; then the bearer/basic header rule)
+and run the loop: exactly the fixtures that rule covers must fail, each with its
+name in the assertion message, and every other fixture must still pass. Four of the
+five rules own one fixture; the PEM/PGP block rule owns two (`pem` and `pgp`), so
+disabling it must turn exactly those two red. A rule whose removal turns nothing
+red is either redundant or untested; a fixture that fails when an unrelated rule is
+removed is pinned to the wrong rule. Restore and
+re-run. A green list that has never been seen red proves only that the assertions
+ran.
 
 **Test the near-neighbor of anything that passes.** `https://user:pw@host` was
 masked and `postgres://user:pw@db:5432` was not. One passing variant is not

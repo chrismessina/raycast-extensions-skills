@@ -1,0 +1,35 @@
+name: CI
+
+# The plugin's one CI entry point, the same one githooks/pre-push and a developer run:
+# plugins/raycast-extensions/scripts/ci.mjs (budgets, markers, home paths, the preset, generated
+# regions, runner calls, fixtures, plugin script tests, check-references.sh).
+#
+# rx resolves through the plugin's runner in its npx mode, `npx -y raycast-harness@<pin>` with the
+# exact version in plugins/raycast-extensions/rx-version.json. So this cannot pass on GitHub until
+# Phase 9 publishes raycast-harness 0.1.1 to npm. That is expected: nothing is pushed before then.
+# RX_DEV and RX_TARBALL are local validation overrides and are never set here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    # macOS: the pinned raycast-harness declares "os": ["darwin"], so npm will not install it on Linux.
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install the CI tooling (the CommonMark parser rx-calls-check reads Markdown with)
+        run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
+
+      - name: Run every plugin check
+        run: node plugins/raycast-extensions/scripts/ci.mjs

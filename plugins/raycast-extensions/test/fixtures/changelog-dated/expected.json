@@ -1,0 +1,14 @@
+{
+  "why": "A core check under the preset: a CHANGELOG whose top entry carries a date instead of {PR_MERGE_DATE} FAILs changelog-placeholder.",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 1,
+      "checks": {
+        "changelog-placeholder": "FAIL",
+        "changelog-order": "PASS"
+      }
+    }
+  ]
+}

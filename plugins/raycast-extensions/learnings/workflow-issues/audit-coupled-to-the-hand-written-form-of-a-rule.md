@@ -1,6 +1,8 @@
 ---
 module: skills
 date: 2026-07-26
+applies_to: ["develop", "ship"]
+trigger: "when you are about to introduce a helper that encodes a rule an audit already greps for"
 problem_type: workflow_issue
 component: development_workflow
 severity: medium
@@ -49,22 +51,33 @@ two halves of one mechanism; shipping one without the other leaves the rule in a
 worse state than before, because now there are two compliant forms and the checker
 only recognizes one.
 
-Concretely, the audit has to accept **either** form:
+Concretely, the audit has to accept **every** compliant form, and it has to look at each
+site, not at a count. The canonical audit is the `copy-error` rule in
+[`house-style.md`](../../reference/house-style.md): list every failure site
+(`rg -n 'Toast\.Style\.Failure|showFailureToast\(' src`), then read each one and confirm a
+Copy Error `primaryAction` in the same call or on the same toast; `showError(` / `failToast(`
+sites comply without one. A global count of any string proves nothing — one compliant toast
+can mask ten that are not.
+
+The three greps this incident produced are kept as the record of **failed proxies**, not as
+checks to run:
 
 ```bash
 # WRONG — only sees the hand-written form; returns 0 on kit-using code
 rg -c '"Copy Error"' src
 
-# RIGHT — sites that still need attention (raw Failure toasts not routed through the helper)
+# ALSO WRONG (the first "fix") — a line filter: a multiline raw toast whose action sits on a
+# later line still appears here even when it is compliant, and a one-line helper call hides
+# nothing about the sites that bypass it
 rg -n 'Toast\.Style\.Failure' src | rg -v 'failToast|showError'
-# RIGHT — sites that comply, by either route
+# ALSO WRONG (the first "fix") — a global marker count: one helper import or one string
+# elsewhere inflates it without fixing any other site
 rg -cn '"Copy Error"|failToast\(|showError\(' src
 ```
 
-Note the shape of the corrected check: it inverts from *"count the good marker"* to
-*"enumerate the sites that still lack it."* That form degrades safely — a new way
-of satisfying the rule shows up as "not in the needs-attention list" rather than as
-a false failure.
+The shape that holds up is *enumerate every site, then pair each with its remedy*. Counting
+markers — good ones or bad ones — is the proxy that broke, and the "fix" above only swapped one
+spelling for three.
 
 **Three questions to ask when adding any rule-encoding helper:**
 
@@ -76,13 +89,11 @@ a false failure.
    compliance will block correct work — worse than one that over-reports, because
    it trains people to ignore it.
 
-**Write the trap into the audit itself, not just the changelog.** The corrected
-`ship` step carries an inline warning, so the next person to touch it sees why the
-naive grep is wrong before they simplify it back:
-
-> ⚠️ **A literal `grep "Copy Error"` gives a FALSE FAILURE on kit-using code.**
-> `showError` / `failToast` attach the action *inside the package*, so a compliant
-> extension shows zero matches.
+**Write the trap into the audit itself, not just the changelog.** The `copy-error` rule in
+`house-style.md` carries the warning inline — a literal `grep "Copy Error"` gives a false
+failure on kit-using code, because `showError` / `failToast` attach the action inside the
+package — so the next person to touch the audit sees why a count is wrong before they
+simplify it back to one.
 
 ## Why This Matters
 
@@ -130,7 +141,7 @@ improve the code — precisely when you least expect a compliance regression.
   4 sites actually compliant via failToast()/showError()
 ```
 
-**After the audit fix** — same repo, same code:
+**After the per-site audit** — same repo, same code:
 
 ```
 sites still needing a copy action: 1   (the user-state toast — correctly excluded
@@ -138,7 +149,7 @@ sites still needing a copy action: 1   (the user-state toast — correctly exclu
 compliant sites: 4
 ```
 
-One further detail worth keeping: the corrected audit still reports that single
+One further detail worth keeping: the per-site audit still reports that single
 remaining site, and that is right. It is a `Toast.Style.Failure` used for a
 *user-state* message ("Export folder not found") with no error object behind it.
 The rule is about errors the user might need to report; blanket-converting

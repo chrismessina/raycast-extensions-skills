@@ -1,6 +1,8 @@
 ---
 title: "An AI tool's confirmation runs in a different process from the tool: hand state over through LocalStorage"
 date: 2026-10-20
+applies_to: ["develop"]
+trigger: "when you are about to pass anything from an AI tool's `confirmation` to the tool itself"
 category: design-patterns
 module: ai-extensions
 component: ai-tool-confirmation

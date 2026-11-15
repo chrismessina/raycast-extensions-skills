@@ -1,6 +1,8 @@
 ---
 module: shared-tooling
 date: 2026-07-26
+applies_to: ["develop"]
+trigger: "when you are about to move a helper into a shared package, or add one to the kit"
 problem_type: tooling_decision
 component: tooling
 severity: medium

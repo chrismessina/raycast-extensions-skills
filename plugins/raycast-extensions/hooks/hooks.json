@@ -1,0 +1,22 @@
+{
+  "description": "rx guard: a Bash command that runs `ray publish` / `npm run publish` is allowed only behind a current `rx gates` receipt and `rx audit record` audit; `gh pr ready` in any form is always blocked (marking ready is Chris's click); a Write, Edit, MultiEdit or NotebookEdit into a repo's `.git/rx/` state or the rx attestation key is blocked, and so is a Bash command that mentions either (rx state is written only by rx). Format per https://code.claude.com/docs/en/hooks and https://code.claude.com/docs/en/plugins-reference (exec form: `args` present, so the ${CLAUDE_PLUGIN_ROOT} path is one argument with no shell quoting). `onFailure: block` (Claude Code 2.1.295+) fails closed when the hook process itself cannot run or times out.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/rx.mjs",
+              "guard"
+            ],
+            "timeout": 120,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

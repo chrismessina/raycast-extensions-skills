@@ -1,6 +1,8 @@
 ---
 module: development-workflow
 date: 2026-07-30
+applies_to: ["develop", "review-pr"]
+trigger: "when you are about to change a numeric constant on a directional argument, choose between two explanations, or ask which evidence a green check is missing"
 problem_type: workflow_issue
 component: development_workflow
 severity: high
@@ -45,7 +47,24 @@ Every one was caught by empirical measurement or by an independent reviewer. **N
 
 The pattern is not "the agent was careless." Every wrong diagnosis was the *most plausible* explanation available from reading the code. That is precisely the problem: reading code produces plausible theories, and an agent reviewing its own plausible theory against the same code will confirm it. Plausibility is what self-review measures, and plausibility is not truth.
 
-This document is about the methods that broke the loop.
+This document is about the methods that broke the loop. It also carries the selector for the four
+verification learnings from the same fleet, because the question they answer — *what evidence is
+missing?* — is the one a wrong diagnosis never asks.
+
+## Which evidence is missing?
+
+A green suite, a clean grep or a passed review can be missing its evidence in four different ways,
+and each needs a different remedy. Name the row before reaching for a fix.
+
+| The check is green but… | What is missing | Remedy | Read |
+|---|---|---|---|
+| the defect sits between two files that are each correct alone | the **seam**: nobody reviewed the pair | review the joins; test legacy-shaped data; check the new seam a fix creates | [`bugs-concentrate-at-module-seams`](../architecture-patterns/bugs-concentrate-at-module-seams.md) |
+| the "break" step never changed anything, or the fetch never happened | the **probe never landed**: a no-op mutation, a collection failure, a 404 piped into `grep -c` | confirm the mutation or fetch landed on its own terms; read exit codes, not stdout | [`green-falsification-that-tested-nothing`](green-falsification-that-tested-nothing.md) |
+| the assertion compares the code to a constant the code itself owns | the **oracle**: nothing external was consulted | assert against the dependency's real behavior; react to its rejection instead of caching its rule | [`test-against-the-dependency-not-your-own-constant`](test-against-the-dependency-not-your-own-constant.md) |
+| the property is a glyph, a spinner, a color, a layout | the **pixels**: the evidence is not in the artifact at all | say so, put it first in the hands-on list, write no test that appears to cover it | [`rendered-output-is-invisible-to-code-review`](rendered-output-is-invisible-to-code-review.md) |
+
+The rest of this file is the fifth case: the evidence exists and was never gathered, because the
+author re-read the code instead.
 
 ## Guidance
 
@@ -139,7 +158,7 @@ The rule: **an absence is only evidence if you have verified you searched the th
 
 Instances the agent could not have caught by instrumentation — because it never suspected them — were caught by Greptile, by a human Store reviewer, and by adversarial Codex passes.
 
-The instructive one is the stale-badge fix, because it *failed on precisely the path it was written for*. The fix decided whether to commit an empty render by checking the cached payload. But the view command overwrites that payload with an empty list **before** launching the menu bar, so on the mark-as-read path the payload already read empty, the check concluded "nothing to clear," and the badge stayed. Found by a reviewer, not by self-review — self-review kept re-reading a function whose logic was internally coherent and never simulated the caller ordering.
+The instructive one is the stale-badge fix, because it *failed on precisely the path it was written for*. The fix decided whether to commit an empty render by checking the cached payload. But the view command overwrites that payload with an empty list **before** launching the menu bar, so on the mark-as-read path the payload already read empty, the check concluded "nothing to clear," and the badge stayed. Found by a reviewer (Greptile traced the caller), not by self-review — self-review kept re-reading a function whose logic was internally coherent and never simulated the caller ordering. The fix introduced a separate committed-count key as the authority, with the caller-ordering hazard written into the comment so the next reader cannot repeat it. Self-review verifies a function against itself; only tracing the real caller ordering — or a reviewer who does — catches a function that is correct in isolation and wrong in situ.
 
 Operationally: run the independent review on any nontrivial branch **before** reporting done, and ask the reviewer to report *everything* and filter in a separate pass. Scoping a review request by severity up front ("only high-severity," "be conservative") makes reviewers report less, which is the opposite of the goal.
 
@@ -167,50 +186,16 @@ Escalate from self-review to measurement whenever any of these hold:
 - **You are relying on an API field's obvious meaning** — especially a count, total, or flag alongside a filter, projection, or pagination parameter. Probe filtered and unfiltered variants side by side, then establish the blast radius across a sample.
 - **You are about to treat an absence as evidence.** Confirm you searched the artifact that actually executes.
 - **A fix targets a specific code path.** Trace the actual caller ordering and simulate that path, not the function in isolation.
-- **Before reporting a nontrivial branch as done.** Independent review — a second agent, a static reviewer, a human — is the only technique that catches errors you do not suspect. Ask for everything; filter afterwards.
+- **Before reporting a nontrivial branch as done.** Independent review — a second agent, a static reviewer, a human — is the only technique that catches errors you do not suspect. Ask for everything; filter afterward.
 
 Self-review remains useful for what it is good at: typos, unhandled nulls, inconsistent naming, forgotten call sites. It is not a diagnostic instrument.
 
 ## Examples
 
-### Duplicate fetches — plausible attribution, disproved in one run
-
-**Before.** Duplicate fetch log lines. Diagnosis: the view command and the menu-bar command each fetch; naturally there are two. Plausible, matches the architecture, and confirmed by every subsequent re-read of both commands.
-
-**Probe.** Add a `source: "view" | "menu-bar"` field to the fetch options and log it.
-
-**After.** The pairs were same-source — two `view`, then two `menu-bar`. The theory was dead in one run. A follow-up module-scoped `moduleLoadId` (same value across both fetches) then eliminated the "two processes" class entirely. The real cause was Raycast's dev renderer replaying passive effects, which no amount of reading the extension's own source could have surfaced. **Cost of the probe: one field. Cost of not having it: two wrong diagnoses in sequence, one of which shipped a no-op `useCallback` refactor.**
-
-### Page size 25 → 50 — an intuition that was measuring the wrong axis
-
-**Before.** `PR_PAGE_SIZE` raised 25 → 50, reasoning "fewer round-trips is faster." Intermittent 502s followed.
-
-**Sweep.** Three trials at 10 / 25 / 50 against a 312-PR repo, recording latency *and* rate-limit cost.
-
-**After.** Cost per PR flat at ~0.56 points across all three sizes. The larger page bought no quota saving whatsoever and only pushed each request into GitHub's 10-second query timeout. Reverted, and the measurement written into the code.
-
-The mirror-image instance is the more useful one: an independent Codex pass set `ACTIVITY_CONCURRENCY = 2` on the equally-plausible "do not amplify GitHub load." Measured cost was identical at every concurrency level; only wall-clock moved — 2,464ms at 2 vs 892ms at 8 — and at 2, a cold start was *slower than the design it replaced*. **Two agents, opposite intuitions, both wrong, one measurement each.**
-
-### `timelineItems.totalCount` — a field that does not mean what it says
-
-**Before.** Truncation detected by `totalCount > nodes.length`, applied uniformly to all five connections. Correct-looking, and it silently made **every** PR fall back to REST — 25 of 25 — negating the optimization while reporting success.
-
-**Probe.** Query the same PR twice, filtered and unfiltered, side by side.
-
-**After.** Filtered: `totalCount 9, nodes 4`. Unfiltered: `totalCount 9`. `totalCount` counts the whole timeline and ignores `itemTypes` entirely. Detection for that connection switched to saturation (`fetched >= requested`), and a 50-PR probe established that the other four connections *do* report accurately — so the workaround stayed narrow.
-
-### The stale-badge fix that failed on its own target path
-
-**Before.** To decide whether an empty render was needed to clear a stale menu-bar badge, the code checked the **cached payload**. Internally coherent; survived self-review.
-
-**Reviewer.** Greptile traced the caller.
-
-**After.** The view command overwrites the cached payload with an empty list *before* launching the menu-bar command. So on the mark-as-read path — the one path this fix existed for — the payload already read empty, the check concluded "nothing to clear," and the badge persisted. The fix introduced a separate committed-count key as the authority, with the caller-ordering hazard written into the comment so the next reader cannot repeat it.
-
-**The generalizable lesson:** self-review verifies a function against itself. Only tracing the real caller ordering — or a reviewer who does — catches a function that is correct in isolation and wrong in situ.
+Each technique above carries its own before/probe/after record in place (duplicate fetches in §1–§2, the page-size and concurrency sweeps in §3, `totalCount` in §4, the stale badge in §6). One detail from the `totalCount` case not stated above: detection for that connection switched to saturation (`fetched >= requested`), which is what let the workaround stay narrow.
 
 ## Related
 
-- [`green-falsification-that-tested-nothing`](green-falsification-that-tested-nothing.md) — the verification-layer counterpart. That doc covers an agent failing to *verify* its own fix (probes returning a clean reading while checking nothing); this one covers an agent failing to *diagnose*. Its rule that a subagent's self-falsification is systematically weaker than an independent one is the same finding reached from the other side.
-- [`bugs-concentrate-at-module-seams`](../architecture-patterns/bugs-concentrate-at-module-seams.md) — seven Critical defects survived a per-task review of every diff on a 39-commit branch, five of them living between the files those reviews examined. That doc explains *where* defects hide; this one explains *why re-reading did not surface them and what did*.
+- The four verification learnings are in the selector at the top of this file; this file is the diagnosis counterpart (an agent failing to *diagnose*, where they cover an agent failing to *verify*). `green-falsification`'s rule that a subagent's self-falsification is systematically weaker than an independent one is this file's §6 reached from the other side.
+- [`verify-the-remedy-not-just-the-finding`](verify-the-remedy-not-just-the-finding.md) — the same mechanism when the wrong theory is a reviewer's and the author adopts it.
 - The seven diagnoses are recorded in situ, with their corrections, in `docs/PERFORMANCE-FINDINGS.md` in the `gh-pr-tracker` extension repo — see §4.5 (cost model corrected by instrumentation), §5 (an adversarial pass overturning §3/§4, with the standing rule "where this section contradicts §3 or §4, this section wins"), §6.2 (page-size sweep), §6.4 (`totalCount` probe), §6.5 (the safety-margin bug reported by a human Store reviewer), and §6.6 (two silent-data-loss blockers found by adversarial review).

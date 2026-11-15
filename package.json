@@ -8,6 +8,7 @@
     "format:check": "prettier --check \"**/*.{yml,yaml,json}\""
   },
   "devDependencies": {
+    "mdast-util-from-markdown": "2.1.0",
     "prettier": "^3.8.4"
   }
 }

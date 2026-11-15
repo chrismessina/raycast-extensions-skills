@@ -1,0 +1,17 @@
+{
+  "why": "Plan section 11.1 assertions under the preset: AGENTS.md names a path and an npm script that do not exist; the real ones it also names pass.",
+  "runs": [
+    {
+      "args": ["preflight", "--root", ".", "--json"],
+      "match": "partial",
+      "exit": 1,
+      "checks": {
+        "agents-md-paths": "FAIL",
+        "agents-md-scripts": "FAIL",
+        "agents-md-no-home-paths": "PASS",
+        "agents-md-symbols": "N/A",
+        "agent-scaffolding": "WARN"
+      }
+    }
+  ]
+}
