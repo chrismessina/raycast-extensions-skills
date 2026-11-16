@@ -49,6 +49,7 @@ A command prints `VERDICT  check-id  message` lines and exits 0 (PASS/WARN/N/A o
 | bump, floor, or migrate @raycast/api and want to know why the policy says what it says | [`raycast-api-policy-history`](../../learnings/tooling-decisions/raycast-api-policy-history.md) |
 | call `useCachedPromise` / `useCachedState`, or branch on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
 | change a numeric constant on a directional argument, choose between two explanations, or ask which evidence a green check is missing | [`self-review-does-not-catch-diagnostic-errors`](../../learnings/workflow-issues/self-review-does-not-catch-diagnostic-errors.md) |
+| change the messages, state file or safety rules of a long-running helper an extension spawns | [`long-running-helper-outlives-extension-updates`](../../learnings/architecture-patterns/long-running-helper-outlives-extension-updates.md) |
 | cite a Keyboard.Shortcut.Common binding from the docs, the linter or the runtime | [`keyboard-shortcut-sources-divergence-history`](../../learnings/tooling-decisions/keyboard-shortcut-sources-divergence-history.md) |
 | drive a third-party Mac app through AppleScript or JXA | [`raycast-applescript-jxa-integration`](../../learnings/architecture-patterns/raycast-applescript-jxa-integration.md) |
 | fix something whose correctness is on screen: a toast, an icon, a color | [`rendered-output-is-invisible-to-code-review`](../../learnings/workflow-issues/rendered-output-is-invisible-to-code-review.md) |

@@ -26,6 +26,7 @@ Mechanical checks run through the plugin's `rx` runner (`<plugin>` = two levels 
 |---|---|
 | add Swift (or any native helper) to a Raycast extension | [`raycast-swift-helper-built-from-source`](../../learnings/architecture-patterns/raycast-swift-helper-built-from-source.md) |
 | call `useCachedPromise` / `useCachedState`, or branch on its `error` | [`use-cached-promise-caching-semantics`](../../learnings/design-patterns/use-cached-promise-caching-semantics.md) |
+| change the messages, state file or safety rules of a long-running helper an extension spawns | [`long-running-helper-outlives-extension-updates`](../../learnings/architecture-patterns/long-running-helper-outlives-extension-updates.md) |
 | drive a third-party Mac app through AppleScript or JXA | [`raycast-applescript-jxa-integration`](../../learnings/architecture-patterns/raycast-applescript-jxa-integration.md) |
 | share mutable state between commands, or between an AI tool and an open command | [`portable-node-advisory-file-lock`](../../learnings/design-patterns/portable-node-advisory-file-lock.md) |
 | show, copy, or log an error that may carry a server response or URL | [`error-display-is-a-credential-disclosure-surface`](../../learnings/security-issues/error-display-is-a-credential-disclosure-surface.md) |
