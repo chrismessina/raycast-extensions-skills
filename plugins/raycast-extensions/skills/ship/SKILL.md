@@ -112,9 +112,9 @@ and denied, and step 5 is the bare line `npm run publish`. (`rx holdout out` goe
 Guard constraints: the publish is **exactly** `npm run publish` as the whole command (optionally
 after one `cd <absolute or ./… or ../… dir> &&`; plain output redirections allowed); **any other
 Bash command containing the whole word "publish" is blocked** (a commit message, an `echo`,
-`npm publish`), as is any command mentioning marking a PR ready; **never write under `.git/rx/`** or
-hand-edit `receipt.json`, `audit.json`, `publication.json`; an entries file inside the extension
-root (including `.git/`) is `ERROR input`, since it would enter the payload and ship.
+`npm publish`, `rtk npm run publish`: if auto mode quotes that rewrite back, resend the bare one),
+as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt.json`,
+`audit.json`, `publication.json`; an entries file in the extension root (`.git/` too) would ship, so it is `ERROR input`.
 
 ## Pre-flight (the "cake") — each layer is gardening, not engineering
 

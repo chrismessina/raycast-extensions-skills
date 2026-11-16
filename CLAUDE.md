@@ -52,7 +52,9 @@ argument is trusted as a value: never put a flag in a variable (`OPT=--json`, th
 the check cannot see what it expands to.
 
 The runner reads the exact version from `rx-version.json`, runs it (`npx -y @chrismessina/raycast-harness@<version>`,
-or a local checkout when `RX_DEV=<path>` is set during development), and appends
+with `--prefix <cache>/runner/npx` added only inside a checkout of rx itself, where npx would
+otherwise run the workspace package and lock the guard; or a local checkout when `RX_DEV=<path>`
+is set during development), and appends
 `--preset <plugin>/presets/chrismessina.json` to every command whose registry accepts it. Never a
 bare `rx`, never `npx @chrismessina/raycast-harness`, never `--preset` by hand. `reference/rx.md` is generated
 from the registry by `scripts/rx-reference.mjs`; do not edit it. Every `rx` command prints

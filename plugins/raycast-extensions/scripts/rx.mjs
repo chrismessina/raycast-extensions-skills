@@ -16,6 +16,19 @@
 //                                  directory with that marker counts as installed: one without it
 //                                  is replaced, and a run that loses a race keeps the winner's
 //        otherwise                 npx -y @chrismessina/raycast-harness@<pinned version>
+//                                  One exception: when the project npm would pick for the caller's
+//                                  directory (the nearest ancestor holding a package.json or a
+//                                  node_modules) is a package named @chrismessina/raycast-harness,
+//                                  i.e. a checkout of rx itself, the runner adds
+//                                  `--prefix <cache>/runner/npx`, an empty directory it owns.
+//                                  Without it npx runs the workspace package there (when its
+//                                  version satisfies the pin), finds no installed `rx` bin and
+//                                  fails, and the fail-closed guard hook then blocks every tool
+//                                  call. rx still runs in the caller's directory: --prefix moves
+//                                  only npm's project root (and with it the project .npmrc), not
+//                                  the command's cwd. It is added nowhere else, so every other
+//                                  project keeps its own npm configuration. If the directory cannot
+//                                  be created, the runner drops --prefix and runs npx as before.
 //   3. Appends `--preset <absolute path of ../presets/chrismessina.json>` when the command (or
 //      subcommand) accepts `--preset`, learned from `rx commands --json`. A `--preset` the caller
 //      supplied wins. The registry is cached per pinned version at
@@ -33,7 +46,7 @@
 // rx whose bytes are already on this machine:
 //   RX_DEV                    the checkout, as above
 //   RX_TARBALL                the byte-keyed install, only if a completed one is already in the cache
-//   otherwise                 `npx --offline -y @chrismessina/raycast-harness@<pin>` with npm_config_offline=true,
+//   otherwise                 `npx --offline -y @chrismessina/raycast-harness@<pin>` (plus --prefix inside an rx checkout) with npm_config_offline=true,
 //                             after an offline `--version` probe shows the pinned package is in
 //                             npm's cache; a cache miss fails instead of fetching. npx may lay
 //                             out an install from npm's local content cache to run it; that
@@ -112,8 +125,39 @@ export function cacheBase(env) {
 }
 
 /**
+ * The empty directory npx mode passes as `--prefix` inside an rx checkout (see the header).
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function npxPrefix(env) {
+  return join(cacheBase(env), "runner", "npx");
+}
+
+/**
+ * Is the project npm would pick for `cwd` a checkout of rx itself? npm's project root is the
+ * nearest ancestor holding a package.json or a node_modules directory.
+ * @param {string} cwd
+ */
+export function inRxCheckout(cwd) {
+  for (let dir = resolve(cwd); ; ) {
+    const pkg = join(dir, "package.json");
+    if (existsSync(pkg)) {
+      try {
+        return JSON.parse(readFileSync(pkg, "utf8"))?.name === PACKAGE;
+      } catch {
+        return false;
+      }
+    }
+    if (existsSync(join(dir, "node_modules"))) return false;
+    const up = dirname(dir);
+    if (up === dir) return false;
+    dir = up;
+  }
+}
+
+/**
  * Pick the executable for this run. Pure apart from existence checks; the tarball install itself
- * happens in installTarball(), so tests can prepare an installed tree and never touch npm.
+ * happens in installTarball() and the npx prefix is created by prepareExecutable(), so tests can
+ * prepare an installed tree and never touch npm or the cache.
  * @param {{ version: string, env: NodeJS.ProcessEnv, cwd?: string }} opts
  * @returns {Executable}
  */
@@ -131,7 +175,26 @@ export function resolveExecutable({ version, env, cwd = process.cwd() }) {
     const installRoot = tarballInstallDir(abs, env);
     return { file: process.execPath, args: [tarballExecutable(installRoot)], mode: "tarball", label: `RX_TARBALL ${abs}`, installRoot, tarball: abs };
   }
-  return { file: "npx", args: ["-y", `${PACKAGE}@${version}`], mode: "npx", label: `npx ${PACKAGE}@${version}` };
+  const prefix = inRxCheckout(cwd) ? ["--prefix", npxPrefix(env)] : [];
+  return { file: "npx", args: [...prefix, "-y", `${PACKAGE}@${version}`], mode: "npx", label: `npx ${PACKAGE}@${version}` };
+}
+
+/**
+ * Make an executable ready to spawn. In npx mode with `--prefix` that means creating the prefix
+ * directory; if it cannot be created, the same executable without `--prefix` (npx from the
+ * caller's directory, the runner's behavior before 2026-11-15). Anything else is returned unchanged.
+ * @param {Executable} exe
+ * @returns {Executable}
+ */
+export function prepareExecutable(exe) {
+  const i = exe.mode === "npx" ? exe.args.indexOf("--prefix") : -1;
+  if (i < 0) return exe;
+  try {
+    mkdirSync(exe.args[i + 1], { recursive: true });
+    return exe;
+  } catch {
+    return { ...exe, args: [...exe.args.slice(0, i), ...exe.args.slice(i + 2)] };
+  }
 }
 
 /**
@@ -248,7 +311,7 @@ export async function captureRx(argv, opts = {}) {
   const env = opts.env ?? process.env;
   const log = opts.log ?? ((s) => process.stderr.write(s));
   const version = readPinnedVersion();
-  const exe = resolveExecutable({ version, env, cwd: opts.cwd });
+  const exe = prepareExecutable(resolveExecutable({ version, env, cwd: opts.cwd }));
   await installTarball(exe, env, log);
   let args = argv;
   if (opts.inject !== false) {
@@ -345,7 +408,7 @@ export const NOT_INSTALLED =
  * @returns {Promise<{ exe: Executable, env: NodeJS.ProcessEnv } | null>}
  */
 export async function resolveLocalExecutable({ version, env, cwd = process.cwd(), run = capture }) {
-  const exe = resolveExecutable({ version, env, cwd });
+  const exe = prepareExecutable(resolveExecutable({ version, env, cwd }));
   if (exe.mode === "dev") return { exe, env };
   if (exe.mode === "tarball") return exe.installRoot && tarballInstalled(exe.installRoot) ? { exe, env } : null;
   const offlineEnv = { ...env, npm_config_offline: "true" };
@@ -385,7 +448,7 @@ export async function main(argv, io = {}) {
       if (!local) throw new RunnerError(NOT_INSTALLED);
       return await passthrough(local.exe.file, [...local.exe.args, ...args], { cwd, env: local.env, log });
     }
-    const exe = resolveExecutable({ version, env, cwd });
+    const exe = prepareExecutable(resolveExecutable({ version, env, cwd }));
     await installTarball(exe, env, log);
     const wantsRx = args.length > 0 && !args[0].startsWith("--");
     if (wantsRx) {

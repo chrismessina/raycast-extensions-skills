@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,9 @@ import {
   injectPreset,
   installTarball,
   loadRegistry,
+  inRxCheckout,
+  npxPrefix,
+  prepareExecutable,
   nodeMeetsFloor,
   readPinnedVersion,
   resolveExecutable,
@@ -413,7 +416,7 @@ function fakeProgram(file, body = "") {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(
     file,
-    `#!${process.execPath}\nconst { appendFileSync } = process.getBuiltinModule("node:fs");\nconst argv = process.argv.slice(2);\nconst log = (o) => appendFileSync(process.env.FAKE_LOG, JSON.stringify(o) + "\\n");\nlog({ prog: ${JSON.stringify(file.split("/").pop())}, argv, offline: process.env.npm_config_offline ?? null });\n${body}\n`,
+    `#!${process.execPath}\nconst { appendFileSync } = process.getBuiltinModule("node:fs");\nconst argv = process.argv.slice(2);\nconst log = (o) => appendFileSync(process.env.FAKE_LOG, JSON.stringify(o) + "\\n");\nlog({ prog: ${JSON.stringify(file.split("/").pop())}, argv, cwd: process.cwd(), offline: process.env.npm_config_offline ?? null });\n${body}\n`,
   );
   chmodSync(file, 0o755);
 }
@@ -512,6 +515,7 @@ test("recording a publication in pinned npx mode runs npx offline only; a cache 
       ["npx", ["--offline", "-y", pkg, "--version"]],
       ["npx", ["--offline", "-y", pkg, "publication", "record", "raycast/extensions", "31000", SHA40]],
     ]);
+    assert.ok(calls.every((c) => realpathSync(c.cwd) === realpathSync(w.repo)), "npx still runs rx in the caller's directory");
     assert.ok(calls.every((c) => c.offline === "true"), "npm_config_offline=true on every npx run");
     rmSync(w.log, { force: true });
     const miss = await runner(["publication", "record", "raycast/extensions", "31000", SHA40], { cwd: w.repo, env: w.env });
@@ -708,3 +712,63 @@ function fakeExtension(root) {
   writeFileSync(join(root, "src", "index.tsx"), "export default function Command() { return null; }\n");
   writeFileSync(join(root, "package-lock.json"), JSON.stringify({ name: "fake-ext", lockfileVersion: 3, packages: { "": { name: "fake-ext" }, "node_modules/@raycast/api": { version: "1.104.25" } } }));
 }
+
+test("npx mode runs from a neutral --prefix, so a checkout of rx itself cannot hijack the pinned package (2026-11-15)", async () => {
+  await withTempDir(async (dir) => {
+    // Inside the rx checkout, `npx -y @chrismessina/raycast-harness@<pin>` resolved to the
+    // workspace package and printed `sh: rx: command not found`, and the fail-closed guard hook
+    // then blocked every tool call. A package.json with the same name and the pinned version (npx
+    // prefers a local package only when its version satisfies the spec) reproduces it.
+    const ws = join(dir, "rx-checkout");
+    mkdirSync(ws);
+    writeFileSync(join(ws, "package.json"), JSON.stringify({ name: "@chrismessina/raycast-harness", version: readPinnedVersion(), bin: { rx: "bin/rx.mjs" } }));
+    const env = { ...e2eEnv(join(dir, "cache")) };
+    delete env.RX_DEV;
+    delete env.RX_TARBALL;
+    const r = await runner(["--version"], { cwd: ws, env });
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.stdout.trim(), readPinnedVersion());
+    assert.ok(existsSync(npxPrefix(env)), "the runner created its prefix directory");
+  });
+});
+
+test("inRxCheckout: only a project npm resolves to a package named @chrismessina/raycast-harness gets --prefix", async () => {
+  await withTempDir(async (dir) => {
+    const env = { XDG_CACHE_HOME: join(dir, "cache") };
+    const rx = join(dir, "rx");
+    mkdirSync(join(rx, "src", "deep"), { recursive: true });
+    writeFileSync(join(rx, "package.json"), JSON.stringify({ name: "@chrismessina/raycast-harness" }));
+    assert.equal(inRxCheckout(join(rx, "src", "deep")), true, "a subdirectory of the checkout");
+    assert.deepEqual(resolveExecutable({ version: "0.1.0", env, cwd: rx }).args, ["--prefix", npxPrefix(env), "-y", "@chrismessina/raycast-harness@0.1.0"]);
+    const ext = join(rx, "fixtures", "ext");
+    mkdirSync(ext, { recursive: true });
+    writeFileSync(join(ext, "package.json"), JSON.stringify({ name: "some-extension" }));
+    assert.equal(inRxCheckout(ext), false, "a nested project is its own project");
+    const nm = join(rx, "other");
+    mkdirSync(join(nm, "node_modules"), { recursive: true });
+    assert.equal(inRxCheckout(nm), false, "a node_modules directory makes its parent the project");
+    writeFileSync(join(dir, "broken.json"), "");
+    const broken = join(dir, "broken");
+    mkdirSync(broken);
+    writeFileSync(join(broken, "package.json"), "{");
+    assert.equal(inRxCheckout(broken), false);
+  });
+});
+
+test("prepareExecutable: creates the npx prefix; when it cannot, it drops --prefix and runs npx as before", async () => {
+  await withTempDir(async (dir) => {
+    const env = { XDG_CACHE_HOME: join(dir, "cache") };
+    const rx = join(dir, "rx");
+    mkdirSync(rx);
+    writeFileSync(join(rx, "package.json"), JSON.stringify({ name: "@chrismessina/raycast-harness" }));
+    const exe = resolveExecutable({ version: "0.1.0", env, cwd: rx });
+    assert.ok(!existsSync(npxPrefix(env)), "resolveExecutable touches no disk");
+    assert.deepEqual(prepareExecutable(exe).args, exe.args);
+    assert.ok(existsSync(npxPrefix(env)));
+    writeFileSync(join(dir, "file"), "");
+    const blocked = resolveExecutable({ version: "0.1.0", env: { XDG_CACHE_HOME: join(dir, "file") }, cwd: rx });
+    assert.deepEqual(prepareExecutable(blocked).args, ["-y", "@chrismessina/raycast-harness@0.1.0"]);
+    const dev = resolveExecutable({ version: "0.1.0", env: { RX_DEV: (mkdirSync(join(dir, "d", "bin"), { recursive: true }), writeFileSync(join(dir, "d", "bin", "rx.mjs"), ""), join(dir, "d")) } });
+    assert.equal(prepareExecutable(dev), dev, "other modes are untouched");
+  });
+});
