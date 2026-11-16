@@ -45,7 +45,7 @@ function cachedPin() {
   const npx = join(npmCache, "_npx");
   if (!existsSync(npx)) return null;
   for (const d of readdirSync(npx)) {
-    const pkg = join(npx, d, "node_modules", "raycast-harness", "package.json");
+    const pkg = join(npx, d, "node_modules", "@chrismessina", "raycast-harness", "package.json");
     if (existsSync(pkg) && JSON.parse(readFileSync(pkg, "utf8")).version === pin) return pkg;
   }
   return null;
@@ -80,8 +80,8 @@ try {
   else console.log(`PASS   coverage: all ${listed.length} commands have a --help case`);
 
   const fromCache = cachedPin();
-  if (fromCache) console.log(`PASS   provenance: raycast-harness@${pin} came from the fresh npm cache`);
-  else { failures++; console.log(`FAIL   provenance: raycast-harness@${pin} is not in the fresh npm cache, so the cases did not run the published package`); }
+  if (fromCache) console.log(`PASS   provenance: @chrismessina/raycast-harness@${pin} came from the fresh npm cache`);
+  else { failures++; console.log(`FAIL   provenance: @chrismessina/raycast-harness@${pin} is not in the fresh npm cache, so the cases did not run the published package`); }
 
   if (process.argv.includes("--ci")) {
     const ci = spawnSync(process.execPath, [join(PLUGIN, "scripts", "ci.mjs")], { cwd: PLUGIN, env, stdio: "inherit", timeout: 900_000 });
@@ -91,5 +91,5 @@ try {
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
 }
-console.log(`smoke: ${failures ? `${failures} failure(s)` : "every case matched"} for raycast-harness@${pin}`);
+console.log(`smoke: ${failures ? `${failures} failure(s)` : "every case matched"} for @chrismessina/raycast-harness@${pin}`);
 process.exit(failures ? 1 : 0);

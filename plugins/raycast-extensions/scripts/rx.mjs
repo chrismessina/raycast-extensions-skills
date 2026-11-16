@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The plugin's ONLY way to run `rx` (raycast-harness). Skills and hooks call it by its absolute
+// The plugin's ONLY way to run `rx` (@chrismessina/raycast-harness). Skills and hooks call it by its absolute
 // plugin path:  node "<plugin>/scripts/rx.mjs" <command> [subcommand] [--flags]
 //
 // What it does, in order:
@@ -15,7 +15,7 @@
 //                                  writes a completion marker and renames it into place. Only a
 //                                  directory with that marker counts as installed: one without it
 //                                  is replaced, and a run that loses a race keeps the winner's
-//        otherwise                 npx -y raycast-harness@<pinned version>
+//        otherwise                 npx -y @chrismessina/raycast-harness@<pinned version>
 //   3. Appends `--preset <absolute path of ../presets/chrismessina.json>` when the command (or
 //      subcommand) accepts `--preset`, learned from `rx commands --json`. A `--preset` the caller
 //      supplied wins. The registry is cached per pinned version at
@@ -33,7 +33,7 @@
 // rx whose bytes are already on this machine:
 //   RX_DEV                    the checkout, as above
 //   RX_TARBALL                the byte-keyed install, only if a completed one is already in the cache
-//   otherwise                 `npx --offline -y raycast-harness@<pin>` with npm_config_offline=true,
+//   otherwise                 `npx --offline -y @chrismessina/raycast-harness@<pin>` with npm_config_offline=true,
 //                             after an offline `--version` probe shows the pinned package is in
 //                             npm's cache; a cache miss fails instead of fetching. npx may lay
 //                             out an install from npm's local content cache to run it; that
@@ -59,7 +59,9 @@ import { firstLine, isRegistry, locate, readRegistry } from "./lib/rx-protocol.m
 export const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const VERSION_FILE = join(PLUGIN_DIR, "rx-version.json");
 export const PRESET_FILE = join(PLUGIN_DIR, "presets", "chrismessina.json");
-export const PACKAGE = "raycast-harness";
+export const PACKAGE = "@chrismessina/raycast-harness";
+// rx names its XDG cache and config directories without the npm scope (src/state.mjs).
+const STATE_DIR = "raycast-harness";
 const NODE_FLOOR = [22, 12];
 
 /** Thrown for every runner-level failure; main() prints the message and exits 2. */
@@ -69,7 +71,7 @@ export class RunnerError extends Error {}
  * @typedef {{ file: string, args: string[], mode: "dev" | "tarball" | "npx", label: string, installRoot?: string, tarball?: string }} Executable
  *   `file` + `args` is the program prefix rx's own argv is appended to. Tarball mode also carries
  *   `installRoot` (the `npm install --prefix` directory) and `tarball` (absolute path); the
- *   executable is always `<installRoot>/node_modules/raycast-harness/bin/rx.mjs`.
+ *   executable is always `<installRoot>/node_modules/@chrismessina/raycast-harness/bin/rx.mjs`.
  * @typedef {import("./lib/rx-protocol.mjs").FlagSpec} FlagSpec
  * @typedef {import("./lib/rx-protocol.mjs").CommandEntry} CommandEntry
  * @typedef {import("./lib/rx-protocol.mjs").Registry} Registry
@@ -106,7 +108,7 @@ export function readPinnedVersion(file = VERSION_FILE) {
  */
 export function cacheBase(env) {
   const xdg = env.XDG_CACHE_HOME;
-  return xdg && xdg.trim() ? join(xdg, PACKAGE) : join(homedir(), ".cache", PACKAGE);
+  return xdg && xdg.trim() ? join(xdg, STATE_DIR) : join(homedir(), ".cache", STATE_DIR);
 }
 
 /**

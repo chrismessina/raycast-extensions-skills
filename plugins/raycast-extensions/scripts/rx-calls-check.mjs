@@ -17,7 +17,12 @@
 // either the shell form (`command` is a shell line) or the exec form (`command` + `args[]` is the
 // argument vector, not shell-parsed; the tokens after the `scripts/rx.mjs` path are rx's argv).
 // `description` and other prose strings are never scanned.
-//   bare-npx         `npx raycast-harness` anywhere in a scanned file.
+//   bare-npx         an npx command in code or a hook naming raycast-harness or
+//                    @chrismessina/raycast-harness anywhere in its argv, including package option
+//                    values and version selectors. Shell quotes are removed by bash; executable
+//                    paths whose basename is npx count. Prose is never scanned for npx.
+//   shell-syntax     shell text naming npx and raycast-harness that cannot be safely tokenized, including syntax
+//                    errors and unbalanced quotes (fail closed). Substitutions are scanned too.
 //   unknown-command  a runner call names a command the registry does not have.
 //   missing-subcommand / unknown-subcommand   for commands that take subcommands.
 //   unknown-flag     a flag the (sub)command does not declare (the registry's global flags, which
@@ -56,7 +61,7 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { validateDocumentedCall } from "./lib/rx-protocol.mjs";
@@ -116,7 +121,29 @@ export function validateCall(tokens, registry) {
 
 const MARKER = "scripts/rx.mjs";
 const BARE_RX_RE = /(?:^|[\s(;|&`$]|\$\s)rx\s+(?!runner\b)([a-z][a-z-]*)(?=\s|$|[`)|;&])/;
-const NPX_RE = /\bnpx\s+(?:-y\s+|--yes\s+)?raycast-harness\b/;
+// Package identity is checked only after bash has removed shell quoting.
+/** @param {string} token */
+function isNpxPackage(token) {
+  for (const prefix of ["--package=", "-p="]) {
+    if (token.startsWith(prefix)) {
+      token = token.slice(prefix.length);
+      break;
+    }
+  }
+  return ["raycast-harness", "@chrismessina/raycast-harness"].some((name) =>
+    token === name || (token.startsWith(name + "@") && token.length > name.length + 1));
+}
+
+/**
+ * bashArgv keeps leading `NAME=value` assignment words in argv, so skip them to reach the
+ * executable (`NODE_OPTIONS=… npx …` runs npx).
+ * @param {string[]} argv
+ */
+function isBareNpx(argv) {
+  const at = argv.findIndex((t) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(t));
+  return at >= 0 && basename(argv[at]) === "npx" && argv.slice(at + 1).some(isNpxPackage);
+}
+
 const BARE_CHAR = /[A-Za-z0-9_./:=,+@%-]/;
 const RUNNER_PATH_RE = /(?:^|\/)scripts\/rx\.mjs$/;
 const SHAPE = `node <runner path> <command> [args], each arg a bare word, '…' or "…" ($NAME allowed), with an optional trailing # comment`;
@@ -294,8 +321,6 @@ export function scanMarkdown(text, registry) {
   /** @type {Omit<Finding, "file">[]} */
   const findings = [];
   let calls = 0;
-  /** @type {Set<number>} lines inside a code block (their npx is reported by the shell-line scan) */
-  const codeLines = new Set();
   /** @type {[number, number][]} source offset ranges whose markers were read */
   const read = [];
   // The parser replaces a NUL with U+FFFD, while bash drops it, so the bytes the checks read would not
@@ -318,17 +343,24 @@ export function scanMarkdown(text, registry) {
       const bodyFrom = !fenced ? start.offset : eol === -1 ? end.offset : eol + 1;
       if (value !== "") read.push([bodyFrom, end.offset]);
       const first = fenced ? start.line + 1 : start.line;
-      for (let k = first; k <= end.line; k++) codeLines.add(k);
       if (value === "") return;
-      value.split("\n").forEach((raw, k) => {
+      const blockLines = value.split("\n");
+      blockLines.forEach((raw, k) => {
         const line = first + k;
         // A shell line: comments ([ \t]* then `#`, as bash reads them) and verdict lines that do not
         // name the runner are not commands; everything else is scanned on its own.
         if (/^[ \t]*#/.test(raw) || (!raw.includes(MARKER) && /^\s*(PASS|FAIL|WARN|N\/A|ERROR)\b/.test(raw))) return;
-        const r = scanShellLine(raw, registry);
+        // Keep runner rules physical-line based. Only npx joins continuations.
+        const r = scanShellLine(raw, registry, false);
         calls += r.calls;
         for (const f of r.findings) findings.push({ line, ...f, text: raw.trim() });
       });
+      for (let k = 0; k < blockLines.length; k++) {
+        const start = k;
+        let command = blockLines[k];
+        while ((stripComments(command).match(/\\+$/)?.[0].length ?? 0) % 2 === 1 && k + 1 < blockLines.length) command += "\n" + blockLines[++k];
+        for (const f of npxCalls(command)) findings.push({ line: first + start, ...f, text: command.trim() });
+      }
       return;
     }
     if (node.type === "inlineCode") {
@@ -336,15 +368,20 @@ export function scanMarkdown(text, registry) {
       read.push([start.offset, end.offset]);
       const code = String(node.value);
       const line = start.line;
+      // CommonMark folds internal newlines to spaces. A backslash before that folded newline
+      // remains a backslash; remove source continuations before parsing the span for npx.
+      const source = text.slice(start.offset, end.offset);
+      const npxCode = /\\\r?\n/.test(source) ? String(fromMarkdown(source.replace(/\\\r?\n/g, " ")).children[0]?.children?.[0]?.value ?? code) : code;
+      for (const f of npxCalls(npxCode)) findings.push({ line, ...f, text: code });
       if (code.includes(MARKER)) {
         if (code.includes("\n")) {
           findings.push({ line, rule: "runner-shape", message: shapeMessage("an inline span holding a runner call crosses a line break"), text: code.replace(/\s*\n\s*/g, " ") });
           return;
         }
         if (PATH_ONLY_RE.test(code) && code.replace(/["']/g, "").endsWith(MARKER)) return;
-        const r = scanShellLine(code, registry);
+        const r = scanShellLine(code, registry, false);
         calls += r.calls;
-        for (const f of r.findings) if (f.rule !== "bare-npx") findings.push({ line, ...f, text: code }); // npx is reported per line below
+        for (const f of r.findings) findings.push({ line, ...f, text: code });
         return;
       }
       const inv = code.match(/^\$?\s*rx\s+([a-z][a-z-]*)(.*)$/);
@@ -359,9 +396,6 @@ export function scanMarkdown(text, registry) {
   };
   visit(tree);
   const lines = text.split("\n");
-  lines.forEach((raw, i) => {
-    if (!codeLines.has(i + 1) && NPX_RE.test(raw)) findings.push({ line: i + 1, rule: "bare-npx", message: "call rx through the runner, never `npx raycast-harness`", text: raw.trim() });
-  });
   // Every marker must lie in a range that was read.
   for (let at = text.indexOf(MARKER); at !== -1; at = text.indexOf(MARKER, at + 1)) {
     if (read.some(([from, to]) => at >= from && at + MARKER.length <= to)) continue;
@@ -387,7 +421,8 @@ export function splitSegments(line) {
     const ch = line[i];
     if (quote) {
       cur += ch;
-      if (ch === quote) quote = "";
+      if (ch === "\\" && quote === '"' && i + 1 < line.length) cur += line[++i];
+      else if (ch === quote) quote = "";
       continue;
     }
     if (ch === '"' || ch === "'") {
@@ -503,9 +538,10 @@ function closingParen(text, open) {
  * finding, and is still searched for a bare `rx` or `npx raycast-harness`, as is every other line.
  * @param {string} line
  * @param {Registry} registry
+ * @param {boolean} [scanNpx] false when Markdown scans joined npx commands separately
  * @returns {{ findings: Omit<Finding, "file" | "line" | "text">[], calls: number }}
  */
-export function scanShellLine(line, registry) {
+export function scanShellLine(line, registry, scanNpx = true) {
   /** @type {Omit<Finding, "file" | "line" | "text">[]} */
   const findings = [];
   if (line.includes(MARKER)) {
@@ -522,7 +558,7 @@ export function scanShellLine(line, registry) {
     }
     findings.push({ rule: "runner-shape", message: shapeMessage(lexed.reason) });
   }
-  findings.push(...bareCalls(line));
+  findings.push(...bareCalls(line, scanNpx));
   return { findings, calls: 0 };
 }
 
@@ -547,22 +583,64 @@ export function bashArgv(shell) {
 }
 
 /**
+ * Read shell words without executing shell syntax. Substitutions have already been replaced;
+ * the safety pass allows only quoted text, escapes, plain words and simple variable expansions.
+ * Bash owns quote removal and word splitting through bashArgv, just as for runner calls.
+ * Unsupported operators/expansions fail closed rather than being evaluated by the checker.
+ * @param {string} segment
+ * @returns {string[] | null}
+ */
+function shellCommandArgv(segment) {
+  let quote = "";
+  for (let i = 0; i < segment.length; i++) {
+    const ch = segment[i];
+    if (ch === "\\" && quote !== "'") { i++; continue; }
+    if (quote === "'") { if (ch === "'") quote = ""; continue; }
+    if (ch === '"') { quote = quote === '"' ? "" : '"'; continue; }
+    if (!quote && ch === "'") { quote = "'"; continue; }
+    if (ch === "$") {
+      const variable = segment.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[A-Za-z_][A-Za-z0-9_]*\})/);
+      if (!variable) return null;
+      i += variable[0].length - 1;
+      continue;
+    }
+    if (ch === "`" || (!quote && "();&|<>".includes(ch)) || ch === "\0") return null;
+  }
+  if (quote || needsNextLine(segment)) return null;
+  const argv = bashArgv(segment);
+  return argv[0]?.startsWith("<bash exit ") ? null : argv;
+}
+
+/** @param {string} line @returns {Omit<Finding, "file" | "line" | "text">[]} */
+function npxCalls(line) {
+  // Ordinary code snippets need not be shell programs. Fail closed when npx-bearing text
+  // cannot be read; leave unrelated snippets and the runner's existing diagnostics alone.
+  const clean = stripComments(line).replace(/^\s*\$\s+/, "").replace(/\\\r?\n/g, " ");
+  const { text: flat, bodies } = substitutions(clean);
+  const findings = bodies.flatMap(npxCalls);
+  for (const segment of splitSegments(flat)) {
+    const argv = shellCommandArgv(segment);
+    if (!argv && segment.includes("npx") && segment.includes("raycast-harness")) findings.push({ rule: "shell-syntax", message: "cannot safely tokenize npx shell text; use a complete simple command" });
+    else if (argv && isBareNpx(argv)) findings.push({ rule: "bare-npx", message: "call rx through the runner, never `npx raycast-harness`" });
+  }
+  return findings;
+}
+
+/**
  * Bare `rx …` and `npx raycast-harness` in a shell line, per segment, including inside substitutions
  * (bash runs those too). A runner path never matches: `rx` there is preceded by `/`.
  * @param {string} line
  * @returns {Omit<Finding, "file" | "line" | "text">[]}
  */
-function bareCalls(line) {
+function bareCalls(line, scanNpx = true) {
   /** @type {Omit<Finding, "file" | "line" | "text">[]} */
   const findings = [];
+  if (scanNpx) findings.push(...npxCalls(line));
   const { text: flat, bodies } = substitutions(stripComments(line));
-  for (const body of bodies) findings.push(...bareCalls(body));
+  for (const body of bodies) findings.push(...bareCalls(body, false));
   for (const raw of splitSegments(flat)) {
     const segment = raw.replace(/\\\r?\n/g, " ");
-    if (NPX_RE.test(segment)) {
-      findings.push({ rule: "bare-npx", message: "call rx through the runner, never `npx raycast-harness`" });
-      continue;
-    }
+    if (npxCalls(segment).some((f) => f.rule === "bare-npx")) continue;
     const bare = segment.match(BARE_RX_RE);
     if (bare) findings.push({ rule: "bare-rx", message: `\`rx ${bare[1]}\` must be called through the runner: node "<plugin>/scripts/rx.mjs" ${bare[1]} …` });
   }
@@ -622,7 +700,7 @@ export function scanHooks(text, registry) {
             if (bad) findings.push({ line: lineOf(vector[at]), ...bad, text: shown });
           } else if (vector[0] === "rx" || vector[0] === "raycast-harness") {
             findings.push({ line: lineOf(e.command), rule: "bare-rx", message: `\`${vector.slice(0, 2).join(" ")}\` must be called through the runner`, text: shown });
-          } else if (vector[0] === "npx" && vector.some((t) => /^raycast-harness(@|$)/.test(t))) {
+          } else if (isBareNpx(vector)) {
             findings.push({ line: lineOf(e.command), rule: "bare-npx", message: "call rx through the runner, never `npx raycast-harness`", text: shown });
           }
           continue;

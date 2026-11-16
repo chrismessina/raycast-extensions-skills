@@ -114,6 +114,7 @@ test("scanShellLine: a line naming the runner that is not one runner call is run
   const cases = {
     "node /plugin/scripts/rx.mjs doctor; rx preflight --root .": ["runner-shape", "bare-rx"],
     "node scripts/rx.mjs doctor && npx raycast-harness stale": ["runner-shape", "bare-npx"],
+    "node scripts/rx.mjs doctor && npx @chrismessina/raycast-harness stale": ["runner-shape", "bare-npx"],
     "node scripts/rx.mjs doctor && node scripts/rx.mjs preflight": ["runner-shape"],
     // Codex W3 r2 F6: a runner path inside an argument exempts nothing.
     'rx scan "node /p/scripts/rx.mjs preflight"': ["runner-shape", "bare-rx"],
@@ -164,7 +165,9 @@ test("scanHooks: a shell-form hook entry follows the runner shape too", () => {
 
 test("scanMarkdown: `npx raycast-harness` anywhere is a finding", () => {
   assert.deepEqual(rules("Run `npx raycast-harness preflight`.\n\n```\nnpx -y raycast-harness@0.1.0 doctor\n```\n"), ["1:bare-npx", "4:bare-npx"]);
+  assert.deepEqual(rules("Run `npx @chrismessina/raycast-harness preflight`.\n\n```\nnpx -y @chrismessina/raycast-harness@0.1.2 doctor\n```\n"), ["1:bare-npx", "4:bare-npx"]);
   assert.deepEqual(rules("The npm package is named raycast-harness.\n"), []);
+  assert.deepEqual(rules("The npm package is named @chrismessina/raycast-harness.\n"), []);
 });
 
 test("scanMarkdown: inline spans — a command NAME is allowed, an INVOCATION is not", () => {
@@ -548,4 +551,85 @@ test("R9 NUL and control bytes fail closed; indented blocks at offset 0 and fenc
   assert.deepEqual(scanMarkdown("    node /p/scripts/rx.mjs stale --json\n", REGISTRY), { findings: [], calls: 1 });
   assert.deepEqual(rules("    ```\n    node /p/scripts/rx.mjs bogus\n"), ["2:unknown-command"]);
   assert.deepEqual(rules("```sh node /p/scripts/rx.mjs stale"), ["1:runner-shape"], "an unclosed, empty fence's info string is still not covered");
+});
+
+const npxCases = [
+  ["--offline", "-y", "@chrismessina/raycast-harness@0.1.2", "doctor"],
+  ["--yes", "raycast-harness", "doctor"],
+  ["--package=@chrismessina/raycast-harness@latest", "rx", "doctor"],
+  ["--package", "raycast-harness@^0.1.2", "rx", "doctor"],
+  ["-p", "@chrismessina/raycast-harness@~0.1.2", "rx", "doctor"],
+  ["-p=raycast-harness", "rx", "doctor"],
+  ["--registry", "https://registry.npmjs.org", "@chrismessina/raycast-harness", "doctor"],
+  ["--call", "rx doctor && rx stale", "--package=@chrismessina/raycast-harness"],
+  ["cowsay", "@chrismessina/raycast-harness"],
+];
+const shellQuote = (word) => "'" + word.replaceAll("'", "'\\''") + "'";
+
+for (const args of npxCases) {
+  test(`npx tokens: ${JSON.stringify(args)} across command surfaces`, () => {
+    for (const line of ["npx " + args.join(" "), "npx " + args.map(shellQuote).join(" "),
+      "npx " + args.map((w) => JSON.stringify(w)).join(" ")]) {
+      // The --call script is one shell word, so use the quoted variants for that case.
+      if (args.includes("--call") && line === "npx " + args.join(" ")) continue;
+      assert.ok(scanShellLine(line, REGISTRY).findings.some((f) => f.rule === "bare-npx"), line);
+      assert.deepEqual(rules("```sh\n" + line + "\n```"), ["2:bare-npx"], line);
+      assert.deepEqual(rules("Run `" + line + "`."), ["1:bare-npx"], line);
+      assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command: line }]), REGISTRY).findings.map((f) => f.rule), ["bare-npx"], line);
+    }
+    for (const command of ["npx", "/usr/local/bin/npx"]) {
+      assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command, args }]), REGISTRY).findings.map((f) => f.rule), ["bare-npx"]);
+    }
+  });
+}
+
+test("npx tokens: substitutions and continued Markdown commands", () => {
+  for (const line of ["echo $(npx raycast-harness)", "cat <(npx raycast-harness)", "echo `npx raycast-harness`", "npx \\\n@chrismessina/raycast-harness"]) {
+    assert.ok(scanShellLine(line, REGISTRY).findings.some((f) => f.rule === "bare-npx"), line);
+    assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command: line }]), REGISTRY).findings.map((f) => f.rule), ["bare-npx"]);
+  }
+  const continued = "npx \\\n@chrismessina/raycast-harness";
+  assert.deepEqual(rules("```sh\n" + continued + "\n```"), ["2:bare-npx"]);
+  assert.deepEqual(rules("Run `" + continued + "`."), ["1:bare-npx"]);
+});
+
+test("npx tokens: prose, other packages, paths, and quoted literals are not invocations", () => {
+  for (const arg of ["raycast-harness-extra", "@chrismessina/raycast-harness-extra", "~/.cache/raycast-harness"]) {
+    assert.deepEqual(rules("`npx " + arg + "`"), []);
+    assert.deepEqual(scanShellLine("npx " + arg, REGISTRY).findings, []);
+    assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command: "/usr/local/bin/npx", args: [arg] }]), REGISTRY).findings, []);
+  }
+  assert.deepEqual(rules("A learning: npx resolves the package raycast-harness before executing rx."), []);
+  assert.deepEqual(rules("The npm package is named @chrismessina/raycast-harness."), []);
+  assert.deepEqual(rules('`node /p/scripts/rx.mjs doctor`; npx resolves raycast-harness.'), []);
+  assert.deepEqual(scanShellLine('echo "npx raycast-harness"', REGISTRY).findings, []);
+});
+
+test("npx tokens: malformed shell fails closed", () => {
+  const line = "npx 'raycast-harness";
+  assert.deepEqual(scanShellLine(line, REGISTRY).findings.map((f) => f.rule), ["shell-syntax"]);
+  assert.deepEqual(rules("```sh\n" + line + "\n```"), ["2:shell-syntax"]);
+  assert.deepEqual(rules("`" + line + "`"), ["1:shell-syntax"]);
+  assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command: line }]), REGISTRY).findings.map((f) => f.rule), ["shell-syntax"]);
+});
+
+test("npx tokens: bash removes quoting and escapes from the executable too", () => {
+  for (const command of ["n'p'x", "np\\x", "'/usr/local/bin/npx'"]) {
+    assert.deepEqual(scanShellLine(command + " raycast-harness", REGISTRY).findings.map((f) => f.rule), ["bare-npx"]);
+  }
+});
+
+test("npx shell text that names another package is not fail-closed: redirections in ordinary npx snippets are fine; naming the rx package still fails closed", () => {
+  const md = (/** @type {string} */ line) => rules("```sh\n" + line + "\n```\n").map((r) => r.replace(/^\d+:/, ""));
+  assert.deepEqual(md("npx ray build 2>&1"), []);
+  assert.deepEqual(md("npx ray lint > lint.log"), []);
+  assert.deepEqual(md("npx @chrismessina/raycast-harness preflight > out.txt"), ["shell-syntax"]);
+});
+
+test("Codex R5-F1: leading environment assignments do not hide a direct npx call", () => {
+  const md = (/** @type {string} */ line) => rules("```sh\n" + line + "\n```\n").map((r) => r.replace(/^\d+:/, ""));
+  assert.deepEqual(md("FOO=x npx @chrismessina/raycast-harness doctor"), ["bare-npx"]);
+  assert.deepEqual(md("NODE_OPTIONS=--no-warnings A=1 npx -y raycast-harness@0.1.2 doctor"), ["bare-npx"]);
+  assert.deepEqual(md("FOO=x npx ray build"), []);
+  assert.deepEqual(scanHooks(hooksDoc([{ type: "command", command: "FOO=x npx @chrismessina/raycast-harness guard" }]), HOOK_REGISTRY).findings.map((f) => f.rule), ["bare-npx"]);
 });

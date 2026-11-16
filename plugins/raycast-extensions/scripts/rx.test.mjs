@@ -143,9 +143,9 @@ test("resolveExecutable: RX_DEV runs the checkout's bin/rx.mjs with node; a non-
   });
 });
 
-test("resolveExecutable: without overrides it is `npx -y raycast-harness@<pinned>`; RX_DEV wins over RX_TARBALL", async () => {
+test("resolveExecutable: without overrides it is `npx -y @chrismessina/raycast-harness@<pinned>`; RX_DEV wins over RX_TARBALL", async () => {
   const exe = resolveExecutable({ version: "0.1.0", env: {} });
-  assert.deepEqual({ file: exe.file, args: exe.args, mode: exe.mode }, { file: "npx", args: ["-y", "raycast-harness@0.1.0"], mode: "npx" });
+  assert.deepEqual({ file: exe.file, args: exe.args, mode: exe.mode }, { file: "npx", args: ["-y", "@chrismessina/raycast-harness@0.1.0"], mode: "npx" });
   const blank = resolveExecutable({ version: "0.1.0", env: { RX_DEV: "  ", RX_TARBALL: "" } });
   assert.equal(blank.mode, "npx");
   await withTempDir((dir) => {
@@ -156,7 +156,7 @@ test("resolveExecutable: without overrides it is `npx -y raycast-harness@<pinned
   });
 });
 
-test("installTarball: first-time install runs `npm install --prefix <installRoot> <tarball>` and expects <installRoot>/node_modules/raycast-harness/bin/rx.mjs", async () => {
+test("installTarball: first-time install runs `npm install --prefix <installRoot> <tarball>` and expects <installRoot>/node_modules/@chrismessina/raycast-harness/bin/rx.mjs", async () => {
   await withTempDir(async (dir) => {
     const tgz = join(dir, "raycast-harness-0.1.0.tgz");
     writeFileSync(tgz, "candidate package bytes");
@@ -166,7 +166,7 @@ test("installTarball: first-time install runs `npm install --prefix <installRoot
     assert.equal(exe.installRoot, installRoot);
     assert.equal(exe.tarball, tgz);
     assert.equal(exe.args[0], tarballExecutable(installRoot));
-    assert.equal(exe.args[0], join(installRoot, "node_modules", "raycast-harness", "bin", "rx.mjs"));
+    assert.equal(exe.args[0], join(installRoot, "node_modules", "@chrismessina", "raycast-harness", "bin", "rx.mjs"));
     /** @type {{ file: string, args: string[] }[]} */
     const invocations = [];
     const npm = fakeNpm(invocations);
@@ -293,7 +293,7 @@ test("resolveExecutable: RX_TARBALL resolves to an isolated install keyed by the
     const exe = resolveExecutable({ version: "0.1.0", env });
     assert.equal(exe.mode, "tarball");
     assert.equal(exe.file, process.execPath);
-    assert.equal(exe.args[0], join(installDir, "node_modules", "raycast-harness", "bin", "rx.mjs"));
+    assert.equal(exe.args[0], join(installDir, "node_modules", "@chrismessina", "raycast-harness", "bin", "rx.mjs"));
     // A different tarball → a different directory.
     writeFileSync(tgz, "rebuilt candidate");
     assert.notEqual(tarballInstallDir(tgz, env), installDir);
@@ -504,7 +504,7 @@ test("recording a publication through RX_TARBALL uses only an install already in
 test("recording a publication in pinned npx mode runs npx offline only; a cache miss exits 2 with one sentence and never fetches", async () => {
   await withTempDir(async (dir) => {
     const w = await offlineWorld(dir);
-    const pkg = `raycast-harness@${readPinnedVersion()}`;
+    const pkg = `@chrismessina/raycast-harness@${readPinnedVersion()}`;
     const hit = await runner(["publication", "record", "raycast/extensions", "31000", SHA40], { cwd: w.repo, env: { ...w.env, FAKE_NPX_CACHED: "1" } });
     assert.equal(hit.code, 0, hit.stderr);
     const calls = readLog(w.log);

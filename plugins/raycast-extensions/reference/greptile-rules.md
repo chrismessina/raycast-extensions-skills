@@ -8,7 +8,7 @@ and the docs pages it reads as context in `files.json`. The snapshot of those fi
 maps each rule to where this plugin handles it, so a rule that applies to us is checked on our side
 before it costs a review round.
 
-**Core snapshot this map describes:** `raycast-harness` 0.1.1, `SOURCE.json`
+**Core snapshot this map describes:** `@chrismessina/raycast-harness` 0.1.2, `SOURCE.json`
 `{ repo: raycast/extensions, source: main, pr: 32933, sha: b6bdcb196dd5d5f228ae322a89bb5211bc535170, committed: 2026-11-03T07:07:02Z, fetched: 2026-11-07 }`.
 PR [#32933](https://github.com/raycast/extensions/pull/32933), which added `.greptile/` and deleted
 `.github/copilot-instructions.md`, has merged, so Greptile runs these rules from `main`. The IDs

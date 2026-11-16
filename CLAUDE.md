@@ -11,7 +11,7 @@ skills, the reference files that hold policy, the learnings the skills route to,
 `ray build` here, and `package.json` is `private: true` with Prettier as its only dependency.
 
 The mechanics — every check a program can decide — live in the separate open-source CLI
-`raycast-harness` (`rx`, repo `chrismessina/raycast-harness`), pinned here by `rx-version.json`.
+`@chrismessina/raycast-harness` (`rx`, repo `chrismessina/raycast-harness`), pinned here by `rx-version.json`.
 This repo holds only what is Chris-specific: policy, procedure, judgment, evidence, and the preset
 that binds his rules to `rx` checks.
 
@@ -51,10 +51,10 @@ a span holding only the path (`"<plugin>/scripts/rx.mjs"`) names the file and is
 argument is trusted as a value: never put a flag in a variable (`OPT=--json`, then `"$OPT"`), because
 the check cannot see what it expands to.
 
-The runner reads the exact version from `rx-version.json`, runs it (`npx -y raycast-harness@<version>`,
+The runner reads the exact version from `rx-version.json`, runs it (`npx -y @chrismessina/raycast-harness@<version>`,
 or a local checkout when `RX_DEV=<path>` is set during development), and appends
 `--preset <plugin>/presets/chrismessina.json` to every command whose registry accepts it. Never a
-bare `rx`, never `npx raycast-harness`, never `--preset` by hand. `reference/rx.md` is generated
+bare `rx`, never `npx @chrismessina/raycast-harness`, never `--preset` by hand. `reference/rx.md` is generated
 from the registry by `scripts/rx-reference.mjs`; do not edit it. Every `rx` command prints
 `VERDICT  check-id  message` lines and exits 0 (PASS/WARN/N/A), 1 (a FAIL) or 2 (an ERROR); a skill
 branches on the exit code and quotes the FAIL/ERROR lines, and never re-implements a check in prose
@@ -70,6 +70,22 @@ other Bash command whose text contains the whole word `publish` is blocked (so t
 of commit messages and `echo`), and marking a PR ready in any form is always blocked. Nothing in
 this repo writes under `.git/rx/` by hand — that is `rx`'s state.
 
+**The guard runs from this checkout, and it fails closed.** The plugin loads in place, so an edit
+to `scripts/rx.mjs` or `rx-version.json` changes the hook on the very next tool call. The hook
+matches Bash, Write, Edit, MultiEdit and NotebookEdit. If the runner then names a package or version that npm
+cannot serve, every one of those calls is blocked and the session cannot undo the edit itself.
+Chris has to revert it with a `!` command. This happened on 2026-11-15, when `PACKAGE` was switched
+to `@chrismessina/raycast-harness` before that package was published. Change the runner's package
+name and the pin only after `npx -y <package>@<version> --version` succeeds, as one edit. To test
+an unpublished rx first, start the session with `RX_DEV=<rx checkout>`.
+
+**What `bare-npx` does not catch, on purpose.** `rx-calls-check` reads npx commands from bash's
+own tokens, in code only (fenced blocks, inline spans, hooks), never in prose. It does not try to
+see through deliberate obfuscation: a package name split across a line continuation
+(`raycast-\` then `harness`), or `n'p'x` / `raycast-'harness'` in a line bash cannot tokenize
+(one with a redirection, say). Codex raised both on 2026-11-15 and they were declined: the lint
+guards against an agent writing a direct call by habit, not against someone writing around it.
+
 **Where `rx preflight` runs.** Inside `rx gates`, after `rx stale` has established the published
 baseline and `rx scan` has checked the payload for forbidden examples — that is `ship`'s step 0,
 after baseline verification, not "before anything is read". The pre-`rx` scripts (`preflight.mjs`, `greptile-drift.mjs`,
@@ -77,7 +93,7 @@ after baseline verification, not "before anything is read". The pre-`rx` scripts
 `rx pr body` and deleted; skills call the runner, never a script of their own, and the Greptile rule
 snapshot is versioned inside `rx` (`reference/greptile-rules.md` maps it). Never hand-edit a rules
 copy: `rx greptile update` replaces it, and updating the shipped snapshot is one coordinated change
-(the `raycast-harness` release, the pin, the map's "Core snapshot" line and its table together;
+(the `@chrismessina/raycast-harness` release, the pin, the map's "Core snapshot" line and its table together;
 `reference/greptile-rules.md` has the procedure).
 
 ## The preset and the audit matrix
