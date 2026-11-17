@@ -176,9 +176,9 @@ private func watchRaycast() {
   a helper still running from the previous build has no watch.
 
 This does not cover uninstalling the extension while Raycast keeps running. That is rare, and
-logging out ends the helper. Status 2026-11-17: Codex reviewed the change (PATCH, then PASS on the
-recheck), and build, typecheck, lint and tests are green. Quitting Raycast with the boost on has not
-yet been tested by hand.
+logging out ends the helper. Verified 2026-11-17: Codex reviewed the change (PATCH, then PASS on the
+recheck), build, typecheck, lint and tests are green, and quitting Raycast with the boost on turned
+the boost off (tested by hand on Raycast 2.12.1).
 
 ## 4. Identify the running helper by its argv, not by pid or by path
 
