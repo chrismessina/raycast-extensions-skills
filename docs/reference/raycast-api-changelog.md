@@ -21,6 +21,53 @@ node -e 'console.log(Object.keys(require("./v230/package/oclif.manifest.json").c
 
 ---
 
+## 2.13.0 — 2026-11-18 · **four new `AI.Model` members, one deprecation; nothing else**
+
+Diffed against **2.12.1** (2026-11-13); the pair is adjacent in publish order. Runtime claims were
+checked against **Raycast.app 2.13.0.0**. No files were added or removed. Only `types/index.d.ts`
+(+337 bytes, +6 −1 lines), `package.json`, `dist/commands/version/index.js` and
+`oclif.manifest.json` changed, and the runner reports the last three as version-only. Every `dist/`
+bundle and `dist/types/` is byte-identical to 2.12.1. No command or flag moved, and `engines.node`
+is still `>=22.22.2`.
+
+**Fleet impact:** nothing. No `src/` or `package.json` under `~/Developer/GitHub/chrismessina/*`
+references `Fable_5.1` or `fable-5-1` (searched 2026-11-18).
+
+The declaration diff touches only `AI.Model`. `Keyboard`, every component's `actions` prop, and the
+default primary/secondary shortcut text (`↵`/`⌘↵` in List, Grid and Detail; `⌘↵`/`⌘⇧↵` in Form)
+are unchanged.
+
+### `AI.Model`: four members added, `Anthropic_Claude_Fable_5.1` deprecated
+
+- Added: `Anthropic_Claude_Fable_5.2` (`anthropic-claude-fable-5-2`), `Vercel_Muse_Ember`
+  (`gateway-meta/muse-ember`), `Google_Gemini_4_Carbon` (`google-gemini-4-carbon`) and
+  `Google_Gemini_4_Hydrogen` (`google-gemini-4-hydrogen`).
+- `Anthropic_Claude_Fable_5.1` moved from the active block to `@deprecated`
+  (`Use AI.Model["Anthropic_Claude_Fable_5.2"] instead`). Unlike `Vercel_Inkling_Small` in 2.12.0,
+  it was **not** repointed: it still resolves to `anthropic-claude-fable-5-1`.
+- The enum goes from 182 to 186 members, and none were removed. The app 2.13.0.0 shim
+  (`…/Resources/api/node_modules/@raycast/api/index.js`) maps all five of these keys to the same
+  ids as the 2.13.0 types. The other 181 were not rechecked.
+
+The app's 2.13 release note
+([raycast.com/changelog/macos/2-13](https://www.raycast.com/changelog/macos/2-13), fetched
+2026-11-18) headlines a local Raycast MCP server that shares chosen extensions with outside agents,
+plus more built-in AI extensions. These diffs show no package-side surface for either: no new type,
+manifest field or CLI command. The release note's claims are unverified here.
+
+**Derivation:** `rx api-diff 2.12.1 2.13.0` (rx 0.1.3) gave `api-diff` PASS with the hunks above.
+Shim keys were checked by grepping the app's `index.js` for each new and deprecated id.
+
+---
+
+## 2.12.1 — 2026-11-13 · **nothing new; see 2.12.0**
+
+A pure version bump against **2.12.0**. `rx api-diff 2.12.0 2.12.1` returned `api-diff` N/A (`only
+version fields changed`) on `package.json`, `version/index.js` and `oclif.manifest.json`. No app
+build for 2.12.1 was checked.
+
+---
+
 ## 2.12.0 — 2026-11-12 · **one `AI.Model` deprecation; nothing else**
 
 Diffed against **2.11.1** (2026-11-04). Runtime claims were checked against **Raycast.app 2.12.0.0**.

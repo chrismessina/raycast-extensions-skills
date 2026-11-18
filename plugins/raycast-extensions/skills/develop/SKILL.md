@@ -134,7 +134,7 @@ Take an extension that works (a fork you contribute to, or your own legacy one) 
 
    ```bash
    node "<plugin>/scripts/rx.mjs" shortcuts runtime   # once per installed Raycast version: records the app's real Common table
-   node "<plugin>/scripts/rx.mjs" shortcuts check     # shortcut-ambiguous / shortcut-reserved per resolved panel; ERROR without the table
+   node "<plugin>/scripts/rx.mjs" shortcuts check --extension-typescript     # shortcut-ambiguous / shortcut-reserved per resolved panel; ERROR without the table
    ```
 
 5. **Gates, separately and in this order** (`tsc-gate`): `npm run build` generates `raycast-env.d.ts`; `npx tsc --noEmit` is the type gate reviewers run (`ray lint` never typechecks); `npm run lint` last. Since `@raycast/api` 2.9.0, `ray lint`/`validate`/`publish` **error** on two options with the same `value` in one `dropdown` preference, even under `--relaxed`.

@@ -8,7 +8,7 @@ and the docs pages it reads as context in `files.json`. The snapshot of those fi
 maps each rule to where this plugin handles it, so a rule that applies to us is checked on our side
 before it costs a review round.
 
-**Core snapshot this map describes:** `@chrismessina/raycast-harness` 0.1.3, `SOURCE.json`
+**Core snapshot this map describes:** `@chrismessina/raycast-harness` 0.1.4, `SOURCE.json`
 `{ repo: raycast/extensions, source: main, pr: 32933, sha: b6bdcb196dd5d5f228ae322a89bb5211bc535170, committed: 2026-11-03T07:07:02Z, fetched: 2026-11-07 }`.
 PR [#32933](https://github.com/raycast/extensions/pull/32933), which added `.greptile/` and deleted
 `.github/copilot-instructions.md`, has merged, so Greptile runs these rules from `main`. The IDs
@@ -224,4 +224,11 @@ The other named files (`LICENSE`, `TODO.md`, …) stay out of the Store copy by 
 `.gitignore` while unpublished. A published `LICENSE` stays. `brew` and `dev-null` keep their
 public `TODO.md` by his earlier rulings (2026-09-30, 2026-10-22), through the preset's `ship.keep`;
 `rx holdout` never moves a kept or tracked file.
+
+**Exception, `reader-mode` (Chris, 2026-11-17):** its `AGENTS.md` and `CONCEPTS.md` keep shipping,
+through `ship.keep`, because the extension is tricky to maintain and its learnings should stay
+public for whoever maintains it next. Answer the `no-agent-scaffolding` finding with that reason
+instead of removing them. Known gap: `rx pr files`' `pr-local-only` reads only `holdout.localOnly`,
+not `ship.keep`, so it FAILs on a changed kept file; for reader-mode that FAIL is expected.
+
 Procedure: [`../skills/ship/SKILL.md`](../skills/ship/SKILL.md).

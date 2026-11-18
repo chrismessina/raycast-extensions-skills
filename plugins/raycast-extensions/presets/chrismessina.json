@@ -1138,6 +1138,20 @@
           "dev-null"
         ],
         "reason": "Public backlogs by Chris's decision (2026-09-30 brew, 2026-10-22 dev-null); everywhere else TODO.md is a leak."
+      },
+      {
+        "path": "AGENTS.md",
+        "extensions": [
+          "reader-mode"
+        ],
+        "reason": "Chris, 2026-11-17: reader-mode is tricky to maintain and its learnings must stay public for whoever maintains it next; argue the Greptile no-agent-scaffolding finding rather than remove it."
+      },
+      {
+        "path": "CONCEPTS.md",
+        "extensions": [
+          "reader-mode"
+        ],
+        "reason": "Chris, 2026-11-17: ships with AGENTS.md for reader-mode (same reason)."
       }
     ]
   }
