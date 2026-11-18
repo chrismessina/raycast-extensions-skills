@@ -1,7 +1,7 @@
 ---
 title: "Swift in a Raycast extension: `ray build` compiles it only through a `swift:` import, and a long-running helper is spawned, not wrapped"
 date: 2026-11-15
-last_updated: 2026-11-17
+last_updated: 2026-11-18
 applies_to: ["scaffold", "develop"]
 trigger: "when you are about to add Swift (or any native helper) to a Raycast extension"
 category: architecture-patterns
@@ -50,6 +50,22 @@ new product's bytes match the existing asset.
 
 The imported package must contain **exactly one** `executableTarget`. The CLI runs
 `swift package dump-package` and rejects a package with zero or several.
+
+**Other targets are allowed, in other languages, and may link a private framework.** The rule
+counts executable targets only. External HDR (merged into the Store as
+[raycast/extensions#33439](https://github.com/raycast/extensions/pull/33439), 2026-11-18) puts an
+Objective-C `.target` beside its Swift `executableTarget` and links the private `MonitorPanel`
+framework with `.unsafeFlags(["-F/System/Library/PrivateFrameworks"])` and
+`.linkedFramework("MonitorPanel")`
+([Package.swift](https://github.com/raycast/extensions/blob/7c365b605d065268094489078eb123f9f6554a21/extensions/external-hdr/swift/Package.swift),
+[HDRCore.m](https://github.com/raycast/extensions/blob/7c365b605d065268094489078eb123f9f6554a21/extensions/external-hdr/swift/Sources/HDRCore/HDRCore.m)).
+So `ray build` compiles a mixed-language package, and the Store accepted `unsafeFlags` in the
+package `ray build` imports. SwiftPM refuses `unsafeFlags` only in a package used as a
+*dependency*, and the imported package is the root. That is the route to a private Objective-C API
+with no public header: declare the `@interface` yourself in the `.m` file and wrap it in C
+functions the Swift target calls. Not measured here; read from that merged tree. A private
+framework can vanish in any macOS release, so the helper must fail visibly when a class or selector
+is missing.
 
 What the import produces:
 
