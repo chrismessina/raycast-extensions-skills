@@ -147,6 +147,19 @@ The **first and second** actions in a panel auto-get the default primary/seconda
 (List/Grid/Detail: `↵` and `⌘↵`; Form: `⌘↵` and `⌘⇧↵`). Do not assign a shortcut that duplicates
 those defaults on the same panel.
 
+What the runtime actually does, measured in a List on `@raycast/api` 2.12.1 (a probe extension
+whose actions only toast their own name, 2026-11-18, while settling brew's Preview Upgrades panel):
+
+- **Raycast strips an explicit `⌘↵` from any action.** `ray develop` logs *"The `shortcut` prop
+  provided to the Action `…` is reserved by Raycast and has been removed"*; a Store build drops it
+  silently. The prop is dead, not a collision: the action ends up with no shortcut at all.
+- **A second action that declares its own key keeps `⌘↵` as well.** With the second action
+  declaring `⌥⌘U`, `⌘↵` still ran it.
+- **The panel displays the declared key, not the default.** Brew's Upgrade All, second in Preview
+  Upgrades and declaring `⌥⌘U`, shows `⌥⌘U` in its ⌘K panel. The
+  `@raycast/api` type doc says an alternative shortcut on the primary or secondary action "won't be
+  displayed"; on 2.12.1 that is backwards, and only the "the default still applies" half holds.
+
 - **Audit:** `rx shortcuts check`: `shortcut-ambiguous` (one FAIL per colliding pair on a declared
   platform, both sites as file:line; the two sides of a `cond ? (…) : (…)` evaluated once per panel
   are not a pair, but inside a repeated render such as `items.map(…)` they are) and
