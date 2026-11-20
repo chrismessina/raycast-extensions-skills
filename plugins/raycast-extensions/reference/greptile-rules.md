@@ -133,7 +133,7 @@ the part no check reads still needs an entry. The 55 judgment ids, from that fil
 | `docs-match-behavior` | low | README, `help.md`, descriptions and CHANGELOG match what the code now does | `ship` weeding | judgment |
 | `no-generated-files` | medium | No `raycast-env.d.ts`, `node_modules/`, `dist/`, Swift/Rust build output, `.DS_Store` | `rx preflight` `generated-files`: `dist/` and `.build/` fail, a stray `.DS_Store` warns. `ray publish` never copies `node_modules`, `raycast-env.d.ts` or the Swift/Rust build dirs, so those aren't checked. Other compiled output, and a `.DS_Store` deeper than the named folders, are judgment | FAIL / WARN / judgment |
 | `no-native-binaries` | high | No committed or runtime-compiled binaries; Swift / Rust packages via `ray build` | judgment | judgment |
-| `no-dev-material` | low | No `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, top-level `docs/` … that this PR adds | `rx preflight` `dev-material` (named files plus top-level `docs/` and `tools/`). Contributor `docs/` ships by policy; a published `LICENSE` stays; the rest: not yet published → the extension's `.gitignore`, published → deleted in the PR (`ship`). Scratch, sample and unreferenced asset files and heavy test tooling are judgment | WARN / judgment |
+| `no-dev-material` | low | No `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, top-level `docs/` … that this PR adds | `rx preflight` `dev-material` (named files plus top-level `docs/` and `tools/`). Contributor `docs/` ships by policy; a published `LICENSE` or `CONTRIBUTING.md` stays (`brew`, `reader-mode`); an unpublished `CONTRIBUTING.md` lives in the mirror, tracked there and listed in the extension's `.gitignore` ([`contributing-template.md`](contributing-template.md)); the rest: not yet published → the extension's `.gitignore`, published → deleted in the PR (`ship`). Scratch, sample and unreferenced asset files and heavy test tooling are judgment | WARN / judgment |
 | `npm-lockfile-registry` | high | `package-lock.json` only, in sync; packages only from `registry.npmjs.org` | `rx preflight` `lockfile`, `npm-registry`; `rx api-floor`; `dep-gates.md`; whether the lockfile is in sync with `package.json` is judgment (the gates do not run `npm ci`) | FAIL / WARN / judgment |
 | `failure-toasts` | low | `showFailureToast` in catches; wrap selection APIs; never swallow user-triggered errors | House Style toast rules | judgment |
 | `error-empty-state` | medium | A failed load renders an `EmptyView` with the error, not "No results" | House Style `empty-state-copy`; judgment | judgment |
@@ -222,7 +222,10 @@ Each part of the four-file ruling has its own mechanism:
   check FAILs when any of the four is added, modified or renamed in, and accepts them as `removed`.
 
 The other named files (`LICENSE`, `TODO.md`, …) stay out of the Store copy by the extension's
-`.gitignore` while unpublished. A published `LICENSE` stays. `brew` and `dev-null` keep their
+`.gitignore` while unpublished. A published `LICENSE` stays, and so does a published
+`CONTRIBUTING.md` (`brew`, `reader-mode`; Chris, 2026-11-19): edit it in place. An unpublished
+`CONTRIBUTING.md` stays tracked in the mirror; the fork-side `git add` never stages it, because the
+extension's `.gitignore` lists it. `brew` and `dev-null` keep their
 public `TODO.md` by his earlier rulings (2026-09-30, 2026-10-22), through the preset's `ship.keep`;
 `rx holdout` never moves a kept or tracked file.
 
