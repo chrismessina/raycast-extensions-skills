@@ -56,8 +56,8 @@ Thanks for helping. This guide covers running {{TITLE}} locally and sending a ch
 <!-- Published extension: -->
 {{TITLE}} is published in the [Raycast Store](https://www.raycast.com/chrismessina/{{NAME}}).
 Open pull requests against [`raycast/extensions`](https://github.com/raycast/extensions/tree/main/extensions/{{NAME}}),
-not this repository: Raycast reviews every change there, and merged changes sync back here
-automatically. Open [issues](https://github.com/chrismessina/{{REPO}}/issues) here or in
+not this repository: Raycast reviews every change there, and merged changes come back here in a
+sync pull request. Open [issues](https://github.com/chrismessina/{{REPO}}/issues) here or in
 `raycast/extensions`, whichever you prefer.
 
 <!-- Unpublished extension (no Store listing), instead: -->
@@ -90,6 +90,8 @@ You need [Raycast](https://www.raycast.com/) and Node.js {{NODE}} or later.
 | `npm run lint` | Run Raycast's ESLint and Prettier checks |
 | `npm run fix-lint` | Fix what the linter can fix |
 | `npm test` | Run the unit tests |
+| `npm run publish` | Open or update the pull request in `raycast/extensions` (`ray publish`) |
+| `prepublishOnly` | Stops `npm publish`: the extension goes to the Raycast Store, never to the npm registry |
 
 ## How it works
 
