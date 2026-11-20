@@ -11,6 +11,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   PRESET_FILE,
+  guardStake,
   RunnerError,
   VERSION_FILE,
   cacheBase,
@@ -770,5 +771,168 @@ test("prepareExecutable: creates the npx prefix; when it cannot, it drops --pref
     assert.deepEqual(prepareExecutable(blocked).args, ["-y", "@chrismessina/raycast-harness@0.1.0"]);
     const dev = resolveExecutable({ version: "0.1.0", env: { RX_DEV: (mkdirSync(join(dir, "d", "bin"), { recursive: true }), writeFileSync(join(dir, "d", "bin", "rx.mjs"), ""), join(dir, "d")) } });
     assert.equal(prepareExecutable(dev), dev, "other modes are untouched");
+  });
+});
+
+// ---- the guard hook when rx cannot run ---------------------------------------------------------
+// The hook is `onFailure: block` on every Bash/Write/Edit call. When the pinned rx cannot be
+// fetched (a pin bumped before `npm publish`, no network), the runner used to exit 2 and every
+// call was refused, including the edit that would undo the pin (2026-11-18: pin 0.1.4 before
+// publish; earlier, npx inside an rx checkout). Now the runner falls back to a conservative
+// textual check: a call rx guard could have a stake in is still denied; any other passes with a
+// warning.
+
+/** A fake rx checkout whose `commands --json` and `guard` behave as given. @param {string} dir @param {{ registry: boolean, guard: string }} how */
+function fakeRx(dir, how) {
+  mkdirSync(join(dir, "bin"), { recursive: true });
+  writeFileSync(
+    join(dir, "bin", "rx.mjs"),
+    `const a = process.argv.slice(2);
+if (a[0] === "commands") { if (${how.registry}) { process.stdout.write(${JSON.stringify(JSON.stringify(REGISTRY_DOC))}); process.exit(0); } process.stderr.write("npm error code ETARGET\\n"); process.exit(1); }
+if (a[0] === "guard") { let s = ""; process.stdin.on("data", (d) => (s += d)); process.stdin.on("end", () => { ${how.guard} }); }
+`,
+  );
+  return dir;
+}
+
+/** @param {string} cwd @param {string} tool_name @param {Record<string, unknown>} tool_input */
+const payload = (cwd, tool_name, tool_input) => JSON.stringify({ hook_event_name: "PreToolUse", cwd, tool_name, tool_input });
+/** @param {string} stdout */
+const decision = (stdout) => {
+  if (!stdout.trim()) return "allow";
+  const o = JSON.parse(stdout);
+  return o.hookSpecificOutput?.permissionDecision ?? (o.systemMessage ? "allow+warn" : "allow");
+};
+
+test("guard: when rx cannot be loaded, a call rx guard has no stake in passes with a warning; a guarded one is still denied", async () => {
+  await withTempDir(async (dir) => {
+    const cfg = join(dir, "config");
+    const repo = join(dir, "repo");
+    mkdirSync(join(repo, ".git", "rx"), { recursive: true });
+    /** @type {[string, Record<string, string>][]} */
+    const failures = [
+      ["missing checkout", { RX_DEV: join(dir, "nope") }],
+      ["the pin cannot be fetched", { RX_DEV: fakeRx(join(dir, "fake1"), { registry: false, guard: 'process.stderr.write("npm error code ETARGET\\n"); process.exit(1)' }) }],
+      ["guard crashes", { RX_DEV: fakeRx(join(dir, "fake2"), { registry: true, guard: "process.exit(1)" }) }],
+    ];
+    for (const [label, env] of failures) {
+      /** @param {string} tool @param {Record<string, unknown>} input */
+      const run = async (tool, input) => {
+        const r = await runner(["guard"], { env: { ...process.env, ...env, XDG_CONFIG_HOME: cfg, XDG_CACHE_HOME: join(dir, "cache") }, input: payload(repo, tool, input) });
+        assert.equal(r.code, 0, `${label}: the hook itself never fails (${r.stderr})`);
+        return decision(r.stdout);
+      };
+      /** @type {[string, Record<string, unknown>][]} */
+      const free = [
+        ["Edit", { file_path: join(dir, "elsewhere", "rx-version.json"), old_string: "a", new_string: "b" }],
+        ["Write", { file_path: "src/index.tsx", content: "x" }],
+        ["Bash", { command: "ls -la && git status" }],
+        ["Bash", { command: "gh run view 1 --json status # already queued" }],
+        ["Bash", { command: "node rx.mjs preflight --published" }],
+      ];
+      for (const [tool, input] of free) assert.equal(await run(tool, input), "allow+warn", `${label}: ${tool} ${JSON.stringify(input)}`);
+      /** @type {[string, Record<string, unknown>][]} */
+      const guarded = [
+        ["Bash", { command: "npm run publish" }],
+        ["Bash", { command: "cd ext && ray publish" }],
+        ["Bash", { command: "gh pr ready 12" }],
+        ["Bash", { command: "gh api -X PATCH repos/a/b/pulls/1 -f draft=false" }],
+        ["Bash", { command: "cat .g''it/rx/receipt.json" }],
+        ["Bash", { command: `rm ${join(cfg, "raycast-harness", "attest.key")}` }],
+        ["Edit", { file_path: join(repo, ".git", "rx", "audit.json"), old_string: "a", new_string: "b" }],
+        ["Write", { file_path: ".git/rx/receipt.json", content: "{}" }],
+        ["Write", { file_path: join(cfg, "raycast-harness", "attest.key"), content: "k" }],
+        ["NotebookEdit", { notebook_path: join(repo, ".git", "rx", "n.ipynb"), new_source: "" }],
+      ];
+      for (const [tool, input] of guarded) assert.equal(await run(tool, input), "deny", `${label}: ${tool} ${JSON.stringify(input)}`);
+    }
+  });
+});
+
+test("guard: unreadable hook input is denied when rx cannot be loaded", async () => {
+  await withTempDir(async (dir) => {
+    const r = await runner(["guard"], { env: { ...process.env, RX_DEV: join(dir, "nope"), XDG_CACHE_HOME: join(dir, "cache") }, input: "not json" });
+    assert.equal(r.code, 0);
+    assert.equal(decision(r.stdout), "deny");
+  });
+});
+
+test("guard: when rx runs, its decision and stdout pass through untouched, with the hook input on its stdin", async () => {
+  await withTempDir(async (dir) => {
+    const deny = `process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "saw " + JSON.parse(s).tool_input.command } }))`;
+    const env = { ...process.env, RX_DEV: fakeRx(join(dir, "fake"), { registry: true, guard: deny }), XDG_CACHE_HOME: join(dir, "cache") };
+    const r = await runner(["guard"], { env, input: payload(dir, "Bash", { command: "ls" }) });
+    assert.equal(r.code, 0);
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, "saw ls");
+    const allow = await runner(["guard"], { env: { ...env, RX_DEV: fakeRx(join(dir, "fake3"), { registry: true, guard: "process.exit(0)" }) }, input: payload(dir, "Bash", { command: "ls" }) });
+    assert.deepEqual([allow.code, allow.stdout], [0, ""]);
+  });
+});
+
+test("guard fallback applies rx guard's text rules, and only those (Codex r4 G5, r5, r6, r7)", async () => {
+  await withTempDir(async (dir) => {
+    const cfg = join(dir, "config");
+    const repo = join(dir, "repo");
+    const env = { HOME: process.env.HOME, XDG_CONFIG_HOME: cfg };
+    /** @param {string} tool @param {Record<string, unknown>} input */
+    const stake = (tool, input) => guardStake(payload(repo, tool, input), env);
+    const denied = [
+      "gh pr ready 12",
+      "gh pr -R o/r ready 12",
+      'gh "pr" re""ady 12',
+      "gh api -X PATCH repos/a/b/pulls/1 -f draft=false",
+      "gh api repos/a/b/pulls/1 -f ready_for_review=true",
+      "gh api graphql -f query='mutation { markPullRequestReadyForReview(input: {}) { clientMutationId } }'",
+      "npm run publish",
+      "cat .git//rx/receipt.json",
+      "cat .git/worktrees/w/rx/receipt.json",
+      "cat ~/.config/raycast-harness/attest.key",
+      "rm ~/.config/raycast-harness/generations/current.json",
+      "rm $HOME/.config/raycast-harness/generations/current.json",
+      `ls ${join(cfg, "raycast-harness")}`,
+      `cat ".git/worktrees/my branch/rx/receipt.json"`, // Codex r6 R6-4
+    ];
+    for (const command of denied) assert.ok(stake("Bash", { command }), `deny: ${command}`);
+    const allowed = ["gh pr create --draft", "gh pr list --label ready", "rg ready src", "cat .git/config", "cd ~/.config && ls", "ls", `ls ${join(cfg, "raycast-harness-backup")}` /* Codex r6 R6-3 */];
+    for (const command of allowed) assert.equal(stake("Bash", { command }), null, `allow: ${command}`);
+    const deniedWrites = [".git/rx/x.json", join(repo, ".git", "worktrees", "w", "rx", "x.json"), "src/../.git/rx/x.json", join(cfg, "raycast-harness", "attest.key"), join(repo, ".GIT", "RX", "a")];
+    for (const file_path of deniedWrites) assert.ok(stake("Write", { file_path, content: "" }), `deny Write: ${file_path}`);
+    const quoted = { HOME: process.env.HOME, XDG_CONFIG_HOME: join(dir, "Chris's config") }; // Codex r7 R7-1
+    assert.ok(guardStake(payload(repo, "Bash", { command: `rm "${join(dir, "Chris's config", "raycast-harness", "generations", "current.json")}"` }), quoted), "a config directory with an apostrophe");
+    const allowedWrites = ["rx-version.json", "src/a.ts", ".git/hooks/pre-push", ".git/rxx", join(dir, "config-other", "raycast-harness", "x")];
+    for (const file_path of allowedWrites) assert.equal(stake("Write", { file_path, content: "" }), null, `allow Write: ${file_path}`);
+  });
+});
+
+test("guard fallback denies input it cannot read, and never crashes on odd values (Codex G3)", async () => {
+  await withTempDir(async (dir) => {
+    const env = { ...process.env, RX_DEV: join(dir, "nope"), XDG_CACHE_HOME: join(dir, "cache") };
+    for (const input of ['"text"', "42", "null", "[]", JSON.stringify({ cwd: dir, tool_name: "Bash", tool_input: { command: { toString: null } } })]) {
+      const r = await runner(["guard"], { env, input });
+      assert.deepEqual([r.code, decision(r.stdout)], [0, "deny"], input);
+    }
+  });
+});
+
+test("guard: a rx that exits before reading a large payload falls back instead of crashing on EPIPE (Codex G3)", async () => {
+  await withTempDir(async (dir) => {
+    mkdirSync(join(dir, "fake", "bin"), { recursive: true });
+    writeFileSync(join(dir, "fake", "bin", "rx.mjs"), "process.exit(1)\n");
+    const env = { ...process.env, RX_DEV: join(dir, "fake"), XDG_CACHE_HOME: join(dir, "cache") };
+    const r = await runner(["guard"], { env, input: payload(dir, "Write", { file_path: "src/a.ts", content: "x".repeat(4 * 1024 * 1024) }) });
+    assert.deepEqual([r.code, decision(r.stdout)], [0, "allow+warn"], r.stderr);
+  });
+});
+
+test("guard: a rx that never answers ends in the fallback before the hook's deadline (Codex G4)", async () => {
+  await withTempDir(async (dir) => {
+    mkdirSync(join(dir, "fake", "bin"), { recursive: true });
+    writeFileSync(join(dir, "fake", "bin", "rx.mjs"), "setInterval(() => {}, 1000)\n");
+    const env = { ...process.env, RX_DEV: join(dir, "fake"), XDG_CACHE_HOME: join(dir, "cache"), RX_GUARD_DEADLINE_MS: "1500" };
+    const t = Date.now();
+    const r = await runner(["guard"], { env, input: payload(dir, "Bash", { command: "ls" }) });
+    assert.ok(Date.now() - t < 10_000, `took ${Date.now() - t} ms`);
+    assert.deepEqual([r.code, decision(r.stdout)], [0, "allow+warn"]);
+    assert.match(JSON.parse(r.stdout).systemMessage, /did not answer within 2 s|exited|could not run/);
   });
 });

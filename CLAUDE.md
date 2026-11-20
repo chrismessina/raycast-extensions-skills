@@ -72,14 +72,17 @@ other Bash command whose text contains the whole word `publish` is blocked (so t
 of commit messages and `echo`), and marking a PR ready in any form is always blocked. Nothing in
 this repo writes under `.git/rx/` by hand — that is `rx`'s state.
 
-**The guard runs from this checkout, and it fails closed.** The plugin loads in place, so an edit
-to `scripts/rx.mjs` or `rx-version.json` changes the hook on the very next tool call. The hook
-matches Bash, Write, Edit, MultiEdit and NotebookEdit. If the runner then names a package or version that npm
-cannot serve, every one of those calls is blocked and the session cannot undo the edit itself.
-Chris has to revert it with a `!` command. This happened on 2026-11-15, when `PACKAGE` was switched
-to `@chrismessina/raycast-harness` before that package was published. Change the runner's package
-name and the pin only after `npx -y <package>@<version> --version` succeeds, as one edit. To test
-an unpublished rx first, start the session with `RX_DEV=<rx checkout>`.
+**The guard runs from this checkout.** The plugin loads in place, so an edit to `scripts/rx.mjs`
+or `rx-version.json` changes the hook on the very next tool call. The hook matches Bash, Write,
+Edit, MultiEdit and NotebookEdit. When the pinned rx cannot run (a version npm cannot serve yet,
+no network), the runner answers with a fallback that applies rx guard's text rules: it denies
+every publish, every way rx recognizes of marking a PR ready, and any rx-state or config path
+written out literally, and lets other calls through with a warning. Before the fallback existed, a pin bumped ahead of the release blocked
+every call until Chris reverted it with a `!` command (2026-11-15, and again for 0.1.4). Bump the
+pin with `node plugins/raycast-extensions/scripts/pin-rx.mjs <version>`, never by hand: it writes
+`rx-version.json` and `reference/rx.md` only after the npm registry lists that exact version and
+npx runs it. An `rx.mjs` that cannot load (a syntax error, a bad import) still blocks every call,
+so edit it in a scratch copy, run its tests there, then copy it in. To test an unpublished rx first, start the session with `RX_DEV=<rx checkout>`.
 
 **What `bare-npx` does not catch, on purpose.** `rx-calls-check` reads npx commands from bash's
 own tokens, in code only (fenced blocks, inline spans, hooks), never in prose. It does not try to

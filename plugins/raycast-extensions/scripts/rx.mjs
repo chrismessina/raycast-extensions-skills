@@ -286,17 +286,20 @@ function promote(staging, installRoot) {
 /**
  * Run a program and capture its output. Argument array, no shell.
  * @param {string} file @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string }} [opts]
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, input?: string, timeout?: number }} [opts]
+ *   `timeout` (ms) kills the child and reports it as a failure. A child that exits before reading
+ *   all of `input` is not an error of the caller's (the EPIPE is swallowed; its exit code stands).
  * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
  */
 export function capture(file, args, opts = {}) {
   return new Promise((done) => {
-    const child = execFile(file, args, { cwd: opts.cwd, env: opts.env ?? process.env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const child = execFile(file, args, { cwd: opts.cwd, env: opts.env ?? process.env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: opts.timeout ?? 0, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
       const e = /** @type {(Error & { code?: unknown }) | null} */ (err);
       let code = 0;
       if (e) code = typeof e.code === "number" ? e.code : e.code === "ENOENT" ? 127 : 1;
       done({ code, stdout: String(stdout ?? ""), stderr: String(stderr ?? "") });
     });
+    child.stdin?.on("error", () => {});
     if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
 }
@@ -418,6 +421,134 @@ export async function resolveLocalExecutable({ version, env, cwd = process.cwd()
   return { exe: offline, env: offlineEnv };
 }
 
+// ---- the guard hook when rx cannot run ---------------------------------------------------------
+// hooks.json runs `rx.mjs guard` on every Bash/Write/Edit/MultiEdit/NotebookEdit call with
+// `onFailure: block`. When the pinned rx cannot run (a pin bumped before it is on npm, no
+// network, a crash), exiting 2 would refuse every call, including the edit that undoes the pin.
+// So the runner answers itself instead, with rx guard's text rules: it denies a call that
+// publishes, marks a PR ready, or names rx state or rx's config directory, and lets any other
+// call through with a warning naming the problem. When rx runs, its decision is the only one.
+// Every publish is denied, which is what rx itself would do: it cannot check receipts while down.
+//
+// While rx is down, a Bash path to rx state that is disguised (through a symlink, `..`, a
+// variable, or a separate git directory) is not caught, nor is a Write target that reaches it
+// only through a symlink. Do not add path resolution here; fix the pin or the network.
+
+// Copied from raycast-harness src/audit/publish-command.mjs (READY_MENTIONS, PUBLISH_MENTION,
+// STATE_MENTIONS, normalize, collapseSeparators). Keep them identical to that file.
+const READY_MENTIONS = [/\bpr(?:[ \t]+-\S+(?:[ \t]+[^\s-]\S*)?)*[ \t]+ready(?![\w-])/, /\bdraft[ \t]*=[ \t]*false\b/, /ready_for_review[ \t]*=/, /markpullrequestreadyforreview/];
+const PUBLISH_MENTION = /\bpublish\b/;
+const STATE_MENTIONS = [/\.git\/rx(?![a-z0-9_.-])/, /raycast-harness\/attest\.key/];
+/** @param {string} command */
+const normalize = (command) => command.replace(/\\\r?\n/g, "").replace(/["'\\]/g, "").toLowerCase();
+/** @param {string} text */
+function collapseSeparators(text) {
+  let prev;
+  do {
+    prev = text;
+    text = text.replace(/\/{2,}/g, "/").replace(/\/\.\//g, "/");
+  } while (text !== prev);
+  return text;
+}
+
+/** Literal paths rx guard reaches by resolving path words, which the fallback matches as text. */
+// A worktree name may hold a space once quotes are dropped (`".git/worktrees/my branch/rx"`).
+const LITERAL_STATE = [/\.git\/worktrees\/[^/\n]+\/rx(?![a-z0-9_.-])/, /\.config\/raycast-harness(?![a-z0-9_.-])/];
+
+/** @param {string} s */
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** rx's config directory (the attestation key, generations), as rx's src/attest.mjs keyPaths() names it. @param {NodeJS.ProcessEnv} env */
+function configDir(env) {
+  const xdg = env.XDG_CONFIG_HOME;
+  return join(xdg && xdg.trim() ? xdg : join(homedir(), ".config"), STATE_DIR);
+}
+
+/**
+ * Whether a file path, resolved against `cwd` without touching the disk, is in a repository's rx
+ * state (`.git/rx`, `.git/worktrees/<name>/rx`) or rx's config directory. Compared
+ * case-insensitively, as macOS's default filesystem does.
+ * @param {string} raw @param {string} cwd @param {NodeJS.ProcessEnv} env
+ */
+function isProtected(raw, cwd, env) {
+  const path = resolve(cwd, raw).toLowerCase();
+  const cfg = configDir(env).toLowerCase();
+  if (path === cfg || path.startsWith(cfg + "/")) return true;
+  const seg = path.split("/");
+  return seg.some((s, i) => s === ".git" && (seg[i + 1] === "rx" || (seg[i + 1] === "worktrees" && seg[i + 3] === "rx")));
+}
+
+/**
+ * Why rx guard would deny this hook payload, or null when its text rules see nothing. Anything it
+ * cannot read is denied.
+ * @param {string} input the hook's stdin @param {NodeJS.ProcessEnv} env
+ * @returns {string | null}
+ */
+export function guardStake(input, env) {
+  let p;
+  try {
+    p = JSON.parse(input);
+  } catch {
+    return "the hook input is not JSON";
+  }
+  if (!p || typeof p !== "object" || Array.isArray(p)) return "the hook input is not an object";
+  const tool = p.tool_name;
+  const ti = p.tool_input && typeof p.tool_input === "object" ? p.tool_input : {};
+  const cwd = typeof p.cwd === "string" && p.cwd.startsWith("/") ? p.cwd : process.cwd();
+  if (tool === "Bash") {
+    if (typeof ti.command !== "string") return "the command is not a string";
+    const text = normalize(ti.command);
+    if (READY_MENTIONS.some((re) => re.test(text))) return "the command may mark a PR ready for review";
+    if (PUBLISH_MENTION.test(text)) return "the command mentions publish";
+    const paths = collapseSeparators(text);
+    const cfg = new RegExp(escapeRegExp(collapseSeparators(normalize(configDir(env)))) + "(?![a-z0-9_.-])");
+    if ([...STATE_MENTIONS, ...LITERAL_STATE, cfg].some((re) => re.test(paths))) return "the command names rx state or rx's config directory";
+    return null;
+  }
+  if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(tool)) {
+    const target = tool === "NotebookEdit" ? ti.notebook_path : ti.file_path;
+    if (typeof target !== "string" || !target) return "the call names no file";
+    if (isProtected(target, cwd, env)) return "the file is in rx state or rx's config directory";
+    return null;
+  }
+  return null;
+}
+
+/** The fallback's answer when even guardStake fails. */
+const DENY_UNREADABLE = JSON.stringify({
+  hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "rx guard could not run, and the runner could not read this call, so it is blocked until rx runs again" },
+});
+
+/**
+ * The hook's answer when rx cannot run: deny a call with a stake, else allow with a warning.
+ * Never throws: a failure here is a deny.
+ * @param {string} input @param {NodeJS.ProcessEnv} env @param {string} problem
+ * @returns {string} stdout for the hook
+ */
+export function guardFallback(input, env, problem) {
+  try {
+    const stake = guardStake(input, env);
+    if (stake)
+      return JSON.stringify({
+        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `rx guard could not run (${problem}), and ${stake}, so it is blocked until rx runs again` },
+      });
+    return JSON.stringify({ systemMessage: `rx guard could not run (${problem}); the fallback detected no guarded operation and allowed this call. Fix the rx pin or the network.` });
+  } catch {
+    return DENY_UNREADABLE;
+  }
+}
+
+/** All of stdin as text. */
+function readStdin() {
+  return new Promise((done) => {
+    let s = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (d) => (s += d));
+    process.stdin.on("end", () => done(s));
+    process.stdin.on("error", () => done(s));
+  });
+}
+
 /** @param {string} v e.g. "v22.12.0" */
 export function nodeMeetsFloor(v) {
   const [maj, min] = v.replace(/^v/, "").split(".").map(Number);
@@ -435,6 +566,7 @@ export async function main(argv, io = {}) {
   const cwd = io.cwd ?? process.cwd();
   const out = io.stdout ?? ((s) => process.stdout.write(s));
   const log = io.stderr ?? ((s) => process.stderr.write(s));
+  if (argv.length === 1 && argv[0] === "guard") return runGuard({ env, cwd, out, log, input: await (io.stdin ?? readStdin)() });
   try {
     if (!nodeMeetsFloor(process.version)) throw new RunnerError(`Node ${NODE_FLOOR.join(".")} or newer is required; this is ${process.version}`);
     if (argv[0] === "--runner-version") {
@@ -464,6 +596,48 @@ export async function main(argv, io = {}) {
     }
     throw e;
   }
+}
+
+/**
+ * The PreToolUse hook (`rx.mjs guard`, no flags): rx guard decides when it runs; otherwise
+ * guardFallback does. Always exits 0, so `onFailure: block` never refuses a call wholesale. Guard
+ * takes no --preset, so no registry is loaded.
+ * @param {{ env: NodeJS.ProcessEnv, cwd: string, out: (s: string) => void, log: (s: string) => void, input: string }} o
+ * @returns {Promise<number>}
+ */
+export async function runGuard({ env, cwd, out, log, input }) {
+  // Well inside hooks.json's 120 s timeout, so a stalled fetch ends in the fallback, not a block.
+  const deadline = Number(env.RX_GUARD_DEADLINE_MS) > 0 ? Number(env.RX_GUARD_DEADLINE_MS) : 90_000;
+  const started = Date.now();
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const expired = new Promise((done) => (timer = setTimeout(() => done({ late: true }), deadline)));
+  let problem;
+  try {
+    const attempt = (async () => {
+      if (!nodeMeetsFloor(process.version)) throw new RunnerError(`Node ${NODE_FLOOR.join(".")} or newer is required; this is ${process.version}`);
+      const exe = prepareExecutable(resolveExecutable({ version: readPinnedVersion(), env, cwd }));
+      await installTarball(exe, env, log);
+      return capture(exe.file, [...exe.args, "guard"], { cwd, env, input, timeout: Math.max(1, deadline - (Date.now() - started)) });
+    })();
+    const r = /** @type {{ code: number, stdout: string, stderr: string } | { late: true }} */ (await Promise.race([attempt, expired]));
+    if ("late" in r) problem = `rx did not answer within ${Math.round(deadline / 1000)} s`;
+    else {
+      if (r.stderr) log(r.stderr);
+      if (r.code === 0) {
+        out(r.stdout);
+        return 0;
+      }
+      problem = firstLine(r.stderr) || `rx guard exited ${r.code}`;
+    }
+  } catch (e) {
+    problem = e instanceof Error ? firstLine(e.message) : String(e);
+  } finally {
+    clearTimeout(timer);
+  }
+  log(`rx runner: rx guard could not run: ${problem}\n`);
+  out(guardFallback(input, env, problem));
+  return 0;
 }
 
 /**
@@ -500,6 +674,8 @@ if (invokedDirectly) {
   main(process.argv.slice(2)).then(
     (code) => {
       process.exitCode = code;
+      // The hook must end on time even if rx is still fetching: exit once stdout has drained.
+      if (process.argv[2] === "guard" && process.argv.length === 3) process.stdout.write("", () => process.exit(code));
     },
     (e) => {
       process.stderr.write(`rx runner: ${e?.stack ?? e}\n`);
