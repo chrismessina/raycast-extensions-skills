@@ -10,6 +10,15 @@ Store page *and* in `raycast/extensions`. There is no separate Store copy. Badge
 centered HTML survive Store review — verified 2026-08-26: the published
 `extensions/get-app-icon/README.md` carries all three badges upstream.
 
+**No Development section.** Because the Store page renders this file, contributor material
+(project structure, scripts, clone-and-run, build-from-source) does not belong in it: Greptile
+`readme-user-facing` raises it as a P1, and it did on two Store PRs, the second XDR Boost #33710
+(2026-11-18). `rx preflight` FAILs it as `readme-dev-sections` from the first `rx` release after 0.1.4; under the
+0.1.4 pin, check by hand. Move contributor notes into the mirror's
+`CONTRIBUTING.md`, built from [`contributing-template.md`](contributing-template.md): the
+extension's `.gitignore` keeps it out of the PR, and the README links it only by absolute mirror
+URL.
+
 **Scope:** self-authored extensions only. Do not impose this on a fork you contribute to —
 the personal follow/stars badges transfer *your* identity onto someone else's extension.
 
@@ -34,7 +43,7 @@ repo, normally `raycast-<slug>`.
 
 **<One sentence. What it does and for whom — not a feature list.>**
 
-[Features](#features) • [Requirements](#requirements) • [Quick Start](#quick-start) • [Usage](#usage) • [Development](#development)
+[Features](#features) • [Requirements](#requirements) • [Quick Start](#quick-start) • [Usage](#usage)
 
 </div>
 
@@ -81,41 +90,6 @@ repo, normally `raycast-<slug>`.
 | Preference | Values | Default |
 | --- | --- | --- |
 | <Title> | <type or options> | <default, or blank> |
-
----
-
-## Development
-
-### Project Structure
-
-```
-<repo>/
-├── src/
-│   └── <command>.tsx    # <role>
-├── assets/              # Extension icon (runtime)
-├── media/               # README images
-├── package.json
-└── tsconfig.json
-```
-
-### Scripts
-
-| Script | Description |
-| --- | --- |
-| `npm run dev` | Start in development mode with hot reload |
-| `npm run build` | Build for production |
-| `npm run lint` | Run Raycast ESLint config |
-| `npm run fix-lint` | Auto-fix lint issues |
-| `npm run publish` | Publish to the Raycast Store |
-
-### Clone & Run
-
-```sh
-git clone https://github.com/chrismessina/<repo>.git
-cd <repo>
-npm install
-npm run dev
-```
 
 ---
 
