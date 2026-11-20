@@ -831,6 +831,41 @@ copy allows), **`label` < 50** (it renders in a larger font on the same row as t
   both measurements, and the shell audits `rx` replaced:
   [`logger-preference-copy-and-length-measurements`](../learnings/tooling-decisions/logger-preference-copy-and-length-measurements.md).
 
+#### `[both]` (conditional) The Store description leads with the action and the app people search for
+
+**ID:** `store-description` · **Applies:** the branch adds or changes `description` in `package.json`
+
+The top-level `description` is the line on the Store list, on the extension's web page, and in
+search engine and AI assistant results, so it is written for someone who has never seen the
+extension. Raycast added this to its guidelines and to Greptile as `store-description` in
+raycast/extensions#33589, and rewrote about 3,500 descriptions to it in #33590–#33599 (merged
+2026-11-16/17). The rule as shipped on `main` (092555d) is medium severity and strict: every point
+below is a requirement, a miss is a should-fix, and Greptile posts one comment per description
+listing every miss with a rewritten description as JSON to paste. This house rule's own severity is
+`report`; Greptile's finding still holds the PR.
+
+- **Lead with the action and the app, service or task people search for.** ✅ `Find and kill
+  processes sorted by CPU or memory usage, and force quit apps and background processes.` ❌
+  `Control Obsidian with Raycast` ❌ `Manage Apple Reminders.`
+- **Name the main things it does, matching its commands and AI tools.** Claim nothing the code
+  doesn't do. ✅ `Create, view and complete Apple Reminders, add reminders in natural language with
+  AI, and see them in the menu bar.` ❌ `Spotify's most common features, now at your fingertips.`
+- **About 50 to 155 characters.** Search engines cut off longer ones. Count them; don't estimate.
+- **No filler every extension shares:** "Raycast extension to", "from Raycast", "directly from your
+  command bar", "the fastest way to".
+- **One sentence:** sentence case, US English, a closing period, brand names in canonical spelling
+  (`GitHub`, `macOS`).
+- **Name a platform (`Mac`, `macOS`, `Windows`) only when `platforms` matches.**
+- **Not covered:** a description on `main` the branch doesn't change, command and preference
+  descriptions (those are `pref-description-length` and the command copy rules), and a description
+  in another language for an extension that targets that locale.
+- **Start from Raycast's rewrite.** When the published description came from #33590, adopt it
+  through the mirror sync and edit from there; never revert it to an older local copy.
+
+- **Audit:** judgment `store-description` (report). The mechanical parts (length, closing period,
+  filler, platform) are `rx preflight` `store-description` (WARN) from the first `rx` release after
+  0.1.4; until the pin moves, check them by hand.
+
 ### `[both]` (conditional) Prefer `@chrismessina/raycast-kit` for failure toasts and count copy
 
 **ID:** `kit` · **Applies:** self-authored, already being changed
@@ -1617,6 +1652,7 @@ rule reports a regression on code that just adopted a helper encoding it — see
 | The copy is fixed too — type this block verbatim | `logger-verbose-copy` | `both` | declares `verboseLogging` | **block** | rx `logger-verbose-copy` |
 | Logger 1.5.0+: declare `strictRedaction` beside `verboseLogging` | `logger-strict-redaction` | `both` | self-authored, installed `@chrismessina/raycast-logger` ≥ 1.5.0 | **report** | rx `logger-strict-redaction` |
 | Preference descriptions fit on one line — 80 characters or fewer | `pref-description-length` | `both` | all | **report** | rx `pref-description-length`; rx `pref-label-length` |
+| The Store description leads with the action and the app people search for | `store-description` | `both` | the branch adds or changes `description` in `package.json` | **report** | judgment `store-description` |
 | Prefer `@chrismessina/raycast-kit` for failure toasts and count copy | `kit` | `both` | self-authored, already being changed | **report** | judgment `kit` |
 | Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, "Finder")` | `show-in-finder` | `both` | all | **block** | judgment `show-in-finder` |
 | A completed file export offers Show in Finder AND Copy Path, both with shortcuts | `export-actions` | `both` | writes a file for the user | **block** | judgment `export-actions` |

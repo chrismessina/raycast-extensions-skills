@@ -526,6 +526,23 @@
       ]
     },
     {
+      "id": "store-description",
+      "title": "The Store description leads with the action and the app people search for",
+      "anchor": "../reference/house-style.md#store-description",
+      "tag": "both",
+      "applies": {
+        "manual": "the branch adds or changes `description` in `package.json`"
+      },
+      "severity": "report",
+      "bindings": [
+        {
+          "kind": "judgment",
+          "check": "store-description",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
       "id": "kit",
       "title": "Prefer `@chrismessina/raycast-kit` for failure toasts and count copy",
       "anchor": "../reference/house-style.md#kit",
@@ -1044,6 +1061,10 @@
     {
       "id": "toast-window-copy",
       "question": "Does the extension satisfy `toast-window-copy` (Toast copy never says \"this window\" — a toast is a detached HUD)?"
+    },
+    {
+      "id": "store-description",
+      "question": "Does the changed `description` in `package.json` satisfy `store-description` (it leads with the action and the app people search for, names only what the commands and AI tools do, runs about 50 to 155 characters, has no shared filler, is one sentence ending with a period, and names a platform only when `platforms` matches)?"
     },
     {
       "id": "kit",
