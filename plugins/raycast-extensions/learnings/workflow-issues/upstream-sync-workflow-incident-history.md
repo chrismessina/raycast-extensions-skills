@@ -79,6 +79,21 @@ image bump that changes `lockfileVersion` would rewrite the whole file inside a 
 upstream had done it. A loud stop is recoverable; a silent whole-file rewrite reviewed as "sync from
 upstream" is not.
 
+**The relock step on a macOS-only dependency — 2026-11-19.** fathom and fetch failed every run
+from 2026-11-16, when Raycast's description rewrite (#33590) touched every `package.json`: their
+`@chrismessina/raycast-downloader` declares `"os": ["darwin", "win32"]`, and npm on the Linux
+runner refuses it with `EBADPLATFORM` even for `--package-lock-only`. `--os=darwin` does not help:
+in npm 10.8.2 and 11.19.1 the ideal-tree check (`build-ideal-tree.js`, `#checkEngineAndPlatform`)
+calls `checkPlatform` without the configured os, so only `--force` skips it. The step retries with
+`--force` only when the first run's stderr says `EBADPLATFORM`. That check runs after the tree has
+resolved, so a peer conflict has already failed the first run and `--force` cannot mask it. It does
+skip one more thing: the same per-package loop checks `engines` just before the platform, and
+`--force` turns off its Node-version comparison (the npm-version one stays). With npm's default `engine-strict=false` an engine mismatch is only a warning anyway, so the
+step retries only then, and fails asking for a macOS relock when `engine-strict` is on (Codex,
+2026-11-20, reading `build-ideal-tree.js` in npm 10.9.8 and 11.20.0).
+Verified in `node:20`: the forced lock was byte-identical to the one macOS writes without the flag,
+and a missing package still fails the step.
+
 ## The `{PR_MERGE_DATE}` stamp is not a conflict — 2026-09-17
 
 Delivering the stamp is half of why the workflow exists, yet it presents as a both-sides change: the

@@ -464,7 +464,31 @@ jobs:
           fi
 
           BEFORE=$(jq -r '.lockfileVersion' package-lock.json)
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          # A Raycast extension may depend on a package limited to macOS/Windows
+          # ("os": ["darwin", "win32"]), and npm refuses it on this Linux runner
+          # with EBADPLATFORM even for a lock-only resolve; `--os=darwin` does not
+          # reach that check (npm 10.8 and 11.19). npm checks the platform only
+          # after the tree has resolved, so a peer conflict (ERESOLVE) would already
+          # have failed the first run. The same per-package loop also checks
+          # `engines`, and --force skips that too; with npm's default
+          # engine-strict=false an engine mismatch is only a warning, so the retry
+          # loses nothing, but with engine-strict on it would hide a rejection, so
+          # the step refuses instead. Verified 2026-11-19: the --force lock on
+          # node:20 was byte-identical to the one macOS writes without it.
+          LOCK_ARGS="--package-lock-only --ignore-scripts --no-audit --no-fund"
+          if ! npm install $LOCK_ARGS 2> "$RUNNER_TEMP/npm-lock.err"; then
+            cat "$RUNNER_TEMP/npm-lock.err" >&2
+            if grep -q 'EBADPLATFORM' "$RUNNER_TEMP/npm-lock.err"; then
+              if [ "$(npm config get engine-strict)" = "true" ]; then
+                echo "::error::A dependency is not installable on Linux, and engine-strict is on, so --force would also skip the engines check. Relock on macOS and push the lockfile."
+                exit 1
+              fi
+              echo "::notice::A dependency is not installable on Linux; re-resolving the lock with --force to skip the platform check (engine-strict is off, so engines were only warnings)."
+              npm install $LOCK_ARGS --force
+            else
+              exit 1
+            fi
+          fi
           AFTER=$(jq -r '.lockfileVersion' package-lock.json)
 
           # `ubuntu-latest` floats, so the npm here floats with it. An image bump
