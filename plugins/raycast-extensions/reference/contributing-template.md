@@ -22,7 +22,7 @@ by 2026-11-18, the second on #33710). This file gives that content a home.
 2. Keep it tracked in the mirror. `rx holdout` must not list it: a tracked local-only path is
    `FAIL holdout-tracked`.
 3. Link it from the README only by absolute URL,
-   `https://github.com/chrismessina/raycast-<name>/blob/main/CONTRIBUTING.md`. A relative link to
+   `https://github.com/chrismessina/<repo>/blob/main/CONTRIBUTING.md`. A relative link to
    a file that does not ship fails `readme-links`.
 4. The mirror sync leaves it alone: it deletes a mirror file only when upstream used to serve that
    path, and upstream never has.
@@ -36,7 +36,11 @@ variant of the "Contributing" section below.
 
 ## Filling it in
 
-Replace each `{{…}}`. Take the scripts table from the extension's `package.json` `scripts`, listing
+Replace each `{{…}}`. `{{NAME}}` is `package.json` `name` (the Store slug and the
+`extensions/<name>` directory); `{{REPO}}` and `<repo>` are the mirror's repository name, read from
+`git remote get-url origin`. They usually differ only by the `raycast-` prefix, but not always:
+`name: raycast-store-updates` lives in `chrismessina/raycast-store-updates`, so prefixing the name
+gives a 404. Take the scripts table from the extension's `package.json` `scripts`, listing
 only the ones that exist. The architecture section is the one part written per extension: it is
 where a removed README Development section's project tree and design notes go. Cut a section that
 would be empty. Write in US English and keep it short. No Code of Conduct boilerplate, and never
@@ -53,7 +57,7 @@ Thanks for helping. This guide covers running {{TITLE}} locally and sending a ch
 {{TITLE}} is published in the [Raycast Store](https://www.raycast.com/chrismessina/{{NAME}}).
 Open pull requests against [`raycast/extensions`](https://github.com/raycast/extensions/tree/main/extensions/{{NAME}}),
 not this repository: Raycast reviews every change there, and merged changes sync back here
-automatically. Open [issues](https://github.com/chrismessina/raycast-{{NAME}}/issues) here or in
+automatically. Open [issues](https://github.com/chrismessina/{{REPO}}/issues) here or in
 `raycast/extensions`, whichever you prefer.
 
 <!-- Unpublished extension (no Store listing), instead: -->
@@ -71,7 +75,7 @@ You need [Raycast](https://www.raycast.com/) and Node.js {{NODE}} or later.
    saving a file reloads it.
 
 <!-- Unpublished extension, instead: -->
-1. `git clone https://github.com/chrismessina/raycast-{{NAME}}.git`, then `cd raycast-{{NAME}}`.
+1. `git clone https://github.com/chrismessina/{{REPO}}.git`, then `cd {{REPO}}`.
 2. Run `npm ci`, then `npm run dev`. Raycast opens the development version, and saving a file
    reloads it.
 
