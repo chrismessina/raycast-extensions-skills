@@ -259,9 +259,8 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
      made a true line false. A user-level `verify-agents-md` skill is a convenience, never the
      contract. *(digger 2026-09-04: five adversarial passes, four found a false claim; threads 2026-09-09: six false claims and a machine path shipped.)*
    - **What ships by policy and what stays out.** Contributor `docs/` (architecture, configuration,
-     known issues, `docs/solutions/`; not `docs/agents/` or `docs/planning/`) and an
-     already-published `LICENSE` or `CONTRIBUTING.md` ship (an unpublished `CONTRIBUTING.md` stays
-     tracked in the mirror and listed in the `.gitignore`); `TODO.md` ships on `brew` and `dev-null` only (the preset's
+     known issues, `docs/solutions/`; not `docs/agents/` or `docs/planning/`) and an already-published
+     `LICENSE` or `CONTRIBUTING.md` ship; `TODO.md` ships on `brew` and `dev-null` only (the preset's
      `ship.keep`). Every other path an `agent-scaffolding` / `dev-material` WARN names goes in the
      extension's `.gitignore`. The `no-agent-scaffolding` entry is `pass` when, after `rx holdout
      out`, the payload holds none of the four (evidence: holdout's inventory and `agent-scaffolding`) and each
