@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "fixture-clean",
   "title": "Fixture Clean",
-  "description": "Copies a greeting to the clipboard.",
+  "description": "Copies a friendly greeting to the clipboard with one command.",
   "author": "chrismessina",
   "icon": "icon.png",
   "license": "MIT",

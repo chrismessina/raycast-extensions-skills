@@ -2,7 +2,12 @@
   "why": "A self-authored no-view extension that meets core and every applicable preset rule: every check preflight emits is pinned, and the preset-bound ones it does not trigger (logger, agents-md-*) are N/A for the stated reason.",
   "runs": [
     {
-      "args": ["preflight", "--root", ".", "--json"],
+      "args": [
+        "preflight",
+        "--root",
+        ".",
+        "--json"
+      ],
       "match": "exact",
       "exit": 0,
       "checks": {
@@ -10,6 +15,7 @@
         "schema": "PASS",
         "categories": "PASS",
         "platforms": "PASS",
+        "store-description": "PASS",
         "preference-type": "N/A",
         "shortcut-platform-case": "N/A",
         "changelog-exists": "PASS",
@@ -22,6 +28,7 @@
         "native-fetch": "PASS",
         "unused-dependencies": "PASS",
         "readme-assets": "PASS",
+        "readme-dev-sections": "PASS",
         "screenshots": "N/A",
         "launch-command": "PASS",
         "favicon": "PASS",
@@ -48,7 +55,8 @@
         "agents-md-paths": "N/A",
         "agents-md-scripts": "N/A",
         "agents-md-no-home-paths": "N/A",
-        "agents-md-symbols": "N/A"
+        "agents-md-symbols": "N/A",
+        "contributing-mirror": "N/A"
       }
     }
   ]
