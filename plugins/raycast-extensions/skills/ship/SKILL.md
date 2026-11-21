@@ -75,7 +75,7 @@ exact tree being published, and it checks them on every attempt:
      *(brew #31820, 2026-10-01: a hardcoded `toLocaleString("en-US")` passed the green script and was
      caught only when Chris asked whether the Greptile rules had run)*;
    - a **disposition** for every `stale-check` / `stale-new` / `stale-remove` / `stale-deleted` row in the receipt and every
-     png `OLDER-SHOT` in this run, keyed exactly on `{ path, localHash, baseline }` as `rx stale` and
+     png `OLDER-SHOT` or `UNDECIDED` in this run, keyed exactly on `{ path, localHash, baseline }` as `rx stale` and
      `rx png` report them (a disposition matching nothing is itself a failure; `stale-remove` and `stale-deleted` take `remove-published` with `localHash` `"absent"`, and nothing else does);
    - a **verification** per external effect the preset's applicability detects in `src/`
      (`writes-files`, `web-requests`, `calls-ai`): the **runtime and destination evidence**. `ship`
@@ -173,7 +173,8 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
    | `SAME-PIXELS` PASS | CI re-encoded the shot you have | **adopt the published copy** (`cp` it over yours); it is what ships, and keeping yours differs on every future run |
    | `OLDER-SHOT` WARN | the published image equals an older commit of yours; local is a different shot | **disposition required**: `keep-local` only if that commit is the shot you last submitted and local is your newer replacement. A contributor's shot pulled in by a sync, or an old shot restored upstream, lands here too → STOP |
    | `NOT-YOURS` FAIL | in none of your commits: a contributor's shot or one you never committed | **STOP**: look at both and ask Chris; keeping local reverts a contributor's shot |
-   | `UNDECIDED` FAIL | 16-bit PNG (decoding to 8 bits merges distinct values) or differing `gAMA`/`iCCP`/`sRGB`/`cHRM` (same bytes render differently) | **STOP**: compare by eye and ask |
+   | `16-BIT` FAIL | the local file is 16-bit, with or without a published copy (decoding to 8 bits merges distinct values) | convert it with the `magick … -depth 8` command the message prints (`sips` keeps 16 bits), then re-run gates |
+   | `UNDECIDED` WARN | the same 8-bit pixels with differing `gAMA`/`iCCP`/`sRGB`/`cHRM` (a recapture or re-export changed the color profile) | **disposition required**: compare both by eye; `keep-local` (or `adopt-published`) keyed on `{ path, localHash, baseline }`, the baseline being the published bytes' sha256 that `rx png` prints. Changed pixels or a 16-bit published copy never land here: they run provenance (`OLDER-SHOT` / `NOT-YOURS`) *(capture-raycast-metadata #33805, 2026-11-20: a profile-changed recapture was an unrecordable FAIL; fixed in rx 0.3.0)* |
    | `LOCAL-ONLY` N/A | no published copy | keep local |
 
    Never blanket-adopt and never blanket-keep; `HEAD` is not a safe baseline, because committed
