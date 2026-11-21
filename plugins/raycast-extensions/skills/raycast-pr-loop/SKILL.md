@@ -75,7 +75,7 @@ backs. `no-dev-material` on contributor `docs/` in a self-authored extension: de
 policy (`greptile-rules.md`, *Our policy for the file rules*). Any other path those rules name is real,
 `AGENTS.md` / `CONCEPTS.md` included (Chris, 2026-11-03, after a P1 on cosign #33077: *"we DO need to
 remove AGENTS.md after all"*): not yet on `main` → the extension's `.gitignore` (`git rm --cached`, kept
-in the mirror); on `main` → delete it in this PR (for the four mirror files, a `remove-published` disposition on `stale-remove`), except `brew`/`dev-null` `TODO.md`, a published `LICENSE`, and a published `CONTRIBUTING.md` (`brew`, `reader-mode`; Chris, 2026-11-19). Two former rules still hold on the merits: a ref-gated deferred execution is not a dropped request; Windows media-session limits are not bugs.
+in the mirror); on `main` → delete it in this PR by default (for the four mirror files, a `remove-published` disposition on `stale-remove`), except what the preset's `ship.keep` keeps on Chris's say (`brew`/`dev-null` `TODO.md`, `reader-mode`'s agent files; since 2026-11-20 a published file is his call), a published `LICENSE`, and a published `CONTRIBUTING.md` (`brew`, `reader-mode`; Chris, 2026-11-19). Two former rules still hold on the merits: a ref-gated deferred execution is not a dropped request; Windows media-session limits are not bugs.
 
 For each finding, decide and say which — the judgment is `review-finding-triage` (`valid` /
 `valid-wrong-remedy` / `false-positive` / `conflicts-with-chris`), recorded in the round's audit:

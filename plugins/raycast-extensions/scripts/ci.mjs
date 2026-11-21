@@ -103,7 +103,7 @@ export const HOME_PREFIX = ["", "Users", ""].join("/");
 export const HOME_PATH_ALLOWLIST = [
   {
     file: "plugins/raycast-extensions/learnings/workflow-issues/ship-submission-incident-history.md",
-    line: 337,
+    line: 339,
     reason: "quoted evidence: the historical AGENTS.md pass-1 grep, whose search pattern is the literal; no machine path",
   },
 ];

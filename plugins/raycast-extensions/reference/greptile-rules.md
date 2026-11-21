@@ -1,15 +1,17 @@
 # Greptile's Raycast rules — where each one is handled
 
 Greptile reviews every Store PR against rules Raycast keeps in `.greptile/` at the root of
-`raycast/extensions`: 58 rules with stable IDs in `config.json`, review-wide guidance in `rules.md`,
+`raycast/extensions`: 61 rules with stable IDs in `config.json`, review-wide guidance in `rules.md`,
 and the docs pages it reads as context in `files.json`. The snapshot of those files lives in
 **`raycast-harness` core**, at `src/rules/greptile/` of the package version pinned in
 `rx-version.json` (see [`rx.md`](rx.md)); `SOURCE.json` there records where it came from. This file
 maps each rule to where this plugin handles it, so a rule that applies to us is checked on our side
 before it costs a review round.
 
-**Core snapshot this map describes:** `@chrismessina/raycast-harness` 0.1.4, `SOURCE.json`
-`{ repo: raycast/extensions, source: main, pr: 32933, sha: b6bdcb196dd5d5f228ae322a89bb5211bc535170, committed: 2026-11-03T07:07:02Z, fetched: 2026-11-07 }`.
+**Core snapshot this map describes:** `@chrismessina/raycast-harness` 0.2.0, `SOURCE.json`
+`{ repo: raycast/extensions, source: main, pr: 32933, sha: 092555dd3e726bf33ce2a1b3da5f434bfab1ea71, committed: 2026-11-17T16:47:43Z, fetched: 2026-11-20 }`.
+Against 0.1.4's snapshot it adds `store-description`, `mcp-registry-entries` and
+`changelog-hardcoded-date`, and 12 rules changed text; the rows below follow the new text.
 PR [#32933](https://github.com/raycast/extensions/pull/32933), which added `.greptile/` and deleted
 `.github/copilot-instructions.md`, has merged, so Greptile runs these rules from `main`. The IDs
 below replace the numbers (01–35) of the older rule set exported on 2026-09-26.
@@ -78,13 +80,14 @@ ported with no lost legacy finding (`scripts/compare-preflight.mjs` in core, 59 
 ## Rule → handler
 
 Severity is Greptile's (`high` / `medium` / `low`). Level is ours: FAIL and WARN are `rx preflight`
-results; *judgment* means the rule is one of the **55 Greptile judgment rules** that `rx audit record`
-requires an entry for (`greptile/<rule id>`, all blocking; the list is `GREPTILE_JUDGMENT_RULES` in
+results; *judgment* means the rule is one of the **58 Greptile judgment rules** that `rx audit record`
+requires an entry for (`greptile/<rule id>`, all blocking except `changelog-hardcoded-date`, whose
+`fail` is report-only while its text matches the digest rx read; the list is `GREPTILE_JUDGMENT_RULES` in
 core `src/audit/greptile.mjs`, and the result id is `audit-greptile-<rule id>`); *triage* means
 `raycast-pr-loop` uses the rule to settle a finding. A rule is preflight-only (no judgment in its
 Level) only when its checks cover the whole rule text: `native-fetch`, `platforms-field` and
 `no-nested-review-config`. Every other rule a preflight check covers in part is judgment too, so
-the part no check reads still needs an entry. The 55 judgment ids, from that file:
+the part no check reads still needs an entry. The 58 judgment ids, from that file:
 `changelog-entries`, `supported-platforms`, `shortcut-platform-keys`, `launch-command-try-catch`,
 `preference-types`, `action-organization`, `preference-storage`, `no-hardcoded-secrets`,
 `root-navigation-title`, `ai-tools-evals`, `ai-instructions`, `readme-user-facing`,
@@ -94,16 +97,18 @@ the part no check reads still needs an entry. The 55 judgment ids, from that fil
 `owner-field`, `contributors-third-party-updates`, `deprecated-apis`, `manifest-basics`,
 `menu-bar-commands`, `destructive-actions`, `list-search-filtering`, `data-hooks`,
 `script-and-sql-utils`, `ai-api-usage`, `ai-skills`, `ai-model-provider`, `oauth-utils`,
-`action-title-case`, `extension-overlap`, `data-hooks-bugs`, `oauth-token-bugs`,
+`action-title-case`, `extension-overlap`, `data-hooks-bugs`, `oauth-token-bugs`, `mcp-registry-entries`,
 `store-screenshots`, `unused-dependencies`, `eslint-flat-config`, `no-custom-localization`,
 `extension-categories`, `prettier-config`, `npm-lockfile-registry`,
 `generated-preference-argument-types`, `manifest-title-case`, `raycast-trash`, `favicon-utility`,
-`launch-command-api`, `no-agent-scaffolding`, `no-generated-files`, `no-dev-material`.
+`launch-command-api`, `no-agent-scaffolding`, `no-generated-files`, `no-dev-material`,
+`store-description`, `changelog-hardcoded-date`.
 
 | Rule ID | Sev. | What it asks | Handled by | Level |
 |---|---|---|---|---|
 | `generated-preference-argument-types` | low | Generated `Preferences` / `Arguments` types; no hand-written shapes, no `Preferences` import from `@raycast/api` | `rx preflight` `hand-typed-preferences`; House Style `no-hand-preferences`; judgment for shapes its pattern misses (a custom-named interface, `type CommandArguments`, the deprecated import) | FAIL / judgment |
-| `changelog-entries` | medium | One new top entry with `{PR_MERGE_DATE}`; past entries untouched; breaking changes named; no internal-only bullets; a dependency-only PR needs the `skip-changelog` label, not an entry | `rx preflight` `changelog-order`, `changelog-placeholder`, `changelog-exists`, `changelog-updated` (with `--published`); the bullets are judgment | FAIL / judgment |
+| `changelog-entries` | medium | One new top entry; past entries untouched; breaking changes named; no internal-only bullets; a dependency-only PR needs the `skip-changelog` label, not an entry. A hardcoded date is now its own rule, `changelog-hardcoded-date` | `rx preflight` `changelog-order`, `changelog-placeholder`, `changelog-exists`, `changelog-updated` (with `--published`); the bullets are judgment | FAIL / judgment |
+| `changelog-hardcoded-date` | low | A new entry with a fixed `YYYY-MM-DD` instead of `{PR_MERGE_DATE}`: a nit, raised at most once, never a blocker | `rx preflight` `changelog-placeholder` (a top entry without the placeholder FAILs); a second new dated entry under it is judgment, and its `fail` is report-only | FAIL / judgment (report) |
 | `store-screenshots` | high | A new view or menu-bar extension ships `metadata/` screenshots; ask about refreshing on a rename or redesign | `rx preflight` `screenshots` (a `view` or `menu-bar` command; a published extension whose only such commands are `menu-bar` ones is a WARN), `screenshot-count`, `screenshot-format`, `screenshot-size` (the Store's 2000×1250 PNG, `store-guidelines.md`); judgment for an update's first view, deleted screenshots and the refresh question; `ship` weeding for freshness | FAIL / judgment |
 | `unused-dependencies` | low | Every runtime dependency is imported somewhere in the extension; script-, test- and ESLint-only packages move to `devDependencies` | `rx preflight` `unused-dependencies` (`@types/*` exempt; it also WARNs, as a text heuristic, on a package that `src/` appears to import at runtime but that is only in `devDependencies`: an `import("x")` type or an import inside a string matches too, so a type-only use is written as `import type`); it reads `src/` only, so an import outside `src/`, whether a flagged import is real, and the script-, test- and ESLint-only cases are judgment | FAIL / judgment |
 | `eslint-flat-config` | low | Flat config; `defineConfig` only from `"eslint/config"` | `rx preflight` `eslint-config`. The rule now accepts a config without `defineConfig`, so that case only warns; a `defineConfig` imported from another package is judgment | FAIL / WARN / judgment |
@@ -113,8 +118,8 @@ the part no check reads still needs an entry. The 55 judgment ids, from that fil
 | `manifest-title-case` | low | Title Case for extension, command and preference titles; follow `ray lint` and `ray validate` | `rx preflight` `title-case` (heuristic; brand and CLI names are judgment) | WARN / judgment |
 | `native-fetch` | low | No `node-fetch` / `cross-fetch` / `isomorphic-fetch` | `rx preflight` `native-fetch` | FAIL |
 | `raycast-trash` | medium | `trash()` for the user's files, not `rm` / `mv ~/.Trash` | `rx preflight` `trash` (heuristic); other deletes of the user's files are judgment | WARN / judgment |
-| `action-title-case` | low | Title Case for literal `Action` and `ActionPanel.Submenu` titles; `@raycast/prefer-title-case` only warns, so a PR can still carry them | judgment | judgment |
-| `supported-platforms` | high | `platforms` matches where the code runs, only `macOS` / `Windows`; macOS-only APIs mean `["macOS"]`; Windows testing is questioned only for a reason in the code | `rx preflight` `platforms` (the values); House Style reads `platforms` first; whether the list matches the code is judgment | FAIL / judgment |
+| `action-title-case` | low | Title Case for literal `Action` and `ActionPanel.Submenu` titles, with `ray lint` as the authority: a title it rewrites back to (`Sign in`, `Move up`) is correct, and no `eslint-disable` to force casing | judgment | judgment |
+| `supported-platforms` | high | `platforms` matches where the code runs, only `macOS` / `Windows`; macOS-only APIs mean `["macOS"]`; Windows testing is questioned only for a reason in the code; one `menu-bar` command is no reason to drop `"Windows"` | `rx preflight` `platforms` (the values); House Style reads `platforms` first; whether the list matches the code is judgment | FAIL / judgment |
 | `platforms-field` | low | `platforms` is declared; missing on `main` is a pre-existing note | `rx preflight` `platforms`: a missing field fails, and warns when the published copy lacks it too | FAIL / WARN |
 | `shortcut-platform-keys` | low | `macOS` / `Windows` keys; both platforms for ambiguous modifiers; no collisions | `rx preflight` `shortcut-platform-case`; `rx shortcuts check` `shortcut-ambiguous` / `shortcut-reserved` (embedded in `rx audit record`); `keyboard-conventions.md` | FAIL / judgment |
 | `favicon-utility` | low | `getFavicon()` over a hand-built favicon URL, unless the custom code adds something | `rx preflight` `favicon` (heuristic; other favicon services and the exception are judgment) | WARN / judgment |
@@ -127,22 +132,23 @@ the part no check reads still needs an entry. The 55 judgment ids, from that fil
 | `root-navigation-title` | medium | No `navigationTitle` on a command's root view | judgment (root vs pushed needs reading) | judgment |
 | `ai-tools-evals` | medium | New tools ship evals that `@`-mention the extension; tools that are only `AI mention search` need none | `develop` row for `src/tools/`; judgment | judgment |
 | `ai-instructions` | low | No persona opener; mutating tools export `confirmation`; JSDoc on `Input`; one `ai.*` file | judgment | judgment |
-| `no-agent-scaffolding` | medium | No `AGENTS.md`, `CLAUDE.md`, `TODO.md`, `.claude/` … **that this PR adds or changes** | `rx preflight` `agent-scaffolding`. `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` follow the [file policy](#file-policy) (preflight's list lacks `CONCEPTS.md` and `HANDOFF.md`; holdout covers all four): the audit entry is `pass` when, after `rx holdout out`, the payload holds none of them (evidence: holdout's inventory and `agent-scaffolding`) and each one already published has its `remove-published` disposition; after publish, `rx pr files` may show them only as `removed` (`pr-local-only`). brew's and dev-null's `TODO.md` ship (`ship.keep`). Files beyond the named list ("such as") and nested copies are judgment | WARN / judgment |
+| `no-agent-scaffolding` | medium | No `AGENTS.md`, `CLAUDE.md`, `TODO.md`, `.claude/` … **that this PR adds**; one already on `main` is the owner's call even when the PR edits it | `rx preflight` `agent-scaffolding` (added files only). `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` follow the [file policy](#file-policy) (preflight's list lacks `CONCEPTS.md` and `HANDOFF.md`; holdout covers all four): the audit entry is `pass` when, after `rx holdout out`, the payload holds none of them (evidence: holdout's inventory and `agent-scaffolding`) and each one already published has its `remove-published` disposition or is kept by `ship.keep` on Chris's say; after publish, `rx pr files` may show them only as `removed` (`pr-local-only`). brew's and dev-null's `TODO.md` ship (`ship.keep`). Files beyond the named list ("such as") and nested copies are judgment | WARN / judgment |
 | `no-nested-review-config` | high | No nested `.greptile/` or `greptile.json`, at any depth: it can switch off the repo's rules, and CI fails on it | `rx preflight` `nested-review-config` (at any depth of what `ray publish` copies; core, so no preset exempts or caps it) | FAIL |
-| `readme-user-facing` | medium | README is the Store page: no Development / Build sections, no CI badges; images in `media/` | `rx preflight` `readme-assets`, `readme-links`; `readme-dev-sections` (contributor headings) is in `rx` main and runs once the pin moves past 0.1.4, so until then contributor sections are judgment; `ship` weeding for CI badges and prose | FAIL / judgment |
+| `readme-user-facing` | medium | README is the Store page: no Development / Build sections, no CI badges; images in `media/`; on a new extension, no "What's new" section, and a Commands section covering every command (nit) | `rx preflight` `readme-assets`, `readme-links`, `readme-dev-sections` (contributor headings; Scripts, Contributing and Build only over a contributor command); `ship` weeding for CI badges, prose and the new-extension asks | FAIL / judgment |
 | `docs-match-behavior` | low | README, `help.md`, descriptions and CHANGELOG match what the code now does | `ship` weeding | judgment |
 | `no-generated-files` | medium | No `raycast-env.d.ts`, `node_modules/`, `dist/`, Swift/Rust build output, `.DS_Store` | `rx preflight` `generated-files`: `dist/` and `.build/` fail, a stray `.DS_Store` warns. `ray publish` never copies `node_modules`, `raycast-env.d.ts` or the Swift/Rust build dirs, so those aren't checked. Other compiled output, and a `.DS_Store` deeper than the named folders, are judgment | FAIL / WARN / judgment |
 | `no-native-binaries` | high | No committed or runtime-compiled binaries; Swift / Rust packages via `ray build` | judgment | judgment |
-| `no-dev-material` | low | No `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, top-level `docs/` … that this PR adds | `rx preflight` `dev-material` (named files plus top-level `docs/` and `tools/`). Contributor `docs/` ships by policy; a published `LICENSE` or `CONTRIBUTING.md` stays (`brew`, `reader-mode`); an unpublished `CONTRIBUTING.md` lives in the mirror, tracked there and listed in the extension's `.gitignore` ([`contributing-template.md`](contributing-template.md)); the rest: not yet published → the extension's `.gitignore`, published → deleted in the PR (`ship`). Scratch, sample and unreferenced asset files and heavy test tooling are judgment | WARN / judgment |
+| `no-dev-material` | low | No `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, top-level `docs/` … that this PR adds; on a new extension or a PR adding the first tests, no `test/` folders, `*.test.ts`, test configs or test dependencies | `rx preflight` `dev-material` (named files plus top-level `docs/` and `tools/`, added files only); `contributing-mirror` (preset) FAILs a `CONTRIBUTING.md` the published copy lacks unless the extension's `.gitignore` lists it, and only WARNs without `--published` (a new extension). Contributor `docs/` ships by policy; a published `LICENSE` or `CONTRIBUTING.md` stays (`brew`, `reader-mode`); an unpublished `CONTRIBUTING.md` lives in the mirror, tracked there and listed in the extension's `.gitignore` ([`contributing-template.md`](contributing-template.md)); the rest: not yet published → the extension's `.gitignore`, published → deleted in the PR (`ship`). Scratch, sample and unreferenced asset files and test tooling are judgment | WARN / judgment |
 | `npm-lockfile-registry` | high | `package-lock.json` only, in sync; packages only from `registry.npmjs.org` | `rx preflight` `lockfile`, `npm-registry`; `rx api-floor`; `dep-gates.md`; whether the lockfile is in sync with `package.json` is judgment (the gates do not run `npm ci`) | FAIL / WARN / judgment |
 | `failure-toasts` | low | `showFailureToast` in catches; wrap selection APIs; never swallow user-triggered errors | House Style toast rules | judgment |
 | `error-empty-state` | medium | A failed load renders an `EmptyView` with the error, not "No results" | House Style `empty-state-copy`; judgment | judgment |
 | `no-silent-failure` | medium | No success before the operation succeeded; no empty catches around user actions | judgment | judgment |
 | `shell-command-injection` | high | No interpolated shell / AppleScript / PowerShell strings; argument arrays | judgment | judgment |
 | `no-analytics-or-keychain` | high | No telemetry SDKs; no Keychain access | judgment | judgment |
-| `store-naming` | medium | Noun titles; no "Assistant"; "Raycast" in a new extension's name is a question, not a blocker; `<verb> <noun>` commands; subtitles name the service | judgment | judgment |
-| `store-description` | medium | The top-level `description` (new or changed) leads with the action and the app people search for, names only what the commands and AI tools do, runs about 50 to 155 characters, has no shared filler, is one sentence ending with a period, and names a platform only when `platforms` matches. Strict: every point is a should-fix, in one comment listing every miss with a rewritten description as JSON. Added by [#33589](https://github.com/raycast/extensions/pull/33589), after the 0.1.4 snapshot: it reaches `rx` through `rx greptile update` until the next core release ships it | House Style [`store-description`](house-style.md#store-description) (judgment, report). In `rx` main, not yet released: `rx preflight` `store-description` (WARN: length, the closing period, filler, platform) and `greptile/store-description` in `GREPTILE_JUDGMENT_RULES`; both reach the audit when the pin moves past 0.1.4 | judgment |
-| `extension-overlap` | medium | Questions for the human reviewer: a new extension that overlaps an existing one, an open PR or a native feature; a significant update by someone other than the `author` | judgment; say it in the PR body before Greptile does | judgment |
+| `store-naming` | medium | Noun titles; no "Assistant"; "Raycast" in a new extension's name is a question, not a blocker; `<verb> <noun>` commands; the service's official brand casing (`wikiHow`); subtitles name the service | judgment | judgment |
+| `store-description` | medium | The top-level `description` (new or changed) leads with the action and the app people search for, names only what the commands and AI tools do, runs about 50 to 155 characters, has no shared filler, is one sentence ending with a period, and names a platform only when `platforms` matches. Strict: every point is a should-fix, in one comment listing every miss with a rewritten description as JSON | `rx preflight` `store-description` (WARN: length, the closing period, filler, platform; N/A when unchanged from the published copy); House Style [`store-description`](house-style.md#store-description) and `greptile/store-description` for the rest | WARN / judgment |
+| `mcp-registry-entries` | medium | In `model-context-protocol-registry` only: a server added or edited in `entries.ts` keeps its README table row, gets a CHANGELOG entry, and sits in the right array (official only when the service's makers publish it) | judgment (no other extension is in scope) | judgment |
+| `extension-overlap` | medium | Questions for the human reviewer: a new extension that overlaps an existing one, an open PR or a native feature; a significant update by someone other than the `author`. Each asked once, and only when the PR doesn't already answer it | judgment; say it in the PR body before Greptile does | judgment |
 | `backward-compatible-updates` | high | Never change a command `name`; no removed commands, renamed preferences or changed defaults unannounced | `rx preflight` `command-renamed` (with `--published`); judgment for preferences | FAIL / WARN / judgment |
 | `loading-navigation-placeholders` | low | `isLoading` while loading; Navigation API, not state-swapped root views; placeholders | judgment | judgment |
 | `third-party-tos-signals` | medium | Point out scraping, private endpoints, reused cookies (new extensions) | judgment; say it in the PR body before Greptile does | judgment |
@@ -153,7 +159,7 @@ the part no check reads still needs an entry. The 55 judgment ids, from that fil
 | `menu-bar-commands` | medium | No identical `MenuBarExtra.Item`s; sane `interval` | judgment | judgment |
 | `destructive-actions` | medium | `Action.Style.Destructive`; `confirmAlert` when it can't be undone | House Style; judgment | judgment |
 | `list-search-filtering` | medium | `onSearchTextChange` without filtering makes typing do nothing | judgment | judgment |
-| `data-hooks` | low | `@raycast/utils` hooks over `useState` + `useEffect`; `execute: false` until inputs are ready | judgment | judgment |
+| `data-hooks` | low | `@raycast/utils` hooks over `useState` + `useEffect`; `execute: false` until inputs are ready; a stated reason for a hand-written hook is accepted | judgment | judgment |
 | `data-hooks-bugs` | medium | Args through the args array, not the closure; no `Map` / `Set` / class instances in cached values (`Date` and `Buffer` are restored); no inline `useStreamJSON` `filter` / `transform` | judgment | judgment |
 | `script-and-sql-utils` | low | `runAppleScript` / `useSQL` over hand-rolled process calls; return `permissionView` | judgment | judgment |
 | `ai-api-usage` | medium | `environment.canAccess(AI)` first; no `AI.ask` in loops | judgment | judgment |
@@ -196,13 +202,23 @@ rules in `npm-lockfile-registry`.
 ## File policy
 
 **Our policy for the file rules (Chris, 2026-10-30).** `no-agent-scaffolding` and
-`no-dev-material` flag only files a PR adds or changes, and he notes the scaffolding rule isn't
+`no-dev-material` flag only files a PR adds (before the 0.2.0 snapshot, `no-agent-scaffolding` also flagged files it changed), and he notes the scaffolding rule isn't
 strictly enforced in practice. **Updated 2026-11-03:** `AGENTS.md` and `CONCEPTS.md` no longer
 ship. Greptile raised `AGENTS.md` as a P1 on cosign #33077 and Chris ruled *"we DO need to remove
 AGENTS.md after all"*: keep them in the mirror, listed in the extension's `.gitignore`, and keep
 freshening them there. `CLAUDE.md` and `HANDOFF.md` never ship either. Contributor `docs/` still
 ships and the finding is answered, by his 2026-09-02 ruling. Holding the published copy back was
 tried and doesn't work, because `ray publish` refuses a tree with uncommitted tracked changes.
+
+**Discretion for files already published (Chris, 2026-11-20).** Greptile now treats a file
+already on `main` as the owner's call even when a PR edits it, and `agent-scaffolding` and
+`dev-material` flag only added files. So removing a published doc is a choice, not a requirement:
+*"we can use our discretion about when to leave in place docs that we've been removing recently."*
+The mechanisms below still remove the four agent files by default; to keep a published one, ask
+Chris, then list it in the preset's `ship.keep`, as `reader-mode` does. A kept file ships, so it has
+no `stale-remove` row and takes no `remove-published` disposition; the `no-agent-scaffolding` entry
+cites `ship.keep` and Chris's ruling instead. If the PR changes it, `rx pr files`' `pr-local-only`
+FAILs on it, the known gap described under the reader-mode exception below.
 
 Each part of the four-file ruling has its own mechanism:
 

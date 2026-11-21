@@ -277,11 +277,13 @@ work was finished. The issue named it a week earlier.)*
 
 ## 5. AGENTS.md / CONCEPTS.md freshening: the two passes and the digger and threads incidents
 
-### History: whether AGENTS.md ships (three rulings, the last one current)
+### History: whether AGENTS.md ships (four rulings, the last one current)
 
-The current rule is the 2026-11-03 ruling: `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and
+The default is still the 2026-11-03 ruling: `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and
 `HANDOFF.md` never ship in a Store PR. They stay in the mirror, listed in the extension's
-`.gitignore`, and a published one is deleted in the PR. The mechanisms are in
+`.gitignore`, and a published one is deleted in the PR. Since 2026-11-20 a published one may stay
+at Chris's discretion, through the preset's `ship.keep` (Greptile no longer raises a file already
+on `main`), as `reader-mode`'s already do. The mechanisms are in
 [`reference/greptile-rules.md`](../../reference/greptile-rules.md#file-policy) (*File policy*). Everything
 else in this subsection is history, preserved from the live ship skill's receipt (`SKILL.md`
 around lines 1100–1125 before the harness port), so the reversal can be read in order:
@@ -380,7 +382,7 @@ is, delete the stale line and say so in the report.
 > large drift to `ce-compound-refresh`, which would have refreshed the wrong file.)
 
 A doc-only edit stays in `ship` — it needs no hand-back to `develop`. It does **not** skip
-the adversarial review: an `AGENTS.md` (shipped then, mirror-only now) is inside the `codex-gate` (the docs-only
+the adversarial review: an `AGENTS.md` (shipped then, mirror-only by default now) is inside the `codex-gate` (the docs-only
 exemption was retired 2026-09-09), and a docs review is pointed at *truth, not style*.
 
 *(2026-09-04, `digger`: writing `AGENTS.md` fresh took five adversarial passes, four of

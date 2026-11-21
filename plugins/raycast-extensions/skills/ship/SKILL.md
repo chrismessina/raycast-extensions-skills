@@ -70,13 +70,12 @@ exact tree being published, and it checks them on every attempt:
    - one rule entry per **Greptile judgment rule**, id `greptile/<rule id>` (`changelog-entries`, `no-silent-failure`, …;
      take the ids from the current list, `GREPTILE_JUDGMENT_RULES` in `$RX/src/audit/greptile.mjs`, never from a count;
      `rx audit record` reports it in `data.applicable`, and `audit-coverage` FAILs naming each id missing), each read against
-     the **branch diff**; all blocking, since a Greptile finding at any severity holds a Store PR
+     the **branch diff**; all blocking (except `changelog-hardcoded-date`, report-only), since a Greptile finding at any severity holds a Store PR
      *(brew #31820, 2026-10-01: a hardcoded `toLocaleString("en-US")` passed the green script and was
      caught only when Chris asked whether the Greptile rules had run)*;
-   - a **disposition** for every `stale-check` / `stale-new` / `stale-remove` row in the receipt and every
+   - a **disposition** for every `stale-check` / `stale-new` / `stale-remove` / `stale-deleted` row in the receipt and every
      png `OLDER-SHOT` in this run, keyed exactly on `{ path, localHash, baseline }` as `rx stale` and
-     `rx png` report them (a disposition matching nothing is itself a failure; `stale-remove` takes
-     `remove-published` with `localHash` `"absent"`, and nothing else does);
+     `rx png` report them (a disposition matching nothing is itself a failure; `stale-remove` and `stale-deleted` take `remove-published` with `localHash` `"absent"`, and nothing else does);
    - a **verification** per external effect the preset's applicability detects in `src/`
      (`writes-files`, `web-requests`, `calls-ai`): the **runtime and destination evidence**. `ship`
      does not run the extension, so this is a hand-back: if the diff touches a clipboard write, a
@@ -104,7 +103,7 @@ and denied, and step 5 is the bare line `npm run publish`. (`rx holdout out` goe
 2. `node "<plugin>/scripts/rx.mjs" gates --forbidden "$SCRATCHPAD/forbidden.txt"`
 3. `node "<plugin>/scripts/rx.mjs" shortcuts runtime` — once per installed Raycast version.
 4. `WORK="$(mktemp -d "${TMPDIR:-/tmp}/rx-audit.XXXXXX")"`, write `$WORK/entries.json` (OUTSIDE the
-   extension root), then `node "<plugin>/scripts/rx.mjs" audit record --entries "$WORK/entries.json"`.
+   extension root), then `node "<plugin>/scripts/rx.mjs" audit record --entries "$WORK/entries.json" --extension-typescript` (gates already ran the build; without it a text scan can block on a shortcut that isn't there).
 5. `npm run publish`
 6. `node "<plugin>/scripts/rx.mjs" publication record raycast/extensions "$PR" "$REMOTE_HEAD_SHA"`, with the PR number and the head SHA of the fork branch it was opened from
 7. `node "<plugin>/scripts/rx.mjs" holdout in` — restores from the inventory and verifies every entry.
@@ -147,6 +146,7 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
    | Result | Meaning | Action |
    | --- | --- | --- |
    | `stale-only-pub` FAIL | upstream has a file you do not | **STOP**: publishing deletes it. A file the preset's `holdout.localOnly` lists (`AGENTS.md`, …) is `stale-remove` WARN instead: disposition `remove-published` (step 3) |
+   | `stale-deleted` WARN | you deleted a file the Store copy has, and its published version is in your history at that path | deliberate → disposition `remove-published` (`localHash` `"absent"`); otherwise restore it |
    | `stale-upstream` FAIL | published content is not in this path's history (a rename of yours lands here too) | **STOP**: publishing reverts their fix |
    | `stale-unhandled` FAIL | a symlink, a mode change, an undecidable line | **STOP**: classify by hand |
    | `stale-check` WARN | published == an **older** commit of yours | **disposition required**: read `git --literal-pathspecs log --oneline -- <path>` and the diff against the published copy. Yours only if the published version is the last one before your unpublished commits and every hunk is one of them; anything else is upstream → STOP |
@@ -241,14 +241,14 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
 
 3. **Weeding** — screenshots, README and CHANGELOG current. Self-authored only unless noted; **forks
    skip the identity items** (never add your own `AGENTS.md`, `LICENSE` or badges to an extension you do not own).
-   - 🚨 **`AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` never ship in a Store PR; FRESHEN
+   - 🚨 **`AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` never ship in a Store PR unless `ship.keep` keeps them; FRESHEN
      `AGENTS.md` / `CONCEPTS.md` in the mirror on every self-authored PR.** Greptile raised
      `AGENTS.md` as a P1 on cosign #33077 and Chris ruled (2026-11-03): *"we DO need to remove
      AGENTS.md after all."* All four stay in the mirror, listed in its **`.gitignore`**. Each part of the
      ruling has its own mechanism ([file policy](../../reference/greptile-rules.md#file-policy)): `rx holdout
      out` holds them out of the payload; `holdout-tracked` names a tracked one and its `git rm
      --cached` fix; a published one is `stale-remove`, deleted through a **`remove-published`**
-     disposition; `rx pr files` accepts them only as `removed`. The freshening contract is **checked in
+     disposition; `rx pr files` accepts them only as `removed`. **A published one may stay at Chris's discretion** (2026-11-20: Greptile no longer raises a file already on `main`): ask, then list it in `ship.keep`. The freshening contract is **checked in
      pre-flight, before the holdout**: `rx preflight`'s four `agents-md-*` checks (paths, `npm run`
      scripts, no home-directory path, `symbol()`s in `src/`) plus the audit's `agents-md-claims`
      entry. For that entry, **re-read the behavioral claims about the area this branch changed against the code and
@@ -264,7 +264,7 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
      `ship.keep`). Every other path an `agent-scaffolding` / `dev-material` WARN names goes in the
      extension's `.gitignore`. The `no-agent-scaffolding` entry is `pass` when, after `rx holdout
      out`, the payload holds none of the four (evidence: holdout's inventory and `agent-scaffolding`) and each
-     published one has its `remove-published` disposition. A published path outside
+     published one has its `remove-published` disposition or is kept by `ship.keep` on Chris's say (no disposition; a changed kept file FAILs `pr-local-only`, expected, as on reader-mode). A published path outside
      `holdout.localOnly` stays `stale-only-pub` (FAIL): take it to Chris. Check the **published** directory too *(digger 2026-09-02: `.private/docs/` public since an earlier release)*. A dot-prefix is not privacy.
    - **`LICENSE` (MIT) is mandatory in every self-authored MIRROR and stays out of the Store copy
      unless already published** (`raycast/extensions`' own MIT covers every extension; Greptile's

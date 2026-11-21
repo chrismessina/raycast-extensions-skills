@@ -543,6 +543,23 @@
       ]
     },
     {
+      "id": "contributing-mirror",
+      "title": "A `CONTRIBUTING.md` stays in the mirror unless the Store copy already ships one",
+      "anchor": "../reference/contributing-template.md#how-it-stays-out-of-the-store-pr",
+      "tag": "both",
+      "applies": {
+        "selfAuthored": true
+      },
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "contributing-mirror",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
       "id": "kit",
       "title": "Prefer `@chrismessina/raycast-kit` for failure toasts and count copy",
       "anchor": "../reference/house-style.md#kit",
@@ -904,7 +921,7 @@
     },
     {
       "id": "no-agent-scaffolding",
-      "title": "No agent or planning files that this PR adds or changes",
+      "title": "No agent or planning files that this PR adds",
       "anchor": "../reference/greptile-rules.md#no-agent-scaffolding",
       "tag": "both",
       "applies": true,
