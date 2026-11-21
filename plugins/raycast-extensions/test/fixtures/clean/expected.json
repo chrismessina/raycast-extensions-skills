@@ -46,6 +46,8 @@
         "icon-size": "PASS",
         "readme-links": "PASS",
         "changelog-placeholder": "PASS",
+        "script-utils": "PASS",
+        "failure-toast-helper": "PASS",
         "nested-review-config": "PASS",
         "pref-description-length": "N/A",
         "pref-label-length": "N/A",
