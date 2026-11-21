@@ -515,7 +515,7 @@ however the toast is made. Three paths, and only the last is compliant by defaul
 
 | Path | Compliant when |
 |---|---|
-| `showToast({ style: Toast.Style.Failure, … })`, or `toast.style = Toast.Style.Failure` | it sets a `primaryAction` titled `"Copy Error"` (canonical form below) |
+| `showToast({ style: Toast.Style.Failure, … })`, or `toast.style = Toast.Style.Failure` | it sets a `primaryAction` titled `"Copy Error"` (canonical form below) **and it reports a result, not a caught error** (a validation verdict such as "Saved at the Wrong Size", or a progress toast flipped to Failure). A caught error, including one routed through a local wrapper (`showFailure(title, errorMessage(e))`), goes through `showFailureToast` or the kit: Greptile `failure-toasts` flags the hand-built form, and a wrapper does not hide it (capture-raycast-metadata #33805, round 1) |
 | `showFailureToast(error, { title })` from `@raycast/utils` | it passes `primaryAction` titled `"Copy Error"`. **Its default action is not Copy Error:** it attaches **Report Error** (a published extension) or **Copy Logs** (development or private). Passing `primaryAction` moves that default to the secondary slot, so the user gets both. |
 | `showError` / `failToast` from `@chrismessina/raycast-kit` | always — the kit attaches Copy Error itself, and redacts |
 
