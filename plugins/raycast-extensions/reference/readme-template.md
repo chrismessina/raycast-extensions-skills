@@ -13,8 +13,7 @@ centered HTML survive Store review — verified 2026-08-26: the published
 **No Development section.** Because the Store page renders this file, contributor material
 (project structure, scripts, clone-and-run, build-from-source) does not belong in it: Greptile
 `readme-user-facing` raises it as a P1, and it did on two Store PRs, the second XDR Boost #33710
-(2026-11-18). `rx preflight` FAILs it as `readme-dev-sections` from the first `rx` release after 0.1.4; under the
-0.1.4 pin, check by hand. Move contributor notes into the mirror's
+(2026-11-18). `rx preflight` FAILs it as `readme-dev-sections` (since rx 0.2.0). Move contributor notes into the mirror's
 `CONTRIBUTING.md`, built from [`contributing-template.md`](contributing-template.md): the
 extension's `.gitignore` keeps it out of the PR, and the README links it only by absolute mirror
 URL.

@@ -863,8 +863,8 @@ listing every miss with a rewritten description as JSON to paste. This house rul
   through the mirror sync and edit from there; never revert it to an older local copy.
 
 - **Audit:** judgment `store-description` (report). The mechanical parts (length, closing period,
-  filler, platform) are `rx preflight` `store-description` (WARN) from the first `rx` release after
-  0.1.4; until the pin moves, check them by hand.
+  filler, platform) are `rx preflight` `store-description` (WARN) since rx 0.2.0; the rest is the
+  judgment.
 
 ### `[both]` (conditional) Prefer `@chrismessina/raycast-kit` for failure toasts and count copy
 
@@ -1652,7 +1652,7 @@ rule reports a regression on code that just adopted a helper encoding it — see
 | The copy is fixed too — type this block verbatim | `logger-verbose-copy` | `both` | declares `verboseLogging` | **block** | rx `logger-verbose-copy` |
 | Logger 1.5.0+: declare `strictRedaction` beside `verboseLogging` | `logger-strict-redaction` | `both` | self-authored, installed `@chrismessina/raycast-logger` ≥ 1.5.0 | **report** | rx `logger-strict-redaction` |
 | Preference descriptions fit on one line — 80 characters or fewer | `pref-description-length` | `both` | all | **report** | rx `pref-description-length`; rx `pref-label-length` |
-| The Store description leads with the action and the app people search for | `store-description` | `both` | the branch adds or changes `description` in `package.json` | **report** | judgment `store-description` |
+| The Store description leads with the action and the app people search for | `store-description` | `both` | the branch adds or changes `description` in `package.json` | **report** | rx `store-description` (partial); judgment `store-description` (partial) |
 | Prefer `@chrismessina/raycast-kit` for failure toasts and count copy | `kit` | `both` | self-authored, already being changed | **report** | judgment `kit` |
 | Show a file with `Action.ShowInFinder` / `showInFinder()`, never `open(path, "Finder")` | `show-in-finder` | `both` | all | **block** | judgment `show-in-finder` |
 | A completed file export offers Show in Finder AND Copy Path, both with shortcuts | `export-actions` | `both` | writes a file for the user | **block** | judgment `export-actions` |

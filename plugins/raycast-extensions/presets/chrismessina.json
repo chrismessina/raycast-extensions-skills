@@ -536,9 +536,14 @@
       "severity": "report",
       "bindings": [
         {
+          "kind": "rx",
+          "check": "store-description",
+          "coverage": "partial"
+        },
+        {
           "kind": "judgment",
           "check": "store-description",
-          "coverage": "full"
+          "coverage": "partial"
         }
       ]
     },
