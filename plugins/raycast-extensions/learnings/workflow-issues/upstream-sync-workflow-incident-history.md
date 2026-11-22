@@ -1,19 +1,19 @@
 ---
 title: "The mirror sync workflow: every incident behind a guard in sync-from-upstream.yml, dated, with the run that proved it"
 date: 2026-08-01
-last_updated: 2026-10-31
+last_updated: 2026-11-21
 category: workflow-issues
 module: publishing
 component: development_workflow
 problem_type: workflow_issue
 severity: high
 applies_when:
-  - "Editing `templates/sync-from-upstream.yml` or a mirror's installed copy of it"
+  - "Editing the reusable sync workflow (`.github/workflows/sync-from-upstream.yml` in this repo) or the mirror stub that calls it (`templates/sync-from-upstream.yml`)"
   - "A standalone mirror's sync run failed, opened a conflict issue, or stopped opening PRs"
   - "Tempted to remove a guard in the workflow that looks redundant"
   - "Diagnosing a mirror that reverted a local edit or lost a file"
 applies_to: ["ship"]
-trigger: "when you are about to edit templates/sync-from-upstream.yml or diagnose a failed mirror sync run"
+trigger: "when you are about to edit the mirror sync workflow (.github/workflows/sync-from-upstream.yml or its stub) or diagnose a failed mirror sync run"
 tags:
   - mirror
   - sync
@@ -24,8 +24,9 @@ tags:
 
 # The mirror sync workflow: the incident behind every guard
 
-`templates/sync-from-upstream.yml` reconciles a standalone mirror (`chrismessina/raycast-<name>`)
-against the merged `raycast/extensions` state. The workflow keeps its decision table and a short
+The reusable workflow `.github/workflows/sync-from-upstream.yml` (at this repo's root; each mirror
+carries only the stub in `templates/sync-from-upstream.yml` that calls it) reconciles a standalone
+mirror (`chrismessina/raycast-<name>`) against the merged `raycast/extensions` state. The workflow keeps its decision table and a short
 invariant comment per guard; each guard's incident is recorded here, keyed by the comment that
 points at it. Dates are when the failure was diagnosed; run ids are GitHub Actions run ids on the
 named mirror.
@@ -183,3 +184,25 @@ The one direct write to `main` is the bookkeeping file `.github/upstream-sync-st
 on the default branch when no PR will carry it. Until 2026-10-31 the header said "never pushes to
 main" and a reader had to reach the baseline step to find the exception (audit job-C, Q30); the header
 now states the distinction up front.
+
+## A conflict issue nothing closed, and one copy for the fleet — 2026-11-21
+
+The conflict step reuses one open `upstream-sync` issue across runs, and nothing ever closed it.
+`raycast-xdr-boost` #1 stayed open after a README conflict had resolved itself: the 1.1 README
+change had landed on both sides, so the mirror's copy was byte-identical to the Store's and the next
+dispatched run passed. The workflow now ends with a step that closes every open `upstream-sync`
+issue when a default-branch run gets past the conflict check and every later step succeeds; a clean
+run on another ref says nothing about `main`, so it closes nothing.
+
+The same audit found the fleet split across four template generations. Eighteen of 23 mirrors ran
+`862a1bd` and lacked the two later fixes, and `raycast-luma` ran a copy older than the template
+itself. None of the differences was a deliberate customization; the only per-mirror values were the
+cron minute and `raycast-reader`'s `reader-mode` directory override. A fix landed only in mirrors
+someone re-rendered, so the workflow became a reusable one at `.github/workflows/sync-from-upstream.yml`,
+called at `@main` by a stub that holds the triggers, the permissions, and those two values. Inside
+a called workflow, `github.*` and `actions/checkout` resolve to the calling mirror, but the caller's
+`env:` and `inputs` do not carry over, so the override became the `upstream_ext_dir` input. The
+trade: a broken push to `main` breaks every mirror's next run, so validate a change on one mirror
+first. Dispatching a mirror branch is not enough, because the stub's `uses:` still names `@main`:
+push the change to a branch here, push a mirror branch whose stub calls that branch, and run
+`gh workflow run sync-from-upstream.yml --ref <mirror branch>` (the workflow header has the steps).

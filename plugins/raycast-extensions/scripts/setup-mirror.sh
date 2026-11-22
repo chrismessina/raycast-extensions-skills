@@ -27,15 +27,16 @@ SLUG=$(sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)
 [ "$(git branch --show-current)" = main ] || die "check out main first; the sync workflow has to land on main"
 
 # 1. The monorepo directory the workflow reads. It defaults to package.json's name;
-#    a mirror whose directory differs keeps its override in the workflow file.
+#    a mirror whose directory differs keeps its override in the stub's
+#    `upstream_ext_dir:` (or, in a pre-stub full copy, its `UPSTREAM_EXT_DIR:`).
 EXT_DIR=$NAME; OVR=""
 if [ -f "$WF" ]; then
-  v=$(sed -nE 's/^  UPSTREAM_EXT_DIR: "(.+)"$/\1/p' "$WF")
+  v=$(sed -nE 's/^      upstream_ext_dir: "(.+)"$/\1/p; s/^  UPSTREAM_EXT_DIR: "(.+)"$/\1/p' "$WF" | head -n1)
   [ -n "$v" ] && EXT_DIR=$v && OVR=$v
 fi
 [[ $EXT_DIR =~ ^[a-z0-9][a-z0-9._-]*$ ]] || die "not a monorepo directory name: '$EXT_DIR'"
 gh api "repos/raycast/extensions/contents/extensions/$EXT_DIR" >/dev/null 2>&1 \
-  || die "can't read extensions/$EXT_DIR in raycast/extensions. Not merged yet, a network/auth failure, or the directory name differs from package.json's (set UPSTREAM_EXT_DIR in $WF)."
+  || die "can't read extensions/$EXT_DIR in raycast/extensions. Not merged yet, a network/auth failure, or the directory name differs from package.json's (set upstream_ext_dir in $WF)."
 ok "upstream is extensions/$EXT_DIR"
 
 # 2. Remote history. A repo created with GitHub's "Add a README/license" makes a root
@@ -51,7 +52,9 @@ else
   PUSHED=0
 fi
 
-# 3. The workflow, rendered from the canonical template. The cron minute is staggered
+# 3. The workflow stub, rendered from the template; it calls the one reusable workflow
+#    in raycast-extensions-skills, so this file never needs to change for a sync fix.
+#    The cron minute is staggered
 #    by repo name (GitHub queues same-minute schedules); an existing file keeps its minute.
 MIN=$(( $(printf %s "$NAME" | cksum | cut -d' ' -f1) % 60 ))
 # ponytail: two mirrors can hash to the same minute; harmless, GitHub queues them together.
@@ -60,10 +63,10 @@ if [ -f "$WF" ]; then
   [[ $m =~ ^[0-9]+$ ]] && MIN=$m
 fi
 render() {
-  sed -E "s/^    - cron: \"[0-9]+ 9 \* \* \*\"$/    - cron: \"$MIN 9 * * *\"/; s/^  UPSTREAM_EXT_DIR: \"\"$/  UPSTREAM_EXT_DIR: \"$OVR\"/" "$TEMPLATE"
+  sed -E "s/^    - cron: \"[0-9]+ 9 \* \* \*\"$/    - cron: \"$MIN 9 * * *\"/; s/^      upstream_ext_dir: \"\"$/      upstream_ext_dir: \"$OVR\"/" "$TEMPLATE"
 }
 if [ -f "$WF" ] && ! render | cmp -s - "$WF" && [ $UPDATE = 0 ]; then
-  die "$WF differs from the template. Re-run with --update to replace it (keeps its cron minute and UPSTREAM_EXT_DIR)."
+  die "$WF differs from the template. Re-run with --update to replace it (keeps its cron minute and upstream_ext_dir)."
 fi
 mkdir -p .github/workflows
 render >"$WF"

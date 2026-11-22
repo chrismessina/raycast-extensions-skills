@@ -161,6 +161,7 @@ The sparse config persists across fetches — you stay scoped to `extensions/<na
 ## Related
 
 The standalone mirrors (`chrismessina/raycast-<name>`) are reconciled in the other direction — from
-the merged monorepo back into the mirror — by `templates/sync-from-upstream.yml`. Every guard in
-that workflow has a dated incident behind it:
+the merged monorepo back into the mirror — by the reusable workflow
+`.github/workflows/sync-from-upstream.yml` at this repo's root, which each mirror calls from a stub.
+Every guard in that workflow has a dated incident behind it:
 [`upstream-sync-workflow-incident-history`](../learnings/workflow-issues/upstream-sync-workflow-incident-history.md).
