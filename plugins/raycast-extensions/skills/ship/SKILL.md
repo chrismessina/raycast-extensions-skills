@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Get an existing Raycast extension into raycast/extensions and clean up — runs the pre-flight through `rx` (examples gate, staleness, preflight, API floor, build/tsc/lint) and records the house-style and Greptile judgment audit, submits with `npm run publish`, posts the PR body onto the draft, hands the review rounds to `raycast-pr-loop`, and sweeps after merge. Fires on "submit / publish / ship to the Store", "npm run publish", "run preflight", "check this extension", "is this ready to ship" (those three run the pre-flight and stop), or "address review feedback (metadata/screenshots)." Does NOT change code behavior — if feedback needs code, hands BACK to `develop`.
+description: Get an existing Raycast extension into raycast/extensions and clean up — runs the pre-flight through `rx` (examples gate, staleness, preflight, API floor, build/tsc/lint) and records the house-style and Greptile judgment audit, submits with `npm run publish`, posts the PR body onto the draft, hands the review rounds to `raycast-pr-loop`, and sweeps after merge. Fires on "submit / publish / ship to the Store", "npm run publish", "run preflight", "check this extension", "is this ready to ship" (those three run the pre-flight and stop), "PR approved and merged" / "it merged" (run the post-merge cleanup at once, without waiting to be asked), or "address review feedback (metadata/screenshots)." Does NOT change code behavior — if feedback needs code, hands BACK to `develop`.
 metadata:
   stage: "2a + 3 + 5 + 6 + 7 — pre-flight, compliance, PR, review, cleanup"
 ---
@@ -441,7 +441,7 @@ the three-round and no-re-review bounds are that skill's.
 
 ## Post-merge cleanup
 
-Stamp the CHANGELOG to the merge date (only the entry that merged), push the mirror, sweep the
+**A message saying a PR merged starts this cleanup immediately; reporting the merge state is not the cleanup.** Until `rx` has a command for it, adopt what the merge rewrote *verbatim* from the published copy (the stamped CHANGELOG, CI-recompressed screenshots) and commit it alone, or the next `rx gates` FAILs `stale-upstream` (sf-symbols-search, 2026-11-23). Stamp the CHANGELOG to the merge date (only the entry that merged), push the mirror, sweep the
 local branch (by PR state, never git ancestry: Raycast squash-merges), refresh "open" wording in
 docs this session wrote, and on a new extension's first release run `setup-mirror.sh`:
 [`reference/pr-and-cleanup.md`](../../reference/pr-and-cleanup.md) *Post-merge cleanup*.
