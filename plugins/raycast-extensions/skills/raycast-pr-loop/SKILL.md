@@ -213,8 +213,7 @@ node "<plugin>/scripts/rx.mjs" greptile wait "$PR"
 ## 5. Exit
 
 - **Every bot clear for the current revision** (Greptile 5/5, `reviewedCommit` a prefix of `head`) →
-  report it with the round-by-round history: what was fixed, what was declined and why. **Do not mark
-  the PR ready for review** — the user's click, always.
+  report it with the round-by-round history: what was fixed, what was declined and why. **Do not mark the PR ready for review** — the user's click, always.
 - **Stopping rule fired** → present the finding chain and the current state's defense; the user decides.
 - **No re-review within the bound** → report the reviewer's state honestly (§4) and stop; the loop resumes when a round arrives.
 - **A round needs more than a finding-fix** (a redesign, a new control) → `develop` work; then come back.
