@@ -218,3 +218,4 @@ node "<plugin>/scripts/rx.mjs" greptile wait "$PR"
 - **Stopping rule fired** → present the finding chain and the current state's defense; the user decides.
 - **No re-review within the bound** → report the reviewer's state honestly (§4) and stop; the loop resumes when a round arrives.
 - **A round needs more than a finding-fix** (a redesign, a new control) → `develop` work; then come back.
+- **The PR merged** (`rx pr verify` reports it no longer open and GitHub shows `merged_at`, or the user says it merged) → the loop ends. Run `rx post-merge` from the extension root at once, without waiting to be asked, and report its verdicts (`ship` § Post-merge cleanup).

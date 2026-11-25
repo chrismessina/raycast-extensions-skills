@@ -151,14 +151,23 @@ gh api "repos/raycast/extensions/pulls?state=closed&head=<you>:ext/<name>" \
 
 Once the PR shows `merged=<date>`, in order; each step is skippable when it does not apply:
 
-1. **Stamp the CHANGELOG to the merge date**, the one genuinely manual recurring step. Raycast CI
-   replaced `{PR_MERGE_DATE}` in the merged monorepo copy; your local copy still shows the
-   placeholder. Read the merged file
-   (`curl -sL https://raw.githubusercontent.com/raycast/extensions/main/extensions/<name>/CHANGELOG.md | head`),
-   copy the stamped date onto the matching local entry, and commit. **Only the entry that just
-   merged**; an already-dated entry is never touched. This is the one place a real date is written
-   by hand; a real date going *up* in a submission is the violation (`ship`, CHANGELOG).
-2. **Push** if the extension has its own remote (a mirror), so it matches what shipped.
+1. **Run `rx post-merge`** from the extension root (`rx` 0.5.0 or later). Before the squash,
+   raycastbot pushes its own commit onto `ext/<name>`: it replaces `{PR_MERGE_DATE}` with the merge
+   date, and it recompresses the screenshots, which strips `iCCP`. Those bytes exist in no local
+   commit, so every later `rx stale` FAILs `stale-upstream` until they are adopted. `rx post-merge`
+   attributes them from the PR's own commit list, then copies in exactly those files. It commits
+   them alone, and a new CHANGELOG entry you have not staged yet stays unstaged. The commit is
+   signed with rx's dedicated signing key, so it works while 1Password is locked. Without
+   `--dry-run` it applies, and `--dry-run` previews. It refuses rather than guesses:
+   - a file changed upstream after the merge → `pull-contributions`;
+   - a file changed here since → adopt it by hand;
+   - an unregistered key → it prints the two `gh` commands, which Chris runs.
+
+   This replaces copying the stamped date by hand. A real date is still never written by hand
+   into a submission (`ship`, CHANGELOG).
+2. **Push.** `rx post-merge` pushes its commit to the branch's upstream (the mirror), but only
+   when that push sends exactly the one cleanup commit. When it WARNs (other unpushed commits, a
+   remote that moved, several push URLs), push yourself after looking.
 3. **Sweep the local feature branch** once step 2 is on the remote. Integrate it into local
    `main` first: the feature tip (with the date-stamp commit) is usually pushed as `HEAD:main`
    while local `main` is behind, so `git branch -d` would refuse it. `git switch main && git merge

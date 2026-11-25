@@ -441,10 +441,13 @@ the three-round and no-re-review bounds are that skill's.
 
 ## Post-merge cleanup
 
-**A message saying a PR merged starts this cleanup immediately; reporting the merge state is not the cleanup.** Until `rx` has a command for it, adopt what the merge rewrote *verbatim* from the published copy (the stamped CHANGELOG, CI-recompressed screenshots) and commit it alone, or the next `rx gates` FAILs `stale-upstream` (sf-symbols-search, 2026-11-23). Stamp the CHANGELOG to the merge date (only the entry that merged), push the mirror, sweep the
-local branch (by PR state, never git ancestry: Raycast squash-merges), refresh "open" wording in
-docs this session wrote, and on a new extension's first release run `setup-mirror.sh`:
-[`reference/pr-and-cleanup.md`](../../reference/pr-and-cleanup.md) *Post-merge cleanup*.
+**A message saying a PR merged starts this cleanup immediately; reporting the merge state is not the cleanup.** Run **`rx post-merge`** from the extension root. It reads the PR number from the publication record, or takes it as an argument. It adopts what raycastbot rewrote on the PR branch before the squash (the stamped CHANGELOG, recompressed screenshots), commits only those files signed with rx's own key, and pushes that one commit. Without it, the next `rx gates` FAILs `stale-upstream` (sf-symbols-search, 2026-11-23). Follow its verdicts:
+- `post-merge-adopt` FAIL `changed upstream after the merge` → someone else changed the file since: `pull-contributions`.
+- `changed here since the merge` → the local file moved on; adopt by hand.
+- `post-merge-signing` FAIL → the rx key is not registered on GitHub; hand Chris the two `gh` commands it prints. They need him: `gh auth refresh` is interactive.
+- `post-merge-push` WARN → it did not push, and says why.
+
+The rx key is the one sanctioned signer besides 1Password, and only for this command's commit. It is not a bypass. Never pass it to any other commit. Then refresh "open" wording in docs this session wrote, and on a new extension's first release run `setup-mirror.sh`: [`reference/pr-and-cleanup.md`](../../reference/pr-and-cleanup.md) *Post-merge cleanup*.
 
 ## Throughline A (hard rail)
 
