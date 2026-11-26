@@ -132,7 +132,7 @@ the part no check reads still needs an entry. The 58 judgment ids, from that fil
 | `root-navigation-title` | medium | No `navigationTitle` on a command's root view | judgment (root vs pushed needs reading) | judgment |
 | `ai-tools-evals` | medium | New tools ship evals that `@`-mention the extension; tools that are only `AI mention search` need none | `develop` row for `src/tools/`; judgment | judgment |
 | `ai-instructions` | low | No persona opener; mutating tools export `confirmation`; JSDoc on `Input`; one `ai.*` file | judgment | judgment |
-| `no-agent-scaffolding` | medium | No `AGENTS.md`, `CLAUDE.md`, `TODO.md`, `.claude/` … **that this PR adds**; one already on `main` is the owner's call even when the PR edits it | `rx preflight` `agent-scaffolding` (added files only). `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` follow the [file policy](#file-policy) (preflight's list lacks `CONCEPTS.md` and `HANDOFF.md`; holdout covers all four): the audit entry is `pass` when, after `rx holdout out`, the payload holds none of them (evidence: holdout's inventory and `agent-scaffolding`) and each one already published has its `remove-published` disposition or is kept by `ship.keep` on Chris's say; after publish, `rx pr files` may show them only as `removed` (`pr-local-only`). brew's and dev-null's `TODO.md` ship (`ship.keep`). Files beyond the named list ("such as") and nested copies are judgment | WARN / judgment |
+| `no-agent-scaffolding` | medium | No `AGENTS.md`, `CLAUDE.md`, `TODO.md`, `.claude/` … **that this PR adds**; one already on `main` is the owner's call even when the PR edits it | `rx preflight` `agent-scaffolding` (added files only). `AGENTS.md`, `CONCEPTS.md`, `CLAUDE.md` and `HANDOFF.md` follow the [file policy](#file-policy) (preflight's list lacks `CONCEPTS.md` and `HANDOFF.md`; holdout covers all four): the audit entry is `pass` when, after `rx holdout out`, the payload holds none of them except the paths `ship.keep` keeps (evidence: holdout's inventory and `agent-scaffolding`) and each one already published has its `remove-published` disposition or is kept by `ship.keep` on Chris's say; after publish, `rx pr files` may show them only as `removed` (`pr-local-only`), except a path `ship.keep` keeps for the extension. brew's and dev-null's `TODO.md` ship (`ship.keep`). Files beyond the named list ("such as") and nested copies are judgment | WARN / judgment |
 | `no-nested-review-config` | high | No nested `.greptile/` or `greptile.json`, at any depth: it can switch off the repo's rules, and CI fails on it | `rx preflight` `nested-review-config` (at any depth of what `ray publish` copies; core, so no preset exempts or caps it) | FAIL |
 | `readme-user-facing` | medium | README is the Store page: no Development / Build sections, no CI badges; images in `media/`; on a new extension, no "What's new" section, and a Commands section covering every command (nit) | `rx preflight` `readme-assets`, `readme-links`, `readme-dev-sections` (contributor headings; Scripts, Contributing and Build only over a contributor command); `ship` weeding for CI badges, prose and the new-extension asks | FAIL / judgment |
 | `docs-match-behavior` | low | README, `help.md`, descriptions and CHANGELOG match what the code now does | `ship` weeding | judgment |
@@ -218,7 +218,10 @@ The mechanisms below still remove the four agent files by default; to keep a pub
 Chris, then list it in the preset's `ship.keep`, as `reader-mode` does. A kept file ships, so it has
 no `stale-remove` row and takes no `remove-published` disposition; the `no-agent-scaffolding` entry
 cites `ship.keep` and Chris's ruling instead. If the PR changes it, `rx pr files`' `pr-local-only`
-FAILs on it, the known gap described under the reader-mode exception below.
+passes it and names it "kept on purpose". `rx preflight`'s `keep-gitignored` FAILs when a shipped `.gitignore` excludes a present kept
+file and the published copy does not already hold a file or symlink at that path. An
+already-published file still stages despite the ignore rule; without `--published` that exception
+cannot be established.
 
 Each part of the four-file ruling has its own mechanism:
 
@@ -235,7 +238,8 @@ Each part of the four-file ruling has its own mechanism:
   `{ path, localHash: "absent", baseline }`, so the publish deletes it upstream. Any other published
   path the local tree lacks stays `stale-only-pub` (FAIL).
 - **Checked on the PR.** `rx pr files` reports each file's GitHub status; its `pr-local-only`
-  check FAILs when any of the four is added, modified or renamed in, and accepts them as `removed`.
+  check FAILs when any of the four is added, modified or renamed in, and accepts them as `removed`,
+  unless the preset's `ship.keep` keeps it for this extension.
 
 The other named files (`LICENSE`, `TODO.md`, …) stay out of the Store copy by the extension's
 `.gitignore` while unpublished. A published `LICENSE` stays, and so does a published
@@ -248,7 +252,7 @@ public `TODO.md` by his earlier rulings (2026-09-30, 2026-10-22), through the pr
 **Exception, `reader-mode` (Chris, 2026-11-17):** its `AGENTS.md` and `CONCEPTS.md` keep shipping,
 through `ship.keep`, because the extension is tricky to maintain and its learnings should stay
 public for whoever maintains it next. Answer the `no-agent-scaffolding` finding with that reason
-instead of removing them. Known gap: `rx pr files`' `pr-local-only` reads only `holdout.localOnly`,
-not `ship.keep`, so it FAILs on a changed kept file; for reader-mode that FAIL is expected.
+instead of removing them. `rx pr files`' `pr-local-only` passes a change to either one and names it
+"kept on purpose".
 
 Procedure: [`../skills/ship/SKILL.md`](../skills/ship/SKILL.md).

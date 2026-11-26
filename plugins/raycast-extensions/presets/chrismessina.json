@@ -565,6 +565,21 @@
       ]
     },
     {
+      "id": "keep-gitignored",
+      "title": "A path `ship.keep` ships is not dropped by the extension's `.gitignore`",
+      "anchor": "../reference/greptile-rules.md#no-agent-scaffolding",
+      "tag": "both",
+      "applies": true,
+      "severity": "block",
+      "bindings": [
+        {
+          "kind": "rx",
+          "check": "keep-gitignored",
+          "coverage": "full"
+        }
+      ]
+    },
+    {
       "id": "kit",
       "title": "Prefer `@chrismessina/raycast-kit` for failure toasts and count copy",
       "anchor": "../reference/house-style.md#kit",

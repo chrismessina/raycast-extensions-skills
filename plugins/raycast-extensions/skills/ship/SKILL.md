@@ -250,7 +250,7 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
      ruling has its own mechanism ([file policy](../../reference/greptile-rules.md#file-policy)): `rx holdout
      out` holds them out of the payload; `holdout-tracked` names a tracked one and its `git rm
      --cached` fix; a published one is `stale-remove`, deleted through a **`remove-published`**
-     disposition; `rx pr files` accepts them only as `removed`. **A published one may stay at Chris's discretion** (2026-11-20: Greptile no longer raises a file already on `main`): ask, then list it in `ship.keep`. The freshening contract is **checked in
+     disposition; `rx pr files` accepts them only as `removed`, except a path `ship.keep` keeps for this extension. **A published one may stay at Chris's discretion** (2026-11-20: Greptile no longer raises a file already on `main`): ask, then list it in `ship.keep`. The freshening contract is **checked in
      pre-flight, before the holdout**: `rx preflight`'s four `agents-md-*` checks (paths, `npm run`
      scripts, no home-directory path, `symbol()`s in `src/`) plus the audit's `agents-md-claims`
      entry. For that entry, **re-read the behavioral claims about the area this branch changed against the code and
@@ -265,8 +265,8 @@ as is marking a PR ready; **never write under `.git/rx/`** or hand-edit `receipt
      `LICENSE` or `CONTRIBUTING.md` ship; `TODO.md` ships on `brew` and `dev-null` only (the preset's
      `ship.keep`). Every other path an `agent-scaffolding` / `dev-material` WARN names goes in the
      extension's `.gitignore`. The `no-agent-scaffolding` entry is `pass` when, after `rx holdout
-     out`, the payload holds none of the four (evidence: holdout's inventory and `agent-scaffolding`) and each
-     published one has its `remove-published` disposition or is kept by `ship.keep` on Chris's say (no disposition; a changed kept file FAILs `pr-local-only`, expected, as on reader-mode). A published path outside
+     out`, the payload holds none of the four except the paths `ship.keep` keeps (evidence: holdout's inventory and `agent-scaffolding`) and each
+     published one has its `remove-published` disposition or is kept by `ship.keep` on Chris's say (no disposition; `rx pr files`' `pr-local-only` passes a kept file and names it "kept on purpose", and `rx preflight`'s `keep-gitignored` FAILs if the extension's `.gitignore` would drop it, unless the published copy already holds that file). A published path outside
      `holdout.localOnly` stays `stale-only-pub` (FAIL): take it to Chris. Check the **published** directory too *(digger 2026-09-02: `.private/docs/` public since an earlier release)*. A dot-prefix is not privacy.
    - **`LICENSE` (MIT) is mandatory in every self-authored MIRROR and stays out of the Store copy
      unless already published** (`raycast/extensions`' own MIT covers every extension; Greptile's

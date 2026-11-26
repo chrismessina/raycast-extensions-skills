@@ -58,7 +58,8 @@
         "agents-md-scripts": "N/A",
         "agents-md-no-home-paths": "N/A",
         "agents-md-symbols": "N/A",
-        "contributing-mirror": "N/A"
+        "contributing-mirror": "N/A",
+        "keep-gitignored": "N/A"
       }
     }
   ]
